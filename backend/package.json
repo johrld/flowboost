@@ -1,0 +1,31 @@
+{
+  "name": "flowboost",
+  "version": "0.1.0",
+  "description": "AI-powered content generation service",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsc",
+    "start": "node --env-file=.env dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "pipeline": "tsx scripts/pipeline.ts",
+    "watch": "tsx scripts/watch.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "fastify": "^5.0.0",
+    "pino": "^9.0.0",
+    "simple-git": "^3.27.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

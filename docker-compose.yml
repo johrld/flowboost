@@ -1,0 +1,22 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: ../Dockerfile.backend
+    ports:
+      - "${PORT:-6000}:6000"
+    volumes:
+      - ./backend/data:/app/data
+    env_file: .env
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ./frontend
+      dockerfile: ../Dockerfile.frontend
+    ports:
+      - "${FRONTEND_PORT:-6001}:3000"
+    env_file: .env
+    depends_on:
+      - api
+    restart: unless-stopped

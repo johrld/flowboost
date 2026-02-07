@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+
+# Backend
+backend/dist/
+backend/data/pipeline-runs/
+*.log
+
+# Frontend
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+*.tsbuildinfo
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

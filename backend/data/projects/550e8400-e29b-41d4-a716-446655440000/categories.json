@@ -1,0 +1,97 @@
+[
+  {
+    "id": "meditation",
+    "slug": {
+      "de": "meditation",
+      "en": "meditation",
+      "es": "meditacion"
+    },
+    "name": {
+      "de": "Meditation",
+      "en": "Meditation",
+      "es": "Meditación"
+    },
+    "description": {
+      "de": "Meditationstechniken und Anleitungen für Anfänger und Fortgeschrittene.",
+      "en": "Meditation techniques and guides for beginners and advanced practitioners.",
+      "es": "Técnicas de meditación y guías para principiantes y avanzados."
+    },
+    "order": 1
+  },
+  {
+    "id": "breathing",
+    "slug": {
+      "de": "atemtechniken",
+      "en": "breathing-techniques",
+      "es": "tecnicas-respiracion"
+    },
+    "name": {
+      "de": "Atemtechniken",
+      "en": "Breathing Techniques",
+      "es": "Técnicas de Respiración"
+    },
+    "description": {
+      "de": "Atemübungen für Entspannung, Energie und besseren Schlaf.",
+      "en": "Breathing exercises for relaxation, energy, and better sleep.",
+      "es": "Ejercicios de respiración para relajación, energía y mejor sueño."
+    },
+    "order": 2
+  },
+  {
+    "id": "mindfulness",
+    "slug": {
+      "de": "achtsamkeit",
+      "en": "mindfulness",
+      "es": "mindfulness"
+    },
+    "name": {
+      "de": "Achtsamkeit",
+      "en": "Mindfulness",
+      "es": "Mindfulness"
+    },
+    "description": {
+      "de": "Achtsamkeitsübungen für mehr Präsenz im Alltag.",
+      "en": "Mindfulness practices for more presence in everyday life.",
+      "es": "Prácticas de mindfulness para más presencia en la vida diaria."
+    },
+    "order": 3
+  },
+  {
+    "id": "sleep",
+    "slug": {
+      "de": "schlaf",
+      "en": "sleep",
+      "es": "sueno"
+    },
+    "name": {
+      "de": "Schlaf & Entspannung",
+      "en": "Sleep & Relaxation",
+      "es": "Sueño & Relajación"
+    },
+    "description": {
+      "de": "Techniken für besseren Schlaf und tiefe Entspannung.",
+      "en": "Techniques for better sleep and deep relaxation.",
+      "es": "Técnicas para dormir mejor y relajación profunda."
+    },
+    "order": 4
+  },
+  {
+    "id": "stress",
+    "slug": {
+      "de": "stress-angst",
+      "en": "stress-anxiety",
+      "es": "estres-ansiedad"
+    },
+    "name": {
+      "de": "Stress & Angst",
+      "en": "Stress & Anxiety",
+      "es": "Estrés & Ansiedad"
+    },
+    "description": {
+      "de": "Übungen bei Stress, Angst und emotionaler Belastung.",
+      "en": "Exercises for stress, anxiety, and emotional challenges.",
+      "es": "Ejercicios para estrés, ansiedad y desafíos emocionales."
+    },
+    "order": 5
+  }
+]

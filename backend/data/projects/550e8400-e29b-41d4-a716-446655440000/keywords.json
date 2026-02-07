@@ -1,0 +1,86 @@
+{
+  "meditation": {
+    "primary": [
+      "meditation lernen",
+      "meditation für anfänger",
+      "meditieren lernen"
+    ],
+    "secondary": [
+      "wie meditieren",
+      "meditation anleitung",
+      "einfache meditation",
+      "meditation tipps"
+    ],
+    "long_tail": [
+      "5 minuten meditation morgens",
+      "meditation gegen stress",
+      "meditation für einsteiger kostenlos",
+      "wie fange ich mit meditieren an",
+      "meditation jeden tag"
+    ]
+  },
+  "breathing": {
+    "primary": ["atemübungen", "atemtechnik", "richtig atmen"],
+    "secondary": [
+      "4-7-8 atmung",
+      "box breathing",
+      "atemübung stress",
+      "atemtechnik entspannung"
+    ],
+    "long_tail": [
+      "atemübung zum einschlafen",
+      "atemtechnik gegen angst",
+      "box breathing anleitung",
+      "wim hof atmung anleitung",
+      "atemübung panikattacke"
+    ]
+  },
+  "mindfulness": {
+    "primary": ["achtsamkeit", "achtsamkeitsübungen", "mindfulness"],
+    "secondary": [
+      "achtsamkeit lernen",
+      "achtsamkeit alltag",
+      "achtsam leben",
+      "body scan"
+    ],
+    "long_tail": [
+      "achtsamkeit für anfänger",
+      "achtsamkeitsübung morgens",
+      "achtsam essen lernen",
+      "body scan meditation anleitung",
+      "achtsamkeit gegen stress"
+    ]
+  },
+  "sleep": {
+    "primary": ["einschlafmeditation", "schlafmeditation", "besser schlafen"],
+    "secondary": [
+      "einschlafen meditation",
+      "meditation schlafen",
+      "entspannung schlafen",
+      "einschlafhilfe"
+    ],
+    "long_tail": [
+      "meditation zum einschlafen kostenlos",
+      "geführte meditation einschlafen",
+      "atemübung einschlafen",
+      "gedankenkarussell stoppen schlafen",
+      "progressive muskelentspannung schlafen"
+    ]
+  },
+  "stress": {
+    "primary": ["stress abbauen", "entspannung", "stressbewältigung"],
+    "secondary": [
+      "stress reduzieren",
+      "schnell entspannen",
+      "meditation stress",
+      "angst reduzieren"
+    ],
+    "long_tail": [
+      "stress abbauen übungen",
+      "schnelle entspannung am arbeitsplatz",
+      "meditation gegen angst und panik",
+      "stressbewältigung im alltag",
+      "sofort entspannen technik"
+    ]
+  }
+}

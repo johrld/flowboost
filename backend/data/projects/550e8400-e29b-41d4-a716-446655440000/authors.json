@@ -1,0 +1,76 @@
+[
+  {
+    "id": "johannes",
+    "name": "Johannes Herold",
+    "slug": "johannes-herold",
+    "title": {
+      "de": "Gründer & Entwickler",
+      "en": "Founder & Developer",
+      "es": "Fundador & Desarrollador"
+    },
+    "bio": {
+      "de": "Johannes ist Gründer von Breathe und praktiziert seit über 10 Jahren Meditation. Als Entwickler verbindet er Technologie mit Achtsamkeit.",
+      "en": "Johannes is the founder of Breathe and has been practicing meditation for over 10 years. As a developer, he combines technology with mindfulness.",
+      "es": "Johannes es el fundador de Breathe y practica meditación desde hace más de 10 años. Como desarrollador, combina tecnología con mindfulness."
+    },
+    "image": "/images/authors/johannes.png",
+    "social": {
+      "linkedin": "https://linkedin.com/in/johannesherold",
+      "website": "https://breathejourney.com"
+    }
+  },
+  {
+    "id": "sarah",
+    "name": "Sarah Chen",
+    "slug": "sarah-chen",
+    "title": {
+      "de": "Meditationslehrerin",
+      "en": "Meditation Teacher",
+      "es": "Profesora de Meditación"
+    },
+    "bio": {
+      "de": "Sarah ist zertifizierte Meditationslehrerin mit Schwerpunkt auf Atemtechniken und Stressreduktion. Sie unterrichtet seit 8 Jahren.",
+      "en": "Sarah is a certified meditation teacher specializing in breathing techniques and stress reduction. She has been teaching for 8 years.",
+      "es": "Sarah es profesora certificada de meditación especializada en técnicas de respiración y reducción del estrés. Lleva 8 años enseñando."
+    },
+    "image": "/images/authors/sarah.jpg",
+    "social": {
+      "instagram": "https://instagram.com/sarahchen.meditation"
+    }
+  },
+  {
+    "id": "maria",
+    "name": "Maria Santos",
+    "slug": "maria-santos",
+    "title": {
+      "de": "Achtsamkeits-Coach",
+      "en": "Mindfulness Coach",
+      "es": "Coach de Mindfulness"
+    },
+    "bio": {
+      "de": "Maria ist Achtsamkeits-Coach und spezialisiert auf Meditation für besseren Schlaf und emotionale Balance.",
+      "en": "Maria is a mindfulness coach specializing in meditation for better sleep and emotional balance.",
+      "es": "Maria es coach de mindfulness especializada en meditación para dormir mejor y equilibrio emocional."
+    },
+    "image": "/images/authors/maria.jpg",
+    "social": {
+      "twitter": "https://twitter.com/mariasantos_mindful"
+    }
+  },
+  {
+    "id": "breathe-team",
+    "name": "Breathe Team",
+    "slug": "breathe-team",
+    "title": {
+      "de": "Meditation & Achtsamkeit",
+      "en": "Meditation & Mindfulness",
+      "es": "Meditación & Mindfulness"
+    },
+    "bio": {
+      "de": "Wir sind ein Team aus erfahrenen Meditationslehrern und Achtsamkeits-Experten. Unsere Mission: Meditation für jeden zugänglich machen.",
+      "en": "We are a team of experienced meditation teachers and mindfulness experts. Our mission: making meditation accessible to everyone.",
+      "es": "Somos un equipo de profesores de meditación y expertos en mindfulness. Nuestra misión: hacer la meditación accesible para todos."
+    },
+    "image": "/images/authors/breathe-team.jpg"
+  }
+]
