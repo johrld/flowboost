@@ -200,6 +200,10 @@ function SettingsPageContent() {
         const id = Number(installId);
         setGhInstallationId(id);
         setConnectorType("github");
+        // Auto-save GitHub connection so it persists across reloads
+        await updateProject(cust.id, proj.id, {
+          connector: { type: "github", github: { installationId: id, owner: "", repo: "", branch: "main", contentPath: "src/content/posts", assetsPath: "src/assets/posts" } },
+        });
         // Load repos for the new installation
         setGhLoadingRepos(true);
         try {

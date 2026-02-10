@@ -14,7 +14,7 @@ import { topicRoutes } from "./routes/topics.js";
 import { contentPlanRoutes } from "./routes/content-plan.js";
 import { articleRoutes } from "./routes/articles.js";
 import { pipelineRoutes } from "./routes/pipeline.js";
-import { githubAuthRoutes, githubApiRoutes } from "./routes/github.js";
+import { githubAuthRoutes, githubApiRoutes, githubWebhookRoutes } from "./routes/github.js";
 
 const log = createLogger("server");
 
@@ -67,6 +67,7 @@ export async function buildServer(dataDir: string) {
   await app.register(pipelineRoutes, { prefix: "/customers/:customerId/projects/:projectId/pipeline" });
   await app.register(githubAuthRoutes, { prefix: "/auth" });
   await app.register(githubApiRoutes, { prefix: "/github" });
+  await app.register(githubWebhookRoutes, { prefix: "/github" });
 
   // Error handler
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {

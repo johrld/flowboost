@@ -1,5 +1,7 @@
+import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { isConfigured, listRepos, listBranches } from "../../services/github.js";
+import { createLogger } from "../../utils/logger.js";
 
 /**
  * GitHub App auth routes (/auth/github/*) and API routes (/github/*).
@@ -87,4 +89,94 @@ export async function githubApiRoutes(app: FastifyInstance) {
       }
     },
   );
+}
+
+const webhookLog = createLogger("github-webhook");
+
+export async function githubWebhookRoutes(app: FastifyInstance) {
+  // Custom parser to preserve raw body for HMAC signature verification
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "buffer" },
+    (_req, body: Buffer, done) => {
+      try {
+        done(null, { raw: body, parsed: JSON.parse(body.toString()) });
+      } catch (err) {
+        done(err as Error);
+      }
+    },
+  );
+
+  // POST /github/webhook — Receive GitHub App events
+  app.post("/webhook", async (request, reply) => {
+    const secret = process.env.GITHUB_WEBHOOK_SECRET;
+    if (!secret) {
+      webhookLog.error("GITHUB_WEBHOOK_SECRET not configured");
+      return reply.status(500).send({ error: "Webhook secret not configured" });
+    }
+
+    // Verify signature
+    const signature = request.headers["x-hub-signature-256"] as string | undefined;
+    if (!signature) {
+      return reply.status(401).send({ error: "Missing signature" });
+    }
+
+    const { raw, parsed } = request.body as { raw: Buffer; parsed: Record<string, unknown> };
+    const expected =
+      "sha256=" + crypto.createHmac("sha256", secret).update(raw).digest("hex");
+
+    if (
+      signature.length !== expected.length ||
+      !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+    ) {
+      webhookLog.warn("Invalid webhook signature");
+      return reply.status(401).send({ error: "Invalid signature" });
+    }
+
+    const event = request.headers["x-github-event"] as string;
+    const action = parsed.action as string | undefined;
+    webhookLog.info({ event, action }, "webhook received");
+
+    // Handle installation deleted/suspended → disconnect affected projects
+    if (event === "installation" && (action === "deleted" || action === "suspend")) {
+      const installationId = (parsed.installation as { id: number })?.id;
+      if (installationId) {
+        await disconnectInstallation(app, installationId, action);
+      }
+    }
+
+    return { ok: true };
+  });
+}
+
+/** Find all projects using this GitHub installation and clear their connector. */
+async function disconnectInstallation(
+  app: FastifyInstance,
+  installationId: number,
+  reason: string,
+) {
+  const customers = app.ctx.customers.list();
+  let disconnected = 0;
+
+  for (const customer of customers) {
+    const projects = app.ctx.projectsFor(customer.id).list();
+    for (const project of projects) {
+      if (
+        project.connector?.type === "github" &&
+        project.connector.github?.installationId === installationId
+      ) {
+        app.ctx.projectsFor(customer.id).update(project.id, {
+          connector: { type: "filesystem" },
+          updatedAt: new Date().toISOString(),
+        } as Partial<typeof project>);
+        disconnected++;
+        webhookLog.info(
+          { customerId: customer.id, projectId: project.id, installationId, reason },
+          "disconnected GitHub connector",
+        );
+      }
+    }
+  }
+
+  webhookLog.info({ installationId, disconnected, reason }, "installation cleanup done");
 }

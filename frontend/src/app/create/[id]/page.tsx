@@ -21,44 +21,10 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { StageBadge, ConditionBadge } from "@/components/status-badge";
+import { TiptapEditor } from "@/components/tiptap-editor";
 import { articles, authors, categories, mockArticleContent } from "@/lib/mock-data";
-import { ArrowLeft, Save, Eye, Check, ImageIcon, Plus, Trash2, Upload, Undo2, Play, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Save, Check, ImageIcon, Plus, Trash2, Upload, Undo2, Play, AlertTriangle } from "lucide-react";
 import Link from "next/link";
-
-// Simple markdown preview (no Tiptap yet - will be added in 6.6)
-function MarkdownPreview({ content }: { content: string }) {
-  // Strip frontmatter
-  const body = content.replace(/^---[\s\S]*?---\n*/, "");
-  return (
-    <div className="prose prose-sm max-w-none dark:prose-invert">
-      {body.split("\n").map((line, i) => {
-        if (line.startsWith("## ")) {
-          return <h2 key={i} className="text-lg font-bold mt-6 mb-2">{line.slice(3)}</h2>;
-        }
-        if (line.startsWith("### ")) {
-          return <h3 key={i} className="text-base font-semibold mt-4 mb-1">{line.slice(4)}</h3>;
-        }
-        if (line.startsWith("> ")) {
-          return (
-            <blockquote key={i} className="border-l-4 border-primary/30 pl-4 italic text-muted-foreground my-4">
-              {line.slice(2)}
-            </blockquote>
-          );
-        }
-        if (line.startsWith("- ")) {
-          return <li key={i} className="ml-4">{line.slice(2)}</li>;
-        }
-        if (line.match(/^\d+\./)) {
-          return <li key={i} className="ml-4 list-decimal">{line.replace(/^\d+\.\s*/, "")}</li>;
-        }
-        if (line.trim() === "") return <br key={i} />;
-        // Bold
-        const formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        return <p key={i} className="mb-2" dangerouslySetInnerHTML={{ __html: formatted }} />;
-      })}
-    </div>
-  );
-}
 
 export default function ArticleEditorPage({
   params,
@@ -68,7 +34,6 @@ export default function ArticleEditorPage({
   const { id } = use(params);
   const article = articles.find((a) => a.id === id);
   const [activeLang, setActiveLang] = useState("de");
-  const [isPreview, setIsPreview] = useState(false);
 
   // Parse frontmatter from mock content
   const frontmatterMatch = mockArticleContent.match(/^---\n([\s\S]*?)\n---/);
@@ -118,10 +83,6 @@ export default function ArticleEditorPage({
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setIsPreview(!isPreview)}>
-              <Eye className="mr-2 h-4 w-4" />
-              {isPreview ? "Edit" : "Preview"}
-            </Button>
             <Button variant="outline">
               <Save className="mr-2 h-4 w-4" />
               Save
@@ -200,22 +161,9 @@ export default function ArticleEditorPage({
           </TabsList>
 
           <TabsContent value="de" className="mt-4">
-            {isPreview ? (
-              <Card>
-                <CardContent className="p-6">
-                  <MarkdownPreview content={mockArticleContent} />
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="p-6">
-                  <Textarea
-                    className="min-h-[600px] font-mono text-sm"
-                    defaultValue={mockArticleContent.replace(/^---[\s\S]*?---\n*/, "")}
-                  />
-                </CardContent>
-              </Card>
-            )}
+            <TiptapEditor
+              content={mockArticleContent.replace(/^---[\s\S]*?---\n*/, "")}
+            />
           </TabsContent>
 
           <TabsContent value="en" className="mt-4">
