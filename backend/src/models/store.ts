@@ -76,6 +76,13 @@ export class Store<T extends { id: string }> {
     return fs.readFileSync(filePath, "utf-8");
   }
 
+  /** Write a text file within an entity directory */
+  writeTextFile(id: string, fileName: string, content: string): void {
+    const dir = path.join(this.basePath, id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, fileName), content, "utf-8");
+  }
+
   /** Get the directory path for an entity */
   entityDir(id: string): string {
     return path.join(this.basePath, id);

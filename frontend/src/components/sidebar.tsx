@@ -1,16 +1,16 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Search,
+  Compass,
   CalendarDays,
-  FileText,
+  PenSquare,
   Activity,
   Settings,
   ChevronDown,
-  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,15 +20,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { projects } from "@/lib/mock-data";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getCustomers, getProjects } from "@/lib/api";
+import type { Project } from "@/lib/types";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/research", label: "Research", icon: Search },
-  { href: "/planner", label: "Planner", icon: CalendarDays },
-  { href: "/articles", label: "Articles", icon: FileText },
-  { href: "/pipeline", label: "Pipeline", icon: Activity },
+  { href: "/research", label: "Research", icon: Compass },
+  { href: "/plan", label: "Plan", icon: CalendarDays },
+  { href: "/create", label: "Create", icon: PenSquare },
+  { href: "/monitor", label: "Monitor", icon: Activity },
 ];
 
 const settingsItems = [
@@ -37,14 +38,29 @@ const settingsItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [activeProject, setActiveProject] = useState(projects[0]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProject, setActiveProject] = useState<Project | null>(null);
+  const [customerId, setCustomerId] = useState<string>("");
+
+  useEffect(() => {
+    getCustomers().then((customers) => {
+      if (customers.length > 0) {
+        const cid = customers[0].id;
+        setCustomerId(cid);
+        getProjects(cid).then((p) => {
+          setProjects(p);
+          if (p.length > 0) setActiveProject(p[0]);
+        });
+      }
+    }).catch(() => { /* API not available */ });
+  }, []);
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
       {/* Logo */}
-      <div className="flex items-center gap-2 border-b px-4 py-4">
-        <Zap className="h-6 w-6 text-primary" />
-        <span className="text-lg font-semibold">FlowBoost</span>
+      <div className="flex items-center gap-2.5 border-b px-4 py-4">
+        <Image src="/logo.png" alt="FlowBoost" width={28} height={28} className="rounded-md" />
+        <span className="text-lg font-semibold">flowboost</span>
       </div>
 
       {/* Project Selector */}
@@ -55,7 +71,7 @@ export function Sidebar() {
               variant="ghost"
               className="w-full justify-between font-medium"
             >
-              {activeProject.name}
+              {activeProject?.name ?? "Loading..."}
               <ChevronDown className="h-4 w-4 opacity-50" />
             </Button>
           </DropdownMenuTrigger>
@@ -66,7 +82,7 @@ export function Sidebar() {
                 onClick={() => setActiveProject(project)}
               >
                 {project.name}
-                {project.id === activeProject.id && (
+                {project.id === activeProject?.id && (
                   <span className="ml-auto text-xs text-muted-foreground">Active</span>
                 )}
               </DropdownMenuItem>
@@ -127,7 +143,7 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="border-t px-4 py-3 text-xs text-muted-foreground">
-        FlowBoost v0.1.0
+        flowboost v0.1.0
       </div>
     </aside>
   );

@@ -7,17 +7,18 @@ import { runProductionPipeline } from "../../pipeline/production/run.js";
 const log = createLogger("api:pipeline");
 
 export async function pipelineRoutes(app: FastifyInstance) {
-  // POST /pipeline/strategy - Run strategy pipeline
-  app.post<{ Body: { projectId: string } }>("/strategy", async (request, reply) => {
-    const { projectId } = request.body as { projectId: string };
+  // POST /customers/:customerId/projects/:projectId/pipeline/strategy
+  app.post<{ Params: { customerId: string; projectId: string } }>("/strategy", async (request, reply) => {
+    const { customerId, projectId } = request.params;
 
-    const project = app.ctx.projects.get(projectId);
+    const project = app.ctx.projectsFor(customerId).get(projectId);
     if (!project) {
       return reply.status(404).send({ error: "Project not found" });
     }
 
     // Create pipeline run
-    const run = app.ctx.pipelineRuns.create({
+    const run = app.ctx.pipelineRunsFor(customerId, projectId).create({
+      customerId,
       projectId,
       type: "strategy",
       status: "pending",
@@ -33,12 +34,15 @@ export async function pipelineRoutes(app: FastifyInstance) {
 
     // Build context and run pipeline asynchronously
     const ctx = new PipelineContext(
+      customerId,
       project,
       run,
       {
-        projects: app.ctx.projects,
-        articles: app.ctx.articles,
-        pipelineRuns: app.ctx.pipelineRuns,
+        customers: app.ctx.customers,
+        projects: app.ctx.projectsFor(customerId),
+        articles: app.ctx.articlesFor(customerId, projectId),
+        pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
+        topics: app.ctx.topicsFor(customerId, projectId),
       },
       app.ctx.dataDir,
     );
@@ -51,21 +55,21 @@ export async function pipelineRoutes(app: FastifyInstance) {
     return { message: "Strategy pipeline started", runId: run.id };
   });
 
-  // POST /pipeline/produce - Run production pipeline
-  app.post<{ Body: { projectId: string; topicId: string } }>("/produce", async (request, reply) => {
-    const { projectId, topicId } = request.body as { projectId: string; topicId: string };
+  // POST /customers/:customerId/projects/:projectId/pipeline/produce
+  app.post<{
+    Params: { customerId: string; projectId: string };
+    Body: { topicId: string };
+  }>("/produce", async (request, reply) => {
+    const { customerId, projectId } = request.params;
+    const { topicId } = request.body as { topicId: string };
 
-    const project = app.ctx.projects.get(projectId);
+    const project = app.ctx.projectsFor(customerId).get(projectId);
     if (!project) {
       return reply.status(404).send({ error: "Project not found" });
     }
 
-    const plan = app.ctx.projects.getContentPlan(projectId);
-    if (!plan) {
-      return reply.status(400).send({ error: "No content plan. Run strategy first." });
-    }
-
-    const topic = plan.topics.find((t) => t.id === topicId);
+    const topics = app.ctx.topicsFor(customerId, projectId);
+    const topic = topics.get(topicId);
     if (!topic) {
       return reply.status(404).send({ error: "Topic not found" });
     }
@@ -74,7 +78,8 @@ export async function pipelineRoutes(app: FastifyInstance) {
     }
 
     // Create pipeline run
-    const run = app.ctx.pipelineRuns.create({
+    const run = app.ctx.pipelineRunsFor(customerId, projectId).create({
+      customerId,
       projectId,
       type: "production",
       status: "pending",
@@ -93,17 +98,19 @@ export async function pipelineRoutes(app: FastifyInstance) {
     });
 
     // Mark topic as in production
-    topic.status = "in_production";
-    app.ctx.projects.saveContentPlan(projectId, plan);
+    topics.update(topicId, { status: "in_production" });
 
     // Build context and run pipeline asynchronously
     const ctx = new PipelineContext(
+      customerId,
       project,
       run,
       {
-        projects: app.ctx.projects,
-        articles: app.ctx.articles,
-        pipelineRuns: app.ctx.pipelineRuns,
+        customers: app.ctx.customers,
+        projects: app.ctx.projectsFor(customerId),
+        articles: app.ctx.articlesFor(customerId, projectId),
+        pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
+        topics: app.ctx.topicsFor(customerId, projectId),
       },
       app.ctx.dataDir,
       topic,
@@ -117,12 +124,22 @@ export async function pipelineRoutes(app: FastifyInstance) {
     return { message: "Production pipeline started", runId: run.id };
   });
 
-  // GET /pipeline/runs/:id
-  app.get<{ Params: { id: string } }>("/runs/:id", async (request, reply) => {
-    const run = app.ctx.pipelineRuns.get(request.params.id);
-    if (!run) {
-      return reply.status(404).send({ error: "Pipeline run not found" });
-    }
-    return run;
+  // GET /customers/:customerId/projects/:projectId/pipeline/runs
+  app.get<{ Params: { customerId: string; projectId: string } }>("/runs", async (request) => {
+    const { customerId, projectId } = request.params;
+    return app.ctx.pipelineRunsFor(customerId, projectId).list();
   });
+
+  // GET /customers/:customerId/projects/:projectId/pipeline/runs/:runId
+  app.get<{ Params: { customerId: string; projectId: string; runId: string } }>(
+    "/runs/:runId",
+    async (request, reply) => {
+      const { customerId, projectId, runId } = request.params;
+      const run = app.ctx.pipelineRunsFor(customerId, projectId).get(runId);
+      if (!run) {
+        return reply.status(404).send({ error: "Pipeline run not found" });
+      }
+      return run;
+    },
+  );
 }

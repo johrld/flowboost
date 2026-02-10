@@ -1,28 +1,113 @@
 import path from "node:path";
+import os from "node:os";
+import fs from "node:fs";
+import { simpleGit } from "simple-git";
 import type { Project, PipelineRun, Topic } from "../models/types.js";
+import type { CustomerStore } from "../models/customer.js";
 import type { ProjectStore } from "../models/project.js";
 import type { ArticleStore } from "../models/article.js";
 import type { PipelineRunStore } from "../models/pipeline-run.js";
+import type { TopicStore } from "../models/topic.js";
+import { getCloneUrl } from "../services/github.js";
 
 export class PipelineContext {
   constructor(
+    public readonly customerId: string,
     public readonly project: Project,
     public readonly run: PipelineRun,
     public readonly stores: {
+      customers: CustomerStore;
       projects: ProjectStore;
       articles: ArticleStore;
       pipelineRuns: PipelineRunStore;
+      topics: TopicStore;
     },
     public readonly dataDir: string,
     public readonly topic?: Topic,
   ) {}
 
+  get customerDir(): string {
+    return path.join(this.dataDir, "customers", this.customerId);
+  }
+
   get projectDir(): string {
-    return path.join(this.dataDir, "projects", this.project.id);
+    return path.join(this.customerDir, "projects", this.project.id);
   }
 
   get scratchpadDir(): string {
     return this.stores.pipelineRuns.scratchpadDir(this.run.id);
+  }
+
+  private _repoDir: string | null = null;
+
+  /**
+   * Prepare the repo directory for pipeline access.
+   * For GitHub connector: clones repo with installation token.
+   * For git/other: uses REPOS_DIR env or projectDir/repo fallback.
+   * Call once at pipeline start, reuse the returned path.
+   */
+  async prepareRepo(): Promise<string> {
+    if (this._repoDir) return this._repoDir;
+
+    if (this.project.connector.type === "github") {
+      const gh = this.project.connector.github;
+      if (!gh) throw new Error("GitHub connector configured but no github config found");
+
+      const cloneUrl = await getCloneUrl(gh.installationId, gh.owner, gh.repo);
+      const tmpDir = path.join(os.tmpdir(), `flowboost-repo-${this.run.id}`);
+
+      // Clean up previous attempt
+      if (fs.existsSync(tmpDir)) {
+        fs.rmSync(tmpDir, { recursive: true });
+      }
+
+      await simpleGit().clone(cloneUrl, tmpDir, ["--branch", gh.branch, "--depth", "1"]);
+      this._repoDir = tmpDir;
+      return tmpDir;
+    }
+
+    // Fallback: REPOS_DIR (dev) or projectDir/repo
+    const reposDir = process.env.REPOS_DIR;
+    if (reposDir) {
+      this._repoDir = path.join(reposDir, this.project.slug);
+    } else {
+      this._repoDir = path.join(this.projectDir, "repo");
+    }
+    return this._repoDir;
+  }
+
+  /** Clean up cloned repo if it was a temp directory */
+  cleanupRepo(): void {
+    if (this._repoDir?.startsWith(os.tmpdir()) && fs.existsSync(this._repoDir)) {
+      fs.rmSync(this._repoDir, { recursive: true });
+      this._repoDir = null;
+    }
+  }
+
+  /** Legacy sync accessor — prefer prepareRepo() */
+  get repoDir(): string {
+    if (this._repoDir) return this._repoDir;
+    const reposDir = process.env.REPOS_DIR;
+    if (reposDir) return path.join(reposDir, this.project.slug);
+    return path.join(this.projectDir, "repo");
+  }
+
+  /** Get effective brand voice (project override > customer fallback) */
+  getBrandVoice(): string | null {
+    return this.stores.projects.getEffectiveBrandVoice(
+      this.project.id,
+      this.stores.customers,
+      this.customerId,
+    );
+  }
+
+  /** Get effective style guide (project override > customer fallback) */
+  getStyleGuide(): string | null {
+    return this.stores.projects.getEffectiveStyleGuide(
+      this.project.id,
+      this.stores.customers,
+      this.customerId,
+    );
   }
 
   /** Update run in store */

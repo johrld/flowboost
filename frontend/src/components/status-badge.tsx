@@ -79,8 +79,8 @@ const topicStatusConfig: Record<
   TopicStatus,
   { label: string; className: string; dot: string }
 > = {
-  researched: {
-    label: "Researched",
+  proposed: {
+    label: "Proposed",
     className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
     dot: "bg-gray-400",
   },
@@ -89,12 +89,17 @@ const topicStatusConfig: Record<
     className: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
     dot: "bg-cyan-500",
   },
-  producing: {
+  rejected: {
+    label: "Rejected",
+    className: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+    dot: "bg-red-400",
+  },
+  in_production: {
     label: "Producing",
     className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
     dot: "bg-blue-500 animate-pulse",
   },
-  done: {
+  produced: {
     label: "Done",
     className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
     dot: "bg-green-500",
@@ -120,6 +125,7 @@ const phaseStatusConfig: Record<PhaseStatus, { label: string; className: string 
   running: { label: "Running", className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
   completed: { label: "Done", className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
   failed: { label: "Failed", className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" },
+  skipped: { label: "Skipped", className: "bg-muted text-muted-foreground" },
 };
 
 export function PhaseStatusBadge({ status }: { status: PhaseStatus }) {
@@ -137,3 +143,4 @@ export function PhaseStatusBadge({ status }: { status: PhaseStatus }) {
     </span>
   );
 }
+

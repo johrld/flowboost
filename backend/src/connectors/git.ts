@@ -5,6 +5,7 @@ import { simpleGit, type SimpleGit } from "simple-git";
 import { createLogger } from "../utils/logger.js";
 import type { DeliveryConnector, DeliveryResult } from "./types.js";
 import type { Article, ArticleVersion, Project } from "../models/types.js";
+import { getCloneUrl } from "../services/github.js";
 
 const log = createLogger("connector:git");
 
@@ -21,9 +22,19 @@ export class GitConnector implements DeliveryConnector {
     versions: ArticleVersion[],
     versionDir: string,
   ): Promise<DeliveryResult> {
+    // Resolve config from either github or git connector
+    const ghConfig = project.connector.github;
     const gitConfig = project.connector.git;
-    if (!gitConfig) {
-      return { success: false, connector: this.name, filesWritten: [], error: "No git connector config" };
+
+    const repoUrl = ghConfig
+      ? await getCloneUrl(ghConfig.installationId, ghConfig.owner, ghConfig.repo)
+      : gitConfig?.repoUrl;
+    const branch = ghConfig?.branch ?? gitConfig?.branch;
+    const contentPath = ghConfig?.contentPath ?? gitConfig?.contentPath;
+    const assetsPath = ghConfig?.assetsPath ?? gitConfig?.assetsPath;
+
+    if (!repoUrl || !branch || !contentPath || !assetsPath) {
+      return { success: false, connector: this.name, filesWritten: [], error: "No git/github connector config" };
     }
 
     const filesWritten: string[] = [];
@@ -36,9 +47,9 @@ export class GitConnector implements DeliveryConnector {
       }
 
       // Clone the repository
-      log.info({ repo: gitConfig.repoUrl, branch: gitConfig.branch }, "cloning repository");
+      log.info({ branch }, "cloning repository");
       const git: SimpleGit = simpleGit();
-      await git.clone(gitConfig.repoUrl, workDir, ["--branch", gitConfig.branch, "--depth", "1"]);
+      await git.clone(repoUrl, workDir, ["--branch", branch, "--depth", "1"]);
 
       const repoGit = simpleGit(workDir);
 
@@ -50,26 +61,26 @@ export class GitConnector implements DeliveryConnector {
       for (const version of versions) {
         // Content file
         const sourceContent = path.join(versionDir, "content", version.lang, `${version.slug}.md`);
-        const targetContent = path.join(workDir, gitConfig.contentPath, version.lang, `${version.slug}.md`);
+        const targetContent = path.join(workDir, contentPath, version.lang, `${version.slug}.md`);
 
         if (fs.existsSync(sourceContent)) {
           fs.mkdirSync(path.dirname(targetContent), { recursive: true });
           fs.copyFileSync(sourceContent, targetContent);
-          filesWritten.push(path.join(gitConfig.contentPath, version.lang, `${version.slug}.md`));
+          filesWritten.push(path.join(contentPath, version.lang, `${version.slug}.md`));
           log.info({ lang: version.lang, slug: version.slug }, "content file added");
         }
 
         // Asset files (hero image)
         const sourceAssetsDir = path.join(versionDir, "assets", version.lang);
         if (fs.existsSync(sourceAssetsDir)) {
-          const targetAssetsDir = path.join(workDir, gitConfig.assetsPath, version.lang);
+          const targetAssetsDir = path.join(workDir, assetsPath, version.lang);
           fs.mkdirSync(targetAssetsDir, { recursive: true });
 
           for (const file of fs.readdirSync(sourceAssetsDir)) {
             const src = path.join(sourceAssetsDir, file);
             const dest = path.join(targetAssetsDir, file);
             fs.copyFileSync(src, dest);
-            filesWritten.push(path.join(gitConfig.assetsPath, version.lang, file));
+            filesWritten.push(path.join(assetsPath, version.lang, file));
             log.info({ lang: version.lang, file }, "asset file added");
           }
         }

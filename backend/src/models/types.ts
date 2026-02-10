@@ -1,7 +1,19 @@
 // ─── Core Entities ───────────────────────────────────────────────
 
+export interface Customer {
+  id: string;
+  name: string;
+  slug: string;
+  email?: string;
+  plan: "free" | "pro" | "enterprise";
+  authors: Author[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Project {
   id: string;
+  customerId: string;
   name: string;
   slug: string;
   description: string;
@@ -12,8 +24,16 @@ export interface Project {
   defaultLanguage: string;
   languages: Language[];
   categories: Category[];
-  authors: Author[];
   keywords: Record<string, string[]>;
+
+  // Publishing
+  publishFrequency?: {
+    articlesPerWeek: number;
+    preferredDays: number[]; // 0=Sun, 1=Mon, ...
+  };
+
+  // Competitors
+  competitors?: Competitor[];
 
   // Connector configuration
   connector: ConnectorConfig;
@@ -40,13 +60,27 @@ export interface Author {
   image?: string;
 }
 
+export interface Competitor {
+  domain: string;
+  name: string;
+  notes?: string;
+}
+
 export interface ConnectorConfig {
-  type: "git" | "filesystem" | "api";
+  type: "git" | "github" | "filesystem" | "api";
   git?: {
     repoUrl: string;
     branch: string;
     contentPath: string; // e.g. "src/content/posts"
     assetsPath: string;  // e.g. "src/assets/posts"
+  };
+  github?: {
+    installationId: number;
+    owner: string;
+    repo: string;
+    branch: string;
+    contentPath: string;
+    assetsPath: string;
   };
   filesystem?: {
     outputDir: string;
@@ -60,6 +94,11 @@ export interface PipelineSettings {
   imagenModel: string;
 }
 
+export interface ApiKeys {
+  anthropicApiKey?: string;
+  googleAiApiKey?: string;
+}
+
 // ─── Content Plan (Strategy Pipeline Output) ────────────────────
 
 export interface ContentPlan {
@@ -69,7 +108,6 @@ export interface ContentPlan {
   runId?: string;
 
   audit: ContentAudit;
-  topics: Topic[];
 }
 
 export interface ContentAudit {
@@ -98,6 +136,9 @@ export interface Topic {
   estimatedSections: number;
   reasoning: string;
 
+  createdAt?: string;
+  runId?: string;
+
   // Set after production
   articleId?: string;
   approvedAt?: string;
@@ -109,6 +150,7 @@ export interface Topic {
 
 export interface Article {
   id: string;
+  customerId: string;
   projectId: string;
   topicId: string;
   translationKey: string;
@@ -138,6 +180,7 @@ export type PhaseStatus = "pending" | "running" | "completed" | "failed" | "skip
 
 export interface PipelineRun {
   id: string;
+  customerId: string;
   projectId: string;
   type: PipelineType;
   status: RunStatus;

@@ -2,7 +2,7 @@ import path from "node:path";
 import { createLogger } from "../../utils/logger.js";
 import { runAgentTracked, type AgentConfig } from "../engine.js";
 import type { PipelineContext } from "../context.js";
-import type { ContentPlan } from "../../models/types.js";
+import type { ContentPlan, Topic } from "../../models/types.js";
 import { buildAuditorPrompt } from "../prompts/auditor.js";
 import { buildResearcherPrompt } from "../prompts/researcher.js";
 import { buildStrategistPrompt } from "../prompts/strategist.js";
@@ -20,10 +20,14 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
 
   ctx.updateRun({ status: "running", startedAt: new Date().toISOString() });
 
-  // Resolve the content directory from the git connector config
-  const contentDir = project.connector.git?.contentPath ?? "src/content/posts";
-  // For auditing, the agent reads from the actual repo — we pass the path as context
-  const repoContentDir = path.join(ctx.projectDir, "repo", contentDir);
+  // Clone/prepare repo for reading
+  const repoDir = await ctx.prepareRepo();
+
+  // Resolve the content directory from the connector config
+  const contentDir = project.connector.github?.contentPath
+    ?? project.connector.git?.contentPath
+    ?? "src/content/posts";
+  const repoContentDir = path.join(repoDir, contentDir);
 
   // ── Phase 1: Audit ─────────────────────────────────────────────
   log.info("starting audit phase");
@@ -125,18 +129,36 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
     }, researchResult);
 
     const result = await runAgentTracked(ctx, "strategy", prompt, strategistConfig);
-    contentPlan = extractJson<ContentPlan>(result.text);
+    const strategyOutput = extractJson<ContentPlan & { topics?: Topic[] }>(result.text);
 
-    // Ensure required fields
-    contentPlan.projectId = project.id;
-    contentPlan.runId = ctx.run.id;
-    contentPlan.updatedAt = new Date().toISOString();
+    // Extract topics and save individually to TopicStore
+    const topics = strategyOutput.topics ?? [];
+    const now = new Date().toISOString();
+    for (const topic of topics) {
+      if (!topic.id) topic.id = crypto.randomUUID();
+      if (!topic.status) topic.status = "proposed";
+      topic.createdAt = now;
+      topic.runId = ctx.run.id;
+      ctx.stores.topics.update(topic.id, topic) ?? ctx.stores.topics.create(topic as Omit<Topic, "id"> & { id: string });
+    }
 
-    // Save content plan to project data
+    // Save content plan (audit data only, no topics)
+    contentPlan = {
+      projectId: project.id,
+      createdAt: strategyOutput.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      runId: ctx.run.id,
+      audit: strategyOutput.audit ?? {
+        totalArticles: auditResult.totalArticles,
+        byCategory: auditResult.byCategory,
+        byLanguage: auditResult.byLanguage,
+        gaps: auditResult.categoryGaps,
+      },
+    };
     ctx.stores.projects.saveContentPlan(project.id, contentPlan);
 
     ctx.completePhase("strategy");
-    log.info({ topicCount: contentPlan.topics.length }, "strategy complete — content plan saved");
+    log.info({ topicCount: topics.length }, "strategy complete — topics + content plan saved");
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     ctx.failPhase("strategy", msg);
@@ -145,6 +167,7 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
   }
 
   // ── Done ───────────────────────────────────────────────────────
+  ctx.cleanupRepo();
   ctx.updateRun({ status: "completed", completedAt: new Date().toISOString() });
   log.info({ runId: ctx.run.id, cost: ctx.run.totalCostUsd }, "strategy pipeline completed");
 

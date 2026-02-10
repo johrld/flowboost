@@ -1,0 +1,32 @@
+{
+  "projectId": "550e8400-e29b-41d4-a716-446655440000",
+  "createdAt": "2026-02-10T14:06:16.477Z",
+  "updatedAt": "2026-02-10T14:07:33.829Z",
+  "runId": "30f5e25d-ba62-4399-a340-8b614a4c63f1",
+  "audit": {
+    "totalArticles": 4,
+    "byCategory": {
+      "stress": 4
+    },
+    "byLanguage": {
+      "de": 2,
+      "en": 1,
+      "es": 1
+    },
+    "categoryGaps": [
+      "meditation",
+      "breathing",
+      "mindfulness",
+      "sleep"
+    ],
+    "recommendations": [
+      "Create content for meditation category (0 articles)",
+      "Create content for breathing category (0 articles)",
+      "Create content for mindfulness category (0 articles)",
+      "Create content for sleep category (0 articles)",
+      "All stress articles use the same translationKey - consider diversifying topics within stress category",
+      "Balance language distribution is achieved for existing translationKey",
+      "Expand keyword diversity beyond anxiety/breathing techniques"
+    ]
+  }
+}

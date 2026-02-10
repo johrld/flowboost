@@ -1,0 +1,29 @@
+{
+  "id": "topic-5",
+  "status": "proposed",
+  "title": "Progressive Muscle Relaxation for Insomnia: Step-by-Step Sleep Technique",
+  "category": "sleep",
+  "priority": 5,
+  "keywords": {
+    "primary": "progressive muscle relaxation for sleep",
+    "secondary": [
+      "progressive muscle relaxation insomnia",
+      "PMR technique",
+      "muscle relaxation for sleep",
+      "progressive relaxation exercises",
+      "sleep relaxation techniques"
+    ],
+    "longTail": [
+      "how to do progressive muscle relaxation for insomnia",
+      "progressive muscle relaxation script for bedtime",
+      "does PMR help you fall asleep faster"
+    ]
+  },
+  "searchIntent": "how-to",
+  "competitorInsights": "Harvard Health, WebMD, and Sleep Foundation provide clinical descriptions and basic instructions. Gaps: Limited beginner-friendly scripts, no audio/video integration, missing comparison with other sleep techniques (breathing, meditation), no guidance for combining PMR with other practices, minimal troubleshooting.",
+  "suggestedAngle": "Create the most comprehensive PMR guide with full scripts (10-min, 20-min versions), scientific evidence (including 2023 research on slow-wave sleep increases), comparison matrix with body scan and breathing techniques, combination protocols (PMR + 4-7-8 breathing), and troubleshooting for tension issues.",
+  "estimatedSections": 7,
+  "reasoning": "Strengthens sleep category with second article, strong evidence-based technique with proven results (125% increase in slow-wave sleep), complements body scan article with internal linking opportunity, lower competition for comprehensive guides, supports Breathe app credibility with science-backed content",
+  "approvedAt": "2026-02-06T17:26:19.247Z",
+  "articleId": "508b5100-e8e2-4194-842f-d187d9e8a187"
+}

@@ -4,7 +4,7 @@ import { createLogger } from "./utils/logger.js";
 
 const log = createLogger("main");
 
-const port = parseInt(process.env.PORT ?? "6000", 10);
+const port = parseInt(process.env.PORT ?? "6100", 10);
 const dataDir = path.resolve(process.env.DATA_DIR ?? "./data");
 
 async function main() {

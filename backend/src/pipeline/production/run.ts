@@ -35,6 +35,7 @@ export async function runProductionPipeline(ctx: PipelineContext): Promise<Artic
 
   // Determine output paths
   const article = ctx.stores.articles.create({
+    customerId: ctx.customerId,
     projectId: project.id,
     topicId: topic.id,
     translationKey: outline.sections.find((s) => s.type === "meta")
@@ -125,16 +126,11 @@ export async function runProductionPipeline(ctx: PipelineContext): Promise<Artic
     updatedAt: new Date().toISOString(),
   });
 
-  // Update topic status in content plan
-  const plan = ctx.stores.projects.getContentPlan(project.id);
-  if (plan) {
-    const planTopic = plan.topics.find((t) => t.id === topic.id);
-    if (planTopic) {
-      planTopic.status = "produced";
-      planTopic.articleId = article.id;
-      ctx.stores.projects.saveContentPlan(project.id, plan);
-    }
-  }
+  // Update topic status in TopicStore
+  ctx.stores.topics.update(topic.id, {
+    status: "produced",
+    articleId: article.id,
+  });
 
   ctx.updateRun({ status: "completed", completedAt: new Date().toISOString() });
   log.info({

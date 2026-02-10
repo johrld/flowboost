@@ -11,6 +11,9 @@ export function createConnector(project: Project): DeliveryConnector {
     case "git":
       return new GitConnector();
 
+    case "github":
+      return new GitConnector();
+
     case "filesystem":
       if (!project.connector.filesystem?.outputDir) {
         throw new Error("Filesystem connector requires outputDir");

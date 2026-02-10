@@ -1,0 +1,9 @@
+## Häufige Fehler und wie du schneller Fortschritte machst
+
+Die meisten Anfänger machen denselben Fehler: Sie erwarten, dass Atemtechniken gegen Angst beim ersten Mal Wunder wirken. Du probierst 4-7-8 Atmung während einer Panikattacke aus, es hilft nicht sofort – und du gibst auf. Das ist, als würdest du beim ersten Joggen einen Marathon laufen wollen. Atemübungen sind wie ein Muskel: Sie werden mit Übung stärker. Wenn du nur in akuten Angstsituationen atmest, fehlt deinem Nervensystem die Routine. Ein weiterer klassischer Fehler ist zu forciertes oder zu flaches Atmen. Manche pressen die Luft regelrecht raus, andere atmen so sanft, dass kaum Sauerstoff ankommt.
+
+Der Schlüssel zum Erfolg liegt im regelmäßigen Üben – auch wenn du gerade keine Angst hast. Starte mit 2-3 Minuten täglich, am besten morgens oder abends. Beginne mit nur 3-4 Zyklen deiner gewählten Technik und steigere dich langsam. Teste beide Methoden (4-7-8 und Box Breathing) an stressfreien Tagen, um herauszufinden, welche dir besser liegt. So baust du eine Routine auf, bevor du die Atemübungen bei Stress wirklich brauchst.
+
+Ein sinnvoller Progressionsplan sieht so aus: Woche 1-2 konzentrierst du dich auf eine Technik, übst täglich und verinnerlichst den Rhythmus. Ab Woche 3 kannst du bei Bedarf kombinieren – zum Beispiel Box Breathing am Morgen zur Aktivierung, 4-7-8 Atmung abends zum Einschlafen. Nach 4 Wochen regelmäßiger Praxis merkst du meist deutliche Unterschiede in deiner Stressreaktion.
+
+Wichtig: Wenn du unter schweren Angststörungen leidest oder Panikattacken deinen Alltag stark beeinträchtigen, sind Atemtechniken eine wertvolle Ergänzung – aber kein Ersatz für professionelle Hilfe. Sprich mit einem Therapeuten, wenn Angst dein Leben einschränkt, du nachts nicht mehr schlafen kannst oder dich zunehmend isolierst. Atemübungen können dann Teil eines größeren Behandlungsplans sein.

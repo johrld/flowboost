@@ -1,0 +1,209 @@
+{
+  "topic": {
+    "title": "Atemtechniken gegen Angst: 4-7-8 vs. Box Breathing im Vergleich",
+    "category": "stress",
+    "primaryKeyword": "atemtechniken gegen angst",
+    "secondaryKeywords": [
+      "4-7-8 atmung",
+      "breathing gegen panikattacke",
+      "atemübungen bei stress",
+      "welche atemtechnik bei angst"
+    ],
+    "longTailKeywords": [
+      "beste atemtechnik gegen panikattacke",
+      "4-7-8 oder box breathing bei angst",
+      "welche atemübung hilft sofort bei stress"
+    ],
+    "searchIntent": "informational",
+    "suggestedAngle": "Comprehensive breathing technique comparison with decision matrix (situation, anxiety level, setting), scientific effectiveness data for each method (cyclic sighing research, HRV studies), step-by-step instructions for both, progression recommendations, and clear guidance on when to seek professional help. Avoid overpromising - honest about limitations."
+  },
+  "sections": [
+    {
+      "id": "meta",
+      "type": "meta",
+      "outputFile": "meta.yaml",
+      "frontmatter": {
+        "slug": "atemtechniken-gegen-angst-vergleich",
+        "category": "stress",
+        "author": "breathe-team",
+        "tags": [
+          "atemtechnik",
+          "angst",
+          "panikattacke",
+          "stress"
+        ],
+        "keywords": [
+          "atemtechniken gegen angst",
+          "4-7-8 atmung",
+          "breathing gegen panikattacke",
+          "atemübungen bei stress",
+          "welche atemtechnik bei angst"
+        ],
+        "translationKey": "breathing-techniques-anxiety-comparison",
+        "translations": {
+          "en": "breathing-techniques-anxiety-comparison",
+          "es": "tecnicas-respiracion-ansiedad-comparacion"
+        }
+      }
+    },
+    {
+      "id": "intro",
+      "type": "introduction",
+      "outputFile": "intro.md",
+      "h1": "Atemtechniken gegen Angst: 4-7-8 vs. Box Breathing im Vergleich",
+      "answerCapsuleDirection": "Erkläre, dass beide Techniken wissenschaftlich fundiert sind: 4-7-8 Atmung wirkt schneller und stärker beruhigend (ideal bei akuter Panik), Box Breathing fördert langfristig Fokus und emotionale Stabilität. Die Wahl hängt von Situation, Angstniveau und persönlicher Präferenz ab.",
+      "hookStrategy": "statistic"
+    },
+    {
+      "id": "section-1",
+      "type": "h2_section",
+      "outputFile": "section-1.md",
+      "h2": "Warum Atemtechniken bei Angst wissenschaftlich wirken",
+      "targetWords": 320,
+      "minParagraphs": 4,
+      "keywordsToInclude": [
+        "atemübungen bei stress",
+        "atemtechniken gegen angst"
+      ],
+      "contentDirection": "Erkläre die physiologische Verbindung zwischen Atmung und Nervensystem: Wie langsame, bewusste Atmung den Vagusnerv aktiviert und den Parasympathikus stimuliert. Nenne HRV-Studien (Heart Rate Variability) und Cortisol-Reduktion. Vermeide Übertreibungen – ehrlich über Grenzen sprechen (keine Heilversprechen, bei schweren Angststörungen professionelle Hilfe nötig).",
+      "h3s": []
+    },
+    {
+      "id": "section-2",
+      "type": "h2_section",
+      "outputFile": "section-2.md",
+      "h2": "4-7-8 Atmung: Die Einschlaf-Atemtechnik gegen akute Angst",
+      "targetWords": 380,
+      "minParagraphs": 4,
+      "keywordsToInclude": [
+        "4-7-8 atmung",
+        "beste atemtechnik gegen panikattacke"
+      ],
+      "contentDirection": "Schritt-für-Schritt Anleitung der 4-7-8 Technik (Dr. Andrew Weil). Erkläre Wirkungsweise: Verlängertes Ausatmen aktiviert Parasympathikus besonders stark. Wissenschaftliche Evidenz: Cyclic Sighing Studie (Stanford 2023). Wann anwenden: Bei akuten Panikattacken, Einschlafproblemen, plötzlicher Überwältigung. Konkretes Beispiel aus dem Alltag (z.B. vor wichtigem Termin).",
+      "h3s": [
+        "So funktioniert die 4-7-8 Atemtechnik Schritt für Schritt",
+        "Wann ist 4-7-8 Atmung die beste Wahl?"
+      ],
+      "internalLink": {
+        "anchor": "wissenschaftlich fundierte Atemübungen",
+        "href": "/de/guides/atemubungen-anfaenger"
+      }
+    },
+    {
+      "id": "section-3",
+      "type": "h2_section",
+      "outputFile": "section-3.md",
+      "h2": "Box Breathing: Die Navy SEAL Technik für Fokus und Kontrolle",
+      "targetWords": 380,
+      "minParagraphs": 4,
+      "keywordsToInclude": [
+        "breathing gegen panikattacke",
+        "welche atemübung hilft sofort bei stress"
+      ],
+      "contentDirection": "Schritt-für-Schritt Anleitung Box Breathing (4-4-4-4). Erkläre Symmetrie-Prinzip: Gleichgewicht zwischen Ein- und Ausatmen fördert mentale Klarheit. Studienlage zu HRV-Verbesserung und Stressreduktion. Wann anwenden: Bei mittlerer Angst, vor Stresssituationen, für bessere Konzentration. Navy SEAL Kontext kurz erwähnen (nicht übertreiben). Alltagsbeispiel (z.B. im Wartezimmer).",
+      "h3s": [
+        "Anleitung: Box Breathing in 4 gleichmäßigen Schritten",
+        "Wann eignet sich Box Breathing am besten?"
+      ],
+      "internalLink": {
+        "anchor": "Box Breathing Technik",
+        "href": "/de/blog/box-breathing-anleitung"
+      }
+    },
+    {
+      "id": "section-4",
+      "type": "h2_section",
+      "outputFile": "section-4.md",
+      "h2": "Direkt-Vergleich: Welche Atemtechnik bei welcher Angst?",
+      "targetWords": 350,
+      "minParagraphs": 3,
+      "keywordsToInclude": [
+        "4-7-8 oder box breathing bei angst",
+        "welche atemtechnik bei angst"
+      ],
+      "contentDirection": "Erstelle eine klare Entscheidungsmatrix: Angstniveau (leicht/mittel/schwer), Situation (akut/präventiv), Setting (unterwegs/zuhause), Erfahrungslevel. 4-7-8 gewinnt bei: akuter Panik, Einschlafschwierigkeiten, starker emotionaler Aufregung. Box Breathing gewinnt bei: mittlerer Anspannung, Konzentrationsbedarf, öffentlichen Settings (unauffälliger). Tabelle oder Liste zur Übersichtlichkeit. Ehrlich kommunizieren: Beide Techniken brauchen Übung für volle Wirksamkeit.",
+      "h3s": [
+        "Entscheidungshilfe: 4-7-8 vs. Box Breathing"
+      ]
+    },
+    {
+      "id": "section-5",
+      "type": "h2_section",
+      "outputFile": "section-5.md",
+      "h2": "Häufige Fehler und wie du schneller Fortschritte machst",
+      "targetWords": 300,
+      "minParagraphs": 3,
+      "keywordsToInclude": [
+        "atemtechniken gegen angst",
+        "atemübungen bei stress"
+      ],
+      "contentDirection": "Liste häufige Anfängerfehler: Zu starke Erwartungen an sofortige Wirkung, unregelmäßiges Üben, falsche Atemtechnik (zu flach/zu forciert), während Panikattacke erstmals ausprobieren. Gib konkrete Tipps: Täglich 2-3 Minuten üben (auch ohne Angst), mit 3-4 Zyklen starten, beide Techniken testen. Progressionsplan: Woche 1-2 eine Technik etablieren, dann bei Bedarf kombinieren. Klarstellung wann professionelle Hilfe nötig ist (schwere Angststörung, Panikattacken beeinträchtigen Alltag stark).",
+      "h3s": []
+    },
+    {
+      "id": "section-6",
+      "type": "h2_section",
+      "outputFile": "section-6.md",
+      "h2": "Praktische Anwendung im Alltag: So integrierst du beide Techniken",
+      "targetWords": 280,
+      "minParagraphs": 3,
+      "keywordsToInclude": [
+        "atemübungen bei stress",
+        "welche atemübung hilft sofort bei stress"
+      ],
+      "contentDirection": "Gib konkrete Alltagsszenarien mit Empfehlungen: Morgens (Box Breathing für Tagesstart), vor Meetings/Prüfungen (Box Breathing), abends (4-7-8 zum Runterkommen), bei akuter Angst (4-7-8), im Zug/Büro (Box Breathing unauffälliger). Tipp: Beide Techniken mit Erinnerungen im Handy verknüpfen. Realistische Erwartungen setzen: Nach 1-2 Wochen regelmäßiger Praxis erste deutliche Effekte, volle Wirkung nach 4 Wochen.",
+      "h3s": []
+    },
+    {
+      "id": "conclusion",
+      "type": "conclusion",
+      "outputFile": "conclusion.md",
+      "keyTakeaways": [
+        "4-7-8 Atmung wirkt stärker beruhigend bei akuter Angst und Einschlafproblemen",
+        "Box Breathing fördert Fokus und emotionale Stabilität in Stresssituationen",
+        "Beide Techniken brauchen regelmäßiges Üben für volle Wirksamkeit – starte mit 2-3 Minuten täglich"
+      ],
+      "ctaType": "app_download"
+    },
+    {
+      "id": "faq",
+      "type": "faq",
+      "outputFile": "faq.yaml",
+      "faqSpecs": [
+        {
+          "question": "Welche Atemtechnik hilft am besten bei Panikattacken?",
+          "direction": "Empfehle 4-7-8 Atmung wegen stärkerer Parasympathikus-Aktivierung durch verlängertes Ausatmen. Erwähne, dass Box Breathing auch wirkt, aber 4-7-8 bei akuter Panik meist schneller beruhigt."
+        },
+        {
+          "question": "Kann ich 4-7-8 und Box Breathing kombinieren?",
+          "direction": "Ja, empfehle z.B. Box Breathing tagsüber präventiv, 4-7-8 abends oder bei akuter Angst. Klarstellen: Nicht gleichzeitig, sondern situationsabhängig wählen."
+        },
+        {
+          "question": "Wie oft sollte ich Atemübungen gegen Angst machen?",
+          "direction": "2-3 mal täglich je 3-5 Minuten für präventive Wirkung. Bei akuter Angst zusätzlich situativ. Wichtig: Regelmäßigkeit schlägt Dauer."
+        },
+        {
+          "question": "Wirken Atemtechniken sofort oder braucht es Übung?",
+          "direction": "Ehrlich antworten: Leichte Beruhigung oft sofort spürbar, volle Wirkung nach 1-2 Wochen regelmäßiger Praxis. Wie ein Muskel – je öfter geübt, desto stärker der Effekt."
+        },
+        {
+          "question": "Wann sollte ich trotz Atemübungen professionelle Hilfe suchen?",
+          "direction": "Bei schweren Angststörungen, häufigen Panikattacken (mehrmals pro Woche), oder wenn Angst den Alltag stark einschränkt. Atemtechniken sind Ergänzung, kein Ersatz für Therapie."
+        }
+      ]
+    }
+  ],
+  "totalTargetWords": 2010,
+  "internalLinks": [
+    {
+      "anchor": "wissenschaftlich fundierte Atemübungen",
+      "href": "/de/guides/atemubungen-anfaenger",
+      "placedInSection": "section-2"
+    },
+    {
+      "anchor": "Box Breathing Technik",
+      "href": "/de/blog/box-breathing-anleitung",
+      "placedInSection": "section-3"
+    }
+  ]
+}

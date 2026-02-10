@@ -1,22 +1,30 @@
+import path from "node:path";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { createLogger } from "../utils/logger.js";
+import { CustomerStore } from "../models/customer.js";
 import { ProjectStore } from "../models/project.js";
 import { ArticleStore } from "../models/article.js";
 import { PipelineRunStore } from "../models/pipeline-run.js";
+import { TopicStore } from "../models/topic.js";
 import { healthRoutes } from "./routes/health.js";
+import { customerRoutes } from "./routes/customers.js";
 import { projectRoutes } from "./routes/projects.js";
+import { topicRoutes } from "./routes/topics.js";
 import { contentPlanRoutes } from "./routes/content-plan.js";
 import { articleRoutes } from "./routes/articles.js";
 import { pipelineRoutes } from "./routes/pipeline.js";
+import { githubAuthRoutes, githubApiRoutes } from "./routes/github.js";
 
 const log = createLogger("server");
 
 export interface AppContext {
-  projects: ProjectStore;
-  articles: ArticleStore;
-  pipelineRuns: PipelineRunStore;
   dataDir: string;
+  customers: CustomerStore;
+  projectsFor(customerId: string): ProjectStore;
+  articlesFor(customerId: string, projectId: string): ArticleStore;
+  pipelineRunsFor(customerId: string, projectId: string): PipelineRunStore;
+  topicsFor(customerId: string, projectId: string): TopicStore;
 }
 
 declare module "fastify" {
@@ -30,21 +38,35 @@ export async function buildServer(dataDir: string) {
 
   await app.register(cors, { origin: true });
 
-  // Application context
+  // Application context with factory methods
   const ctx: AppContext = {
-    projects: new ProjectStore(dataDir),
-    articles: new ArticleStore(dataDir),
-    pipelineRuns: new PipelineRunStore(dataDir),
     dataDir,
+    customers: new CustomerStore(dataDir),
+    projectsFor(customerId: string) {
+      return new ProjectStore(path.join(dataDir, "customers", customerId, "projects"));
+    },
+    articlesFor(customerId: string, projectId: string) {
+      return new ArticleStore(path.join(dataDir, "customers", customerId, "projects", projectId, "articles"));
+    },
+    pipelineRunsFor(customerId: string, projectId: string) {
+      return new PipelineRunStore(path.join(dataDir, "customers", customerId, "projects", projectId, "pipeline-runs"));
+    },
+    topicsFor(customerId: string, projectId: string) {
+      return new TopicStore(path.join(dataDir, "customers", customerId, "projects", projectId, "topics"));
+    },
   };
   app.decorate("ctx", ctx);
 
   // Routes
   await app.register(healthRoutes);
-  await app.register(projectRoutes, { prefix: "/projects" });
-  await app.register(contentPlanRoutes, { prefix: "/projects" });
-  await app.register(articleRoutes, { prefix: "/articles" });
-  await app.register(pipelineRoutes, { prefix: "/pipeline" });
+  await app.register(customerRoutes, { prefix: "/customers" });
+  await app.register(projectRoutes, { prefix: "/customers/:customerId/projects" });
+  await app.register(topicRoutes, { prefix: "/customers/:customerId/projects/:projectId/topics" });
+  await app.register(contentPlanRoutes, { prefix: "/customers/:customerId/projects/:projectId" });
+  await app.register(articleRoutes, { prefix: "/customers/:customerId/projects/:projectId/articles" });
+  await app.register(pipelineRoutes, { prefix: "/customers/:customerId/projects/:projectId/pipeline" });
+  await app.register(githubAuthRoutes, { prefix: "/auth" });
+  await app.register(githubApiRoutes, { prefix: "/github" });
 
   // Error handler
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {

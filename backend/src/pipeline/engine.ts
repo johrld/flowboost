@@ -30,7 +30,10 @@ export interface AgentRunResult {
  * Resolve the absolute path to the MCP stdio server script.
  */
 function getMcpServerPath(): string {
-  return path.resolve(import.meta.dirname, "../tools/mcp-stdio-server.ts");
+  // In compiled dist/, the file is .js; in dev with tsx, it's .ts
+  const jsPath = path.resolve(import.meta.dirname, "../tools/mcp-stdio-server.js");
+  const tsPath = path.resolve(import.meta.dirname, "../tools/mcp-stdio-server.ts");
+  return fs.existsSync(jsPath) ? jsPath : tsPath;
 }
 
 /**
@@ -78,10 +81,12 @@ export async function runAgent(
     fs.writeFileSync(mcpConfigPath, JSON.stringify({
       mcpServers: {
         flowboost: {
-          command: "npx",
-          args: ["tsx", getMcpServerPath()],
+          command: "node",
+          args: [getMcpServerPath()],
           env: {
             FLOWBOOST_DATA_DIR: ctx.dataDir,
+            FLOWBOOST_CUSTOMER_DIR: ctx.customerDir,
+            FLOWBOOST_PROJECT_DIR: ctx.projectDir,
             GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
           },
         },
@@ -144,6 +149,7 @@ function spawnClaude(
 
     const events: AgentEvent[] = [];
     let resultText = "";
+    let assistantText = ""; // fallback: collect text from assistant messages
     let costUsd = 0;
     let inputTokens = 0;
     let outputTokens = 0;
@@ -163,13 +169,24 @@ function spawnClaude(
           const msg = JSON.parse(line);
           processStreamEvent(msg, events, onEvent);
 
+          // Collect text from assistant messages as fallback
+          if (msg.type === "assistant") {
+            const message = msg.message as { content?: Array<Record<string, unknown>> } | undefined;
+            for (const block of message?.content ?? []) {
+              if (block.type === "text" && typeof block.text === "string") {
+                assistantText += block.text;
+              }
+            }
+          }
+
           // Capture result
           if (msg.type === "result") {
             resultText = msg.result ?? resultText;
-            costUsd = msg.cost_usd ?? 0;
-            inputTokens = msg.input_tokens ?? 0;
-            outputTokens = msg.output_tokens ?? 0;
-            sessionId = msg.session_id ?? "";
+            costUsd = msg.total_cost_usd ?? msg.cost_usd ?? 0;
+            const usage = msg.usage as Record<string, number> | undefined;
+            inputTokens = usage?.input_tokens ?? msg.input_tokens ?? 0;
+            outputTokens = usage?.output_tokens ?? msg.output_tokens ?? 0;
+            sessionId = (msg.session_id as string) ?? "";
           }
         } catch { /* ignore parse errors for incomplete lines */ }
       }
@@ -192,21 +209,27 @@ function spawnClaude(
           processStreamEvent(msg, events, onEvent);
           if (msg.type === "result") {
             resultText = msg.result ?? resultText;
-            costUsd = msg.cost_usd ?? 0;
-            inputTokens = msg.input_tokens ?? 0;
-            outputTokens = msg.output_tokens ?? 0;
-            sessionId = msg.session_id ?? "";
+            costUsd = msg.total_cost_usd ?? msg.cost_usd ?? 0;
+            const usage = msg.usage as Record<string, number> | undefined;
+            inputTokens = usage?.input_tokens ?? msg.input_tokens ?? 0;
+            outputTokens = usage?.output_tokens ?? msg.output_tokens ?? 0;
+            sessionId = (msg.session_id as string) ?? "";
           }
         } catch { /* ignore */ }
       }
 
-      if (code !== 0 && !resultText) {
+      // Use assistantText as fallback if result event had empty text
+      const finalText = resultText || assistantText;
+
+      if (code !== 0 && !finalText) {
         reject(new Error(`Claude CLI exited with code ${code}: ${stderr.slice(0, 500)}`));
         return;
       }
 
+      log.debug({ hasResult: !!resultText, hasAssistant: !!assistantText, textLength: finalText.length }, "agent output collected");
+
       resolve({
-        text: resultText,
+        text: finalText,
         costUsd,
         tokens: { input: inputTokens, output: outputTokens },
         sessionId,

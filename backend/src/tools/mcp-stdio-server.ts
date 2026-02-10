@@ -19,6 +19,8 @@ import {
 } from "../utils/markdown.js";
 
 const dataDir = process.env.FLOWBOOST_DATA_DIR;
+const projectDir = process.env.FLOWBOOST_PROJECT_DIR;
+const customerDir = process.env.FLOWBOOST_CUSTOMER_DIR;
 if (!dataDir) {
   process.stderr.write("FLOWBOOST_DATA_DIR not set\n");
   process.exit(1);
@@ -134,45 +136,53 @@ server.tool(
 
 server.tool(
   "flowboost_read_project_data",
-  "Read project configuration, brand voice, style guide, SEO guidelines, templates, section specs, or other project resources.",
+  "Read project configuration, brand voice, style guide, SEO guidelines, templates, section specs, or other project resources. Brand voice and style guide use fallback: project-level > customer-level.",
   {
-    projectId: z.string().describe("Project UUID"),
-    resource: z.string().describe("Resource to read: project, authors, categories, languages, keywords, brand-voice, style-guide, seo-guidelines, content-types, content-plan, template:<name>, section-spec:<name>"),
+    resource: z.string().describe("Resource to read: project, brand-voice, style-guide, seo-guidelines, content-types, content-plan, template:<name>, section-spec:<name>"),
   },
   async (args) => {
-    const projectDir = path.join(dataDir, "projects", args.projectId);
-    if (!fs.existsSync(projectDir)) {
-      return { content: [{ type: "text" as const, text: JSON.stringify({ error: `Project not found: ${args.projectId}` }) }] };
+    if (!projectDir) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "FLOWBOOST_PROJECT_DIR not set" }) }] };
     }
 
     const resourceMap: Record<string, string> = {
       project: "project.json",
-      authors: "authors.json",
-      categories: "categories.json",
-      languages: "languages.json",
-      keywords: "keywords.json",
-      "brand-voice": "brand-voice.md",
-      "style-guide": "style-guide.md",
       "seo-guidelines": "seo-guidelines.md",
       "content-types": "content-types.md",
       "content-plan": "content-plan.json",
     };
 
-    let filePath: string;
+    // Resources with customer-level fallback
+    const fallbackResources = ["brand-voice", "style-guide"];
+
+    let filePath: string | undefined;
     const resource = args.resource;
 
     if (resource.startsWith("template:")) {
       filePath = path.join(projectDir, "templates", `${resource.slice(9)}.md`);
     } else if (resource.startsWith("section-spec:")) {
       filePath = path.join(projectDir, "section-specs", `${resource.slice(13)}.md`);
+    } else if (fallbackResources.includes(resource)) {
+      // Try project-level first, then customer-level
+      const fileName = `${resource}.md`;
+      const projectPath = path.join(projectDir, fileName);
+      const customerPath = customerDir ? path.join(customerDir, fileName) : null;
+
+      if (fs.existsSync(projectPath)) {
+        filePath = projectPath;
+      } else if (customerPath && fs.existsSync(customerPath)) {
+        filePath = customerPath;
+      } else {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: `Resource not found: ${resource} (checked project and customer level)` }) }] };
+      }
     } else if (resourceMap[resource]) {
       filePath = path.join(projectDir, resourceMap[resource]);
     } else {
       return { content: [{ type: "text" as const, text: JSON.stringify({ error: `Unknown resource: ${resource}` }) }] };
     }
 
-    if (!fs.existsSync(filePath)) {
-      return { content: [{ type: "text" as const, text: JSON.stringify({ error: `Resource not found: ${filePath}` }) }] };
+    if (!filePath || !fs.existsSync(filePath)) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: `Resource not found: ${filePath ?? resource}` }) }] };
     }
 
     const content = fs.readFileSync(filePath, "utf-8");

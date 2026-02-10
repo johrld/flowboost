@@ -89,12 +89,31 @@ export const agents: Agent[] = [
 
 // Map pipeline phase to agents involved
 export const phaseAgents: Record<string, string[]> = {
+  // Strategy phases
+  audit: ["researcher"],
+  research: ["researcher"],
+  strategy: ["researcher"],
+  // Production phases
   outline: ["architect"],
   writing: ["writer"],
   assembly: ["editor"],
   image: ["designer"],
   quality: ["seo-checker", "reviewer"],
   translation: ["translator"],
+};
+
+export const phaseLabels: Record<string, string> = {
+  // Strategy phases
+  audit: "Content Audit",
+  research: "Research",
+  strategy: "Strategy",
+  // Production phases
+  outline: "Outline",
+  writing: "Writing",
+  assembly: "Assembly",
+  image: "Image",
+  quality: "Quality",
+  translation: "Translation",
 };
 
 export function getAgent(id: string): Agent | undefined {

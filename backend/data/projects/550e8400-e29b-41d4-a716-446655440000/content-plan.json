@@ -1,172 +1,168 @@
 {
   "projectId": "550e8400-e29b-41d4-a716-446655440000",
-  "createdAt": "2026-02-06T16:57:58.274Z",
-  "updatedAt": "2026-02-06T17:26:19.247Z",
+  "createdAt": "2026-02-10T14:06:16.477Z",
+  "updatedAt": "2026-02-10T14:06:16.477Z",
   "audit": {
-    "totalArticles": 0,
+    "totalArticles": 4,
     "byCategory": {
-      "meditation": 0,
-      "breathing": 0,
-      "mindfulness": 0,
-      "sleep": 0,
-      "stress": 0
+      "stress": 4
     },
     "byLanguage": {
-      "de": 0,
-      "en": 0,
-      "es": 0
+      "de": 2,
+      "en": 1,
+      "es": 1
     },
     "categoryGaps": [
       "meditation",
       "breathing",
       "mindfulness",
-      "sleep",
-      "stress"
+      "sleep"
     ],
     "recommendations": [
-      "No content exists yet - start by creating foundational articles in German (default language)",
-      "Prioritize high-volume primary keywords: 'meditation lernen', 'atemübungen', 'achtsamkeit', 'einschlafmeditation', 'stress abbauen'",
-      "Create 2-3 pillar articles per category before translating to ensure quality foundation",
-      "Start with meditation category (order 1) and breathing category (order 2) as they are core app features",
-      "Target 15-20 articles total (3-4 per category) in German first, then translate to EN and ES",
-      "Focus on 'für anfänger' (for beginners) content types as indicated by long-tail keywords",
-      "Address user intent patterns: 'lernen' (learn), 'anleitung' (guide), 'gegen' (against/for relief)",
-      "Ensure each article targets 1 primary + 2-3 secondary keywords from the keyword map"
+      "Create content for meditation category (0 articles)",
+      "Create content for breathing category (0 articles)",
+      "Create content for mindfulness category (0 articles)",
+      "Create content for sleep category (0 articles)",
+      "All stress articles use the same translationKey - consider diversifying topics within stress category",
+      "Balance language distribution is achieved for existing translationKey",
+      "Expand keyword diversity beyond anxiety/breathing techniques"
     ]
   },
   "topics": [
     {
       "id": "topic-1",
       "status": "proposed",
-      "title": "5-Minuten-Meditation: Sofortige Ruhe für Einsteiger",
-      "category": "meditation",
+      "title": "Breathing Exercises for Workplace Stress: 4 Techniques You Can Do at Your Desk",
+      "category": "breathing",
       "priority": 1,
       "keywords": {
-        "primary": "5 minuten meditation",
+        "primary": "breathing exercises for workplace stress",
         "secondary": [
-          "meditation für anfänger",
-          "kurze meditation",
-          "schnelle meditation",
-          "meditation lernen"
+          "breathing techniques for stress",
+          "desk breathing exercises",
+          "workplace wellness breathing",
+          "breathwork for anxiety at work",
+          "office stress relief"
         ],
         "longTail": [
-          "5 minuten meditation für einsteiger anleitung",
-          "wie meditiere ich 5 minuten täglich",
-          "meditation 5 minuten morgens stress"
+          "breathing exercises you can do at your desk without anyone noticing",
+          "best breathing technique for work stress",
+          "how to calm down at work with breathing"
         ]
       },
       "searchIntent": "how-to",
-      "competitorInsights": "Top results focus on guided meditation apps (Headspace) or long theoretical explanations. Gaps: No evidence-based approach showing specific cortisol reduction data, missing practical habit-stacking tips, no comparison of different 5-minute techniques, and lack of common mistake warnings for beginners. Most content is app-promotion heavy rather than educational.",
-      "suggestedAngle": "Science-backed 5-minute meditation guide with measurable benefits (cortisol reduction studies), practical habit-stacking methods (after teeth brushing), realistic expectations (not stopping thoughts), and troubleshooting common beginner mistakes. Focus on skeptical professionals who need proof + quick results.",
-      "estimatedSections": 5,
-      "reasoning": "Highest priority - fills meditation category gap (order 1), targets primary audience (stressed professionals 25-45), addresses skepticism with scientific evidence, matches brand voice (no esoterica, quick formats, evidence-based). High search volume (1.6K+ monthly), moderate difficulty, strong Featured Snippet potential. Foundation piece for cluster linking."
+      "competitorInsights": "Articles from CNBC, Nivati, and Health Assured list techniques but lack workplace-specific context. Gaps: No guidance for discreet practice in open offices, missing tips for integrating with video calls/meetings, limited focus on preventing stress vs reactive management, no employer/HR perspective for corporate wellness programs.",
+      "suggestedAngle": "Focus on discreet, office-appropriate techniques with specific scenarios (before presentation, during conflict, mid-afternoon slump, after difficult call). Include visual guides for desk-friendly postures, timing recommendations for breaks, and downloadable workplace wellness toolkit for HR departments.",
+      "estimatedSections": 6,
+      "reasoning": "Fills critical breathing category gap, directly builds on existing stress content with expanded keyword diversity, strong commercial intent for B2B partnerships, complements existing anxiety/breathing techniques articles, highest strategic value for brand differentiation"
     },
     {
       "id": "topic-2",
       "status": "proposed",
-      "title": "Box Breathing Anleitung: 4-4-4-4 Technik gegen Stress",
-      "category": "breathing",
+      "title": "Body Scan Meditation for Sleep: A Complete Beginner's Guide",
+      "category": "sleep",
       "priority": 2,
       "keywords": {
-        "primary": "box breathing",
+        "primary": "body scan meditation for sleep",
         "secondary": [
-          "box breathing anleitung",
-          "4-4-4-4 atemtechnik",
-          "atemübung gegen stress",
-          "quadrat atmung"
+          "body scan meditation",
+          "sleep meditation techniques",
+          "guided body scan",
+          "meditation for insomnia",
+          "bedtime meditation"
         ],
         "longTail": [
-          "box breathing 4-4-4-4 methode erklärung",
-          "wie funktioniert box breathing bei angst",
-          "box breathing für anfänger schritt für schritt"
+          "how to do body scan meditation for better sleep",
+          "body scan meditation script for beginners",
+          "does body scan meditation help with insomnia"
         ]
       },
       "searchIntent": "how-to",
-      "competitorInsights": "Competitors (Cleveland Clinic, WebMD, Medical News Today) explain the technique well but lack differentiation. Gaps: No comparison with 4-7-8 breathing or other techniques, missing progression tips (starting with 2-3 seconds), no workplace-specific applications, limited scientific depth on vagus nerve activation and 20% cortisol reduction data.",
-      "suggestedAngle": "Complete box breathing tutorial with neuroscience explanation (vagus nerve, HRV increase), beginner modifications (2-3 second counts), workplace integration strategies, comparison table with 4-7-8 breathing to help users choose. Include offline-capable audio guide link from Breathe app.",
-      "estimatedSections": 5,
-      "reasoning": "Second priority - fills breathing category gap (order 2, core app feature), highly practical (usable anywhere), strong scientific evidence (20% cortisol reduction), perfect for anxiety/stress secondary audience. Lower competition than general meditation terms, excellent Rich Snippet potential with step-by-step format. Strengthens app differentiation (offline-capable)."
+      "competitorInsights": "Top results from Headspace, Mindful.org, and Cleveland Clinic provide basic definitions and short scripts. Gaps: No comprehensive beginner-to-advanced progression, limited scientific research citations, minimal troubleshooting for common challenges (falling asleep during practice, restlessness), no comparison with other sleep techniques like PMR or breathing exercises.",
+      "suggestedAngle": "Create a complete step-by-step guide with multiple script lengths (5-min, 10-min, 20-min), include scientific research on effectiveness for insomnia, provide troubleshooting tips for common issues, and compare body scan with other sleep meditation techniques. Include audio timestamps and visual body diagrams.",
+      "estimatedSections": 7,
+      "reasoning": "Fills critical sleep category gap, high search demand for sleep solutions with strong beginner intent, naturally integrates with Breathe app's meditation features, opportunity to create comprehensive cornerstone content that outranks competitors"
     },
     {
       "id": "topic-3",
       "status": "proposed",
-      "title": "Achtsamkeit am Arbeitsplatz: 5 Übungen für den Schreibtisch",
+      "title": "5-Minute Morning Meditation Routine: How to Start Your Day Mindfully",
       "category": "mindfulness",
       "priority": 3,
       "keywords": {
-        "primary": "achtsamkeit am arbeitsplatz",
+        "primary": "morning meditation routine",
         "secondary": [
-          "mindfulness übungen büro",
-          "achtsamkeit im job",
-          "stress am arbeitsplatz reduzieren",
-          "meditation schreibtisch"
+          "morning meditation for beginners",
+          "5 minute meditation",
+          "daily meditation practice",
+          "mindfulness morning routine",
+          "meditation before work"
         ],
         "longTail": [
-          "achtsamkeit übungen für den arbeitsplatz ohne aufstehen",
-          "wie praktiziere ich achtsamkeit am schreibtisch",
-          "5 minuten achtsamkeit büro pause"
+          "how to create a morning meditation habit",
+          "best time for morning meditation",
+          "morning meditation routine for busy people"
         ]
       },
       "searchIntent": "how-to",
-      "competitorInsights": "Top results (Calm, Headspace, Mutual of Omaha) provide generic mindfulness tips. Gaps: No specific desk-based exercises with time estimates, missing remote work adaptations, lack of browser tab/notification management mindfulness, no science on productivity benefits, weak integration with actual work tasks (mindful email reading, meeting transitions).",
-      "suggestedAngle": "Practical desk-based mindfulness exercises with exact time requirements (20-second resets, 30-second transitions), digital-specific techniques (notification mindfulness, email breathing), task transition rituals, 5-4-3-2-1 grounding for overwhelm. Target remote workers and office professionals with zero equipment needed.",
+      "competitorInsights": "Resources from Calm, Mindful.org, and The Mindfulness App provide general tips and 8+ step routines. Gaps: Too complex for true beginners, no emphasis on ultra-short 5-minute practices for busy professionals, limited habit-building science, minimal personalization for different chronotypes or schedules.",
+      "suggestedAngle": "Focus specifically on realistic 5-minute routines for busy people with 3 variations (energizing, calming, focused). Include habit-stacking techniques, chronotype considerations (early birds vs night owls), troubleshooting for common barriers (snoozing, kids, no private space), and 30-day challenge framework.",
       "estimatedSections": 6,
-      "reasoning": "Third priority - fills mindfulness category gap, highly relevant to primary audience (stressed professionals), practical without equipment, addresses modern work challenges (remote work, digital overload). Good internal linking potential to meditation (topic-1) and breathing (topic-2) articles. Aligns with brand value of practical, alltagstaugliche tips."
+      "reasoning": "Fills mindfulness category gap, trending topic in 2026 wellness, strong practical intent from busy professionals, supports Breathe app's quick session features, creates internal linking opportunities with breathing and meditation content"
     },
     {
       "id": "topic-4",
       "status": "proposed",
-      "title": "Einschlaf-Meditation: Techniken zum schnellen Einschlafen",
-      "category": "sleep",
+      "title": "Guided vs Unguided Meditation: Which Type Is Right for You?",
+      "category": "meditation",
       "priority": 4,
       "keywords": {
-        "primary": "einschlaf meditation",
+        "primary": "guided vs unguided meditation",
         "secondary": [
-          "meditation zum einschlafen",
-          "schneller einschlafen meditation",
-          "geführte meditation schlaf",
-          "meditation bei schlafstörungen"
+          "guided meditation benefits",
+          "silent meditation",
+          "meditation for beginners",
+          "types of meditation",
+          "unguided meditation practice"
         ],
         "longTail": [
-          "welche meditation hilft beim einschlafen",
-          "meditation für besseren schlaf anfänger",
-          "einschlaf meditation ohne app kostenlos"
-        ]
-      },
-      "searchIntent": "how-to",
-      "competitorInsights": "Competitors (Headspace, NHS, Cleveland Clinic) focus heavily on app-based guided meditations. Gaps: No offline techniques (all require streaming), missing comparison of body scan vs. breathing vs. visualization for different insomnia types, lack of tech-free evening routine integration, no troubleshooting for racing thoughts vs. physical restlessness.",
-      "suggestedAngle": "Science-backed sleep meditation techniques (body scan, 4-7-8 breathing, visualization) with offline practice instructions, tech-free evening routine (1-hour device cutoff), technique selection based on insomnia type (racing thoughts vs. physical tension), parasympathetic nervous system explanation. Emphasize Breathe app's offline capability.",
-      "estimatedSections": 5,
-      "reasoning": "Fourth priority - fills sleep category gap, targets secondary audience (people with sleep problems), differentiates with offline approach vs. streaming competitors, strong FAQ potential on insomnia types and technique selection. Good cross-linking to breathing techniques (topic-2). Aligns with app's offline-fähig differentiator."
-    },
-    {
-      "id": "topic-5",
-      "status": "produced",
-      "title": "Atemtechniken gegen Angst: 4-7-8 vs. Box Breathing im Vergleich",
-      "category": "stress",
-      "priority": 5,
-      "keywords": {
-        "primary": "atemtechniken gegen angst",
-        "secondary": [
-          "4-7-8 atmung",
-          "breathing gegen panikattacke",
-          "atemübungen bei stress",
-          "welche atemtechnik bei angst"
-        ],
-        "longTail": [
-          "beste atemtechnik gegen panikattacke",
-          "4-7-8 oder box breathing bei angst",
-          "welche atemübung hilft sofort bei stress"
+          "should beginners use guided or unguided meditation",
+          "when to switch from guided to unguided meditation",
+          "benefits of silent meditation vs guided"
         ]
       },
       "searchIntent": "informational",
-      "competitorInsights": "Some comparison articles exist (OxaLife, Better Way Healthcare) but lack depth. Gaps: No decision framework for choosing techniques based on situation (workplace vs. home, acute panic vs. chronic stress), missing scientific comparison of effectiveness for specific conditions, no progression path from beginner to advanced, weak on contraindications or when breathing techniques aren't enough.",
-      "suggestedAngle": "Comprehensive breathing technique comparison with decision matrix (situation, anxiety level, setting), scientific effectiveness data for each method (cyclic sighing research, HRV studies), step-by-step instructions for both, progression recommendations, and clear guidance on when to seek professional help. Avoid overpromising - honest about limitations.",
+      "competitorInsights": "Existing articles from Declutter The Mind, Guided Meditation Framework, and Stream Meditation offer basic pros/cons lists. Gaps: No personalized decision framework, limited transition guidance for progressing from guided to unguided, no discussion of hybrid approaches, minimal mention of specific use cases (stress, focus, sleep).",
+      "suggestedAngle": "Create an interactive decision framework helping readers choose based on experience level, goals, and personality. Include a progression roadmap from guided to hybrid to unguided practice, use-case specific recommendations, and expert quotes. Add comparison table with 10+ criteria and self-assessment quiz.",
       "estimatedSections": 6,
-      "reasoning": "Fifth priority - fills stress category gap, targets secondary audience (stress/anxiety sufferers), unique comparison angle fills competitor gap, high internal linking value (hub article connecting to topic-2 box breathing content). Strong Featured Snippet potential with comparison table. Aligns with brand values: evidenzbasiert (scientific studies) and transparent about limitations (keine unbelegten Heilversprechen).",
-      "approvedAt": "2026-02-06T17:26:19.247Z",
-      "articleId": "508b5100-e8e2-4194-842f-d187d9e8a187"
+      "reasoning": "Fills meditation category gap, common beginner question with sustained search interest, positions Breathe app as offering both approaches, low competition for comprehensive comparison, creates hub content for internal linking to morning meditation and body scan articles"
+    },
+    {
+      "id": "topic-5",
+      "status": "proposed",
+      "title": "Progressive Muscle Relaxation for Insomnia: Step-by-Step Sleep Technique",
+      "category": "sleep",
+      "priority": 5,
+      "keywords": {
+        "primary": "progressive muscle relaxation for sleep",
+        "secondary": [
+          "progressive muscle relaxation insomnia",
+          "PMR technique",
+          "muscle relaxation for sleep",
+          "progressive relaxation exercises",
+          "sleep relaxation techniques"
+        ],
+        "longTail": [
+          "how to do progressive muscle relaxation for insomnia",
+          "progressive muscle relaxation script for bedtime",
+          "does PMR help you fall asleep faster"
+        ]
+      },
+      "searchIntent": "how-to",
+      "competitorInsights": "Harvard Health, WebMD, and Sleep Foundation provide clinical descriptions and basic instructions. Gaps: Limited beginner-friendly scripts, no audio/video integration, missing comparison with other sleep techniques (breathing, meditation), no guidance for combining PMR with other practices, minimal troubleshooting.",
+      "suggestedAngle": "Create the most comprehensive PMR guide with full scripts (10-min, 20-min versions), scientific evidence (including 2023 research on slow-wave sleep increases), comparison matrix with body scan and breathing techniques, combination protocols (PMR + 4-7-8 breathing), and troubleshooting for tension issues.",
+      "estimatedSections": 7,
+      "reasoning": "Strengthens sleep category with second article, strong evidence-based technique with proven results (125% increase in slow-wave sleep), complements body scan article with internal linking opportunity, lower competition for comprehensive guides, supports Breathe app credibility with science-backed content"
     }
-  ],
-  "runId": "6adcb58e-7eb1-4ae7-9d56-10b678ca3ce6"
+  ]
 }

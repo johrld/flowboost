@@ -4,8 +4,8 @@ import { Store } from "./store.js";
 import type { PipelineRun, PipelinePhase, AgentCall } from "./types.js";
 
 export class PipelineRunStore extends Store<PipelineRun> {
-  constructor(dataDir: string) {
-    super(path.join(dataDir, "pipeline-runs"), "run.json");
+  constructor(basePath: string) {
+    super(basePath, "run.json");
   }
 
   /** Update a specific phase within a run */
@@ -55,4 +55,8 @@ export class PipelineRunStore extends Store<PipelineRun> {
     fs.mkdirSync(dir, { recursive: true });
     return dir;
   }
+}
+
+export function createPipelineRunStore(dataDir: string, customerId: string, projectId: string): PipelineRunStore {
+  return new PipelineRunStore(path.join(dataDir, "customers", customerId, "projects", projectId, "pipeline-runs"));
 }

@@ -1,0 +1,27 @@
+{
+  "id": "topic-2",
+  "status": "proposed",
+  "title": "Body Scan Meditation for Sleep: A Complete Beginner's Guide",
+  "category": "sleep",
+  "priority": 2,
+  "keywords": {
+    "primary": "body scan meditation for sleep",
+    "secondary": [
+      "body scan meditation",
+      "sleep meditation techniques",
+      "guided body scan",
+      "meditation for insomnia",
+      "bedtime meditation"
+    ],
+    "longTail": [
+      "how to do body scan meditation for better sleep",
+      "body scan meditation script for beginners",
+      "does body scan meditation help with insomnia"
+    ]
+  },
+  "searchIntent": "how-to",
+  "competitorInsights": "Top results from Headspace, Mindful.org, and Cleveland Clinic provide basic definitions and short scripts. Gaps: No comprehensive beginner-to-advanced progression, limited scientific research citations, minimal troubleshooting for common challenges (falling asleep during practice, restlessness), no comparison with other sleep techniques like PMR or breathing exercises.",
+  "suggestedAngle": "Create a complete step-by-step guide with multiple script lengths (5-min, 10-min, 20-min), include scientific research on effectiveness for insomnia, provide troubleshooting tips for common issues, and compare body scan with other sleep meditation techniques. Include audio timestamps and visual body diagrams.",
+  "estimatedSections": 7,
+  "reasoning": "Fills critical sleep category gap, high search demand for sleep solutions with strong beginner intent, naturally integrates with Breathe app's meditation features, opportunity to create comprehensive cornerstone content that outranks competitors"
+}

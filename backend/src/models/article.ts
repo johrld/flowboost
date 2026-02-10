@@ -4,8 +4,8 @@ import { Store } from "./store.js";
 import type { Article, ArticleVersion } from "./types.js";
 
 export class ArticleStore extends Store<Article> {
-  constructor(dataDir: string) {
-    super(path.join(dataDir, "articles"), "article.json");
+  constructor(basePath: string) {
+    super(basePath, "article.json");
   }
 
   createVersion(articleId: string, version: Omit<ArticleVersion, "id">): ArticleVersion {
@@ -34,4 +34,8 @@ export class ArticleStore extends Store<Article> {
   getVersionDir(articleId: string, versionId: string): string {
     return path.join(this.entityDir(articleId), "versions", versionId);
   }
+}
+
+export function createArticleStore(dataDir: string, customerId: string, projectId: string): ArticleStore {
+  return new ArticleStore(path.join(dataDir, "customers", customerId, "projects", projectId, "articles"));
 }

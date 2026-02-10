@@ -4,16 +4,21 @@ services:
       context: ./backend
       dockerfile: ../Dockerfile.backend
     ports:
-      - "${PORT:-6000}:6000"
+      - "${PORT:-6100}:6100"
     volumes:
       - ./backend/data:/app/data
     env_file: .env
+    environment:
+      - DATA_DIR=/app/data
+      - FRONTEND_URL=${DEV_URL:-http://localhost:6001}
     restart: unless-stopped
 
   dashboard:
     build:
       context: ./frontend
       dockerfile: ../Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${DEV_API_URL:-http://localhost:6100}
     ports:
       - "${FRONTEND_PORT:-6001}:3000"
     env_file: .env
