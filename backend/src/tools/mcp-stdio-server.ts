@@ -148,6 +148,7 @@ server.tool(
     const resourceMap: Record<string, string> = {
       project: "project.json",
       "seo-guidelines": "seo-guidelines.md",
+      "seo-ai-strategy": "seo-ai-strategy.md",
       "content-types": "content-types.md",
       "content-plan": "content-plan.json",
     };

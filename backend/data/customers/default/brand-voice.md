@@ -1,16 +1,37 @@
 # Brand Voice
 
+## Mission
+
+Meditation für jeden zugänglich machen – ohne Vorkenntnisse, ohne Esoterik, ohne Druck.
+
+## Vision
+
+Eine Welt, in der jeder Mensch täglich einen Moment der Stille findet.
+
 ## Kernwerte
 
-1. **Zugänglichkeit** – Keine Vorkenntnisse nötig
-2. **Evidenzbasiert** – Wissenschaftlich fundiert
-3. **Praktisch** – Sofort anwendbar
+1. **Zugänglichkeit** – Keine Vorkenntnisse nötig, einfache Anleitungen, kurze Formate (5-15 Min)
+2. **Evidenzbasiert** – Wissenschaftlich fundierte Techniken, keine unbelegten Heilversprechen
+3. **Praktisch** – Sofort anwendbare Übungen, Alltagstipps, konkrete Anleitungen
 
 ## Zielgruppe
 
-- Gestresste Berufstätige (25-45)
-- Meditation-Neulinge
-- Menschen mit Schlaf- oder Stressproblemen
+### Primär
+
+- **Gestresste Berufstätige** (25-45 Jahre)
+  - Wenig Zeit, hoher Druck
+  - Suchen schnelle, effektive Lösungen
+  - Skeptisch gegenüber Esoterik
+
+- **Meditation-Neulinge**
+  - Neugierig, aber unsicher
+  - Wissen nicht, wo anfangen
+  - Brauchen Führung und Struktur
+
+### Sekundär
+
+- **Menschen mit Schlafproblemen** – Einschlaf-Schwierigkeiten, nächtliches Aufwachen
+- **Menschen mit Stress/Angst** – Überforderung im Alltag, suchen natürliche Hilfe
 
 ## Tonalität
 
@@ -91,6 +112,32 @@ Wenn Fachbegriffe nötig sind, immer erklären:
 | Body Scan       | "systematisches Durchspüren des Körpers"                |
 | Pranayama       | "Atemtechniken aus dem Yoga"                            |
 | Parasympathikus | "der Teil des Nervensystems, der für Entspannung sorgt" |
+
+## Differenzierung
+
+| Breathe                      | Andere Apps           |
+| ---------------------------- | --------------------- |
+| Wissenschaftlich fundiert    | Oft esoterisch        |
+| Kurze Sessions (5-15 min)    | Oft 20+ Minuten       |
+| Fokus auf Atemtechniken      | Meist nur Meditation  |
+| Offline-fähig                | Meist Streaming       |
+| Keine Abo-Pflicht für Basics | Paywall von Anfang an |
+
+## Visuelle Identität
+
+### Farben
+
+- **Primär**: Teal (#14B8A6) – Ruhe, Klarheit
+- **Sekundär**: Slate-Töne – Seriosität
+- **Akzent**: Warm White – Einladend
+
+### Bildsprache
+
+- Echte Menschen (keine Stock-Models)
+- Natürliche Umgebungen
+- Ruhige, aufgeräumte Szenen
+- Warme, weiche Lichtstimmung
+- Keine übertriebenen Posen
 
 ## Qualitätsprüfung
 
