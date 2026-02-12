@@ -98,6 +98,16 @@ export interface PipelineSettings {
   maxRetriesPerPhase: number;
   maxBudgetPerArticle: number;
   imagenModel: string;
+
+  // Video/Audio AI models
+  videoModel?: string;
+  audioModel?: string;
+  preferredVoice?: string;
+
+  // Budgets per content type
+  maxBudgetPerVideo?: number;
+  maxBudgetPerAudio?: number;
+  maxBudgetPerSocialPost?: number;
 }
 
 export interface ApiKeys {
