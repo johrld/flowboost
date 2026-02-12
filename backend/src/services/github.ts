@@ -61,9 +61,55 @@ async function githubFetch<T>(path: string, token: string): Promise<T> {
 /**
  * POST to GitHub API with the given token.
  */
-async function githubPost<T>(path: string, token: string): Promise<T> {
+async function githubPost<T>(path: string, token: string, body?: unknown): Promise<T> {
   const res = await fetch(`${GITHUB_API}${path}`, {
     method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+
+  if (!res.ok) {
+    const bodyText = await res.text();
+    throw new Error(`GitHub API ${res.status}: ${bodyText.slice(0, 300)}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+/**
+ * PUT to GitHub API with the given token.
+ */
+async function githubPut<T>(path: string, token: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${GITHUB_API}${path}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+
+  if (!res.ok) {
+    const bodyText = await res.text();
+    throw new Error(`GitHub API ${res.status}: ${bodyText.slice(0, 300)}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+/**
+ * DELETE on GitHub API with the given token.
+ */
+async function githubDelete(path: string, token: string): Promise<void> {
+  const res = await fetch(`${GITHUB_API}${path}`, {
+    method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",
@@ -75,8 +121,6 @@ async function githubPost<T>(path: string, token: string): Promise<T> {
     const body = await res.text();
     throw new Error(`GitHub API ${res.status}: ${body.slice(0, 300)}`);
   }
-
-  return res.json() as Promise<T>;
 }
 
 /**
@@ -146,6 +190,65 @@ export async function getCloneUrl(
 ): Promise<string> {
   const token = await getInstallationToken(installationId);
   return `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+}
+
+/**
+ * Create a pull request.
+ */
+export async function createPullRequest(
+  installationId: number,
+  owner: string,
+  repo: string,
+  head: string,
+  base: string,
+  title: string,
+  body: string,
+): Promise<{ number: number; url: string }> {
+  const token = await getInstallationToken(installationId);
+  const result = await githubPost<{ number: number; html_url: string }>(
+    `/repos/${owner}/${repo}/pulls`,
+    token,
+    { title, body, head, base },
+  );
+  log.info({ owner, repo, pr: result.number }, "pull request created");
+  return { number: result.number, url: result.html_url };
+}
+
+/**
+ * Merge a pull request.
+ */
+export async function mergePullRequest(
+  installationId: number,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  mergeMethod: "merge" | "squash" | "rebase" = "squash",
+): Promise<{ sha: string }> {
+  const token = await getInstallationToken(installationId);
+  const result = await githubPut<{ sha: string; merged: boolean }>(
+    `/repos/${owner}/${repo}/pulls/${prNumber}/merge`,
+    token,
+    { merge_method: mergeMethod },
+  );
+  log.info({ owner, repo, pr: prNumber, sha: result.sha }, "pull request merged");
+  return { sha: result.sha };
+}
+
+/**
+ * Delete a branch.
+ */
+export async function deleteBranch(
+  installationId: number,
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<void> {
+  const token = await getInstallationToken(installationId);
+  await githubDelete(
+    `/repos/${owner}/${repo}/git/refs/heads/${branch}`,
+    token,
+  );
+  log.info({ owner, repo, branch }, "branch deleted");
 }
 
 /**

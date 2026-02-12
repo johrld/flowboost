@@ -4,7 +4,7 @@
   "slug": "breathe",
   "description": "SEO-optimized content website for the Breathe meditation app. Multilingual (DE/EN/ES).",
   "createdAt": "2026-02-06T00:00:00.000Z",
-  "updatedAt": "2026-02-10T17:30:14.310Z",
+  "updatedAt": "2026-02-10T18:59:44.656Z",
   "defaultLanguage": "de",
   "languages": [
     {
@@ -67,7 +67,15 @@
   ],
   "keywords": {},
   "connector": {
-    "type": "filesystem"
+    "type": "github",
+    "github": {
+      "installationId": 109289932,
+      "owner": "",
+      "repo": "",
+      "branch": "main",
+      "contentPath": "src/content/posts",
+      "assetsPath": "src/assets/posts"
+    }
   },
   "pipeline": {
     "defaultModel": "sonnet",

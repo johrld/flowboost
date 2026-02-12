@@ -1,10 +1,12 @@
 import path from "node:path";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import { createLogger } from "../utils/logger.js";
 import { CustomerStore } from "../models/customer.js";
 import { ProjectStore } from "../models/project.js";
 import { ArticleStore } from "../models/article.js";
+import { ContentStore, MediaAssetStore } from "../models/content.js";
 import { PipelineRunStore } from "../models/pipeline-run.js";
 import { TopicStore } from "../models/topic.js";
 import { healthRoutes } from "./routes/health.js";
@@ -15,6 +17,10 @@ import { contentPlanRoutes } from "./routes/content-plan.js";
 import { articleRoutes } from "./routes/articles.js";
 import { pipelineRoutes } from "./routes/pipeline.js";
 import { githubAuthRoutes, githubApiRoutes, githubWebhookRoutes } from "./routes/github.js";
+import { webhookRoutes } from "./routes/webhooks.js";
+import { contentIndexRoutes } from "./routes/content-index.js";
+import { contentRoutes } from "./routes/content.js";
+import { mediaRoutes } from "./routes/media.js";
 
 const log = createLogger("server");
 
@@ -23,6 +29,8 @@ export interface AppContext {
   customers: CustomerStore;
   projectsFor(customerId: string): ProjectStore;
   articlesFor(customerId: string, projectId: string): ArticleStore;
+  contentFor(customerId: string, projectId: string): ContentStore;
+  mediaFor(customerId: string, projectId: string): MediaAssetStore;
   pipelineRunsFor(customerId: string, projectId: string): PipelineRunStore;
   topicsFor(customerId: string, projectId: string): TopicStore;
 }
@@ -37,6 +45,7 @@ export async function buildServer(dataDir: string) {
   const app = Fastify({ logger: false });
 
   await app.register(cors, { origin: true });
+  await app.register(multipart, { limits: { fileSize: 100 * 1024 * 1024 } }); // 100MB
 
   // Application context with factory methods
   const ctx: AppContext = {
@@ -47,6 +56,12 @@ export async function buildServer(dataDir: string) {
     },
     articlesFor(customerId: string, projectId: string) {
       return new ArticleStore(path.join(dataDir, "customers", customerId, "projects", projectId, "articles"));
+    },
+    contentFor(customerId: string, projectId: string) {
+      return new ContentStore(path.join(dataDir, "customers", customerId, "projects", projectId, "content"));
+    },
+    mediaFor(customerId: string, projectId: string) {
+      return new MediaAssetStore(path.join(dataDir, "customers", customerId, "projects", projectId, "media"));
     },
     pipelineRunsFor(customerId: string, projectId: string) {
       return new PipelineRunStore(path.join(dataDir, "customers", customerId, "projects", projectId, "pipeline-runs"));
@@ -68,6 +83,10 @@ export async function buildServer(dataDir: string) {
   await app.register(githubAuthRoutes, { prefix: "/auth" });
   await app.register(githubApiRoutes, { prefix: "/github" });
   await app.register(githubWebhookRoutes, { prefix: "/github" });
+  await app.register(webhookRoutes, { prefix: "/webhooks" });
+  await app.register(contentRoutes, { prefix: "/customers/:customerId/projects/:projectId/content" });
+  await app.register(mediaRoutes, { prefix: "/customers/:customerId/projects/:projectId/media" });
+  await app.register(contentIndexRoutes, { prefix: "/customers/:customerId/projects/:projectId/content-index" });
 
   // Error handler
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {

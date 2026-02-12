@@ -35,8 +35,14 @@ export interface Project {
   // Competitors
   competitors?: Competitor[];
 
-  // Connector configuration
+  // Connector configuration (V1 — kept for backward compatibility)
   connector: ConnectorConfig;
+
+  // Multi-Connector configuration (V2 — optional, takes precedence when set)
+  connectors?: {
+    site: SiteConnectorConfig;
+    social?: SocialChannelConfig[];
+  };
 
   // Pipeline settings
   pipeline: PipelineSettings;
@@ -97,6 +103,8 @@ export interface PipelineSettings {
 export interface ApiKeys {
   anthropicApiKey?: string;
   googleAiApiKey?: string;
+  runwayApiKey?: string;
+  elevenLabsApiKey?: string;
 }
 
 // ─── Content Plan (Strategy Pipeline Output) ────────────────────
@@ -146,7 +154,7 @@ export interface Topic {
   rejectionReason?: string;
 }
 
-// ─── Articles ───────────────────────────────────────────────────
+// ─── Articles (V2 — kept for backward compat, use ContentItem for new code) ──
 
 export interface Article {
   id: string;
@@ -154,7 +162,7 @@ export interface Article {
   projectId: string;
   topicId: string;
   translationKey: string;
-  status: "draft" | "review" | "approved" | "delivered";
+  status: "draft" | "review" | "approved" | "delivered" | "published";
   createdAt: string;
   updatedAt: string;
   deliveredAt?: string;
@@ -172,9 +180,178 @@ export interface ArticleVersion {
   createdAt: string;
 }
 
+// ─── Content Items (V3 — universal content model) ───────────────
+
+export type ContentType =
+  | "article"
+  | "guide"
+  | "landing_page"
+  | "video"
+  | "audio"
+  | "social_post";
+
+export type ContentItemStatus =
+  | "planned"
+  | "producing"
+  | "draft"
+  | "review"
+  | "approved"
+  | "delivered"
+  | "published"
+  | "updating"
+  | "archived";
+
+export interface ContentItem {
+  id: string;
+  customerId: string;
+  projectId: string;
+
+  type: ContentType;
+  status: ContentItemStatus;
+
+  // Metadata
+  title: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
+  keywords?: string[];
+
+  // Links
+  topicId?: string;
+  translationKey?: string;
+  parentId?: string;
+
+  // Version tracking
+  currentVersionId?: string;
+  lastPublishedVersionId?: string;
+
+  // Delivery tracking
+  deliveryRef?: string;
+  deliveryUrl?: string;
+
+  // Timestamps
+  createdAt: string;
+  updatedAt: string;
+  approvedAt?: string;
+  deliveredAt?: string;
+  publishedAt?: string;
+  archivedAt?: string;
+}
+
+export interface ContentVersion {
+  id: string;
+  contentId: string;
+  versionNumber: number;
+
+  languages: LanguageVariant[];
+  assets: MediaAssetRef[];
+
+  // Type-specific metadata
+  text?: TextVersionMeta;
+  video?: VideoVersionMeta;
+  audio?: AudioVersionMeta;
+  social?: SocialVersionMeta;
+
+  // Pipeline tracking
+  pipelineRunId?: string;
+  seoScore?: number;
+  qualityScore?: number;
+
+  createdAt: string;
+  createdBy: "pipeline" | "user" | "sync";
+}
+
+export interface LanguageVariant {
+  lang: string;
+  slug: string;
+  title: string;
+  description: string;
+  contentPath: string;
+  wordCount?: number;
+}
+
+export interface TextVersionMeta {
+  wordCount: number;
+  headingCount: number;
+  hasFaq: boolean;
+  hasAnswerCapsule: boolean;
+  readabilityScore?: number;
+}
+
+export interface VideoVersionMeta {
+  durationSeconds: number;
+  resolution: string;
+  format: string;
+  hasSubtitles: boolean;
+  scriptPath?: string;
+}
+
+export interface AudioVersionMeta {
+  durationSeconds: number;
+  format: string;
+  sampleRate: number;
+  hasTranscript: boolean;
+  transcriptPath?: string;
+}
+
+export interface SocialVersionMeta {
+  platform: string;
+  characterCount: number;
+  hashtagCount: number;
+  hasMedia: boolean;
+}
+
+// ─── Media Assets ───────────────────────────────────────────────
+
+export type MediaType = "image" | "video" | "audio" | "document";
+export type MediaSource = "generated" | "uploaded" | "extracted";
+
+export interface MediaAsset {
+  id: string;
+  customerId: string;
+  projectId: string;
+
+  type: MediaType;
+  source: MediaSource;
+  mimeType: string;
+  fileName: string;
+  fileSize: number;
+
+  localPath: string;
+  cdnUrl?: string;
+
+  width?: number;
+  height?: number;
+  altText?: string;
+
+  durationSeconds?: number;
+  resolution?: string;
+  thumbnailPath?: string;
+
+  generationPrompt?: string;
+  generationModel?: string;
+  generationCostUsd?: number;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MediaAssetRef {
+  assetId: string;
+  role: "hero" | "thumbnail" | "inline" | "attachment" | "social_media";
+  lang?: string;
+}
+
 // ─── Pipeline Runs ──────────────────────────────────────────────
 
-export type PipelineType = "strategy" | "production";
+export type PipelineType =
+  | "strategy"
+  | "production"
+  | "video_production"
+  | "audio_production"
+  | "social_production"
+  | "update"
+  | "translation";
 export type RunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 export type PhaseStatus = "pending" | "running" | "completed" | "failed" | "skipped";
 
@@ -223,6 +400,140 @@ export interface AgentEvent {
   tool?: string;
   input?: string;  // truncated summary of tool input
   text?: string;
+}
+
+// ─── Content Index ──────────────────────────────────────────────
+
+export interface ContentIndex {
+  projectId: string;
+  lastSyncedAt: string;
+  schemaVersion: number;
+  entries: ContentIndexEntry[];
+}
+
+export interface ContentIndexEntry {
+  id: string;
+  channel: "website" | "social";
+  source: "flowboost" | "external";
+  status: ContentStatus;
+
+  // Website-specific
+  site?: SiteContentMeta;
+
+  // Social-specific (Phase 4)
+  social?: SocialContentMeta;
+
+  // Links
+  parentId?: string;
+  articleId?: string;
+  topicId?: string;
+
+  // Timestamps
+  createdAt: string;
+  firstPublishedAt?: string;
+  lastUpdatedAt?: string;
+  lastSyncedAt: string;
+
+  // Multi-platform publishing status
+  publications: Publication[];
+}
+
+export type ContentStatus =
+  | "planned"
+  | "producing"
+  | "review"
+  | "delivered"
+  | "live"
+  | "archived";
+
+export interface SiteContentMeta {
+  type: "blog" | "landing" | "guide" | "page";
+  translationKey: string;
+  languages: SiteContentLangMeta[];
+  category?: string;
+  tags?: string[];
+  keywords?: string[];
+  canonicalUrl?: string;
+}
+
+export interface SiteContentLangMeta {
+  lang: string;
+  slug: string;
+  title: string;
+  description: string;
+  wordCount: number;
+  filePath: string;
+  sha: string;
+}
+
+export interface Publication {
+  platform: string;
+  status: "queued" | "publishing" | "published" | "failed" | "retrying";
+  ref?: string;
+  url?: string;
+  publishedAt?: string;
+  lastAttemptAt?: string;
+  retryCount: number;
+  error?: string;
+}
+
+export interface ContentRevision {
+  id: string;
+  contentId: string;
+  version: number;
+  changes: {
+    field: string;
+    oldValue?: string;
+    newValue?: string;
+  }[];
+  changedBy: "flowboost" | "external_sync" | "user";
+  changedAt: string;
+  snapshotPath?: string;
+}
+
+// Placeholder for Phase 4 — Social Content
+export interface SocialContentMeta {
+  platform: string;
+  contentType: string;
+  platformPostId?: string;
+  platformUrl?: string;
+  scheduledAt?: string;
+}
+
+// ─── Multi-Connector Config ─────────────────────────────────────
+
+export type SiteConnectorType = "github" | "git" | "filesystem" | "wordpress" | "shopify" | "webflow";
+
+export interface SiteConnectorConfig {
+  type: SiteConnectorType;
+  git?: {
+    repoUrl: string;
+    branch: string;
+    contentPath: string;
+    assetsPath: string;
+  };
+  github?: {
+    installationId: number;
+    owner: string;
+    repo: string;
+    branch: string;
+    contentPath: string;
+    assetsPath: string;
+  };
+  filesystem?: {
+    outputDir: string;
+  };
+}
+
+export type SocialPlatform = "linkedin" | "instagram" | "tiktok" | "x" | "facebook";
+
+export interface SocialChannelConfig {
+  platform: SocialPlatform;
+  enabled: boolean;
+  accountId: string;
+  accountName: string;
+  autoPublish: boolean;
+  syndicationDelay?: number;
 }
 
 // ─── Agent SDK Types ────────────────────────────────────────────
