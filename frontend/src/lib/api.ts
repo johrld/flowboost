@@ -1,4 +1,4 @@
-import type { Customer, Project, Topic, Category, Author, PipelineRun } from "./types";
+import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
 
@@ -115,6 +115,120 @@ export function startProduction(customerId: string, projectId: string, topicId: 
   });
 }
 
+// ── Content ──────────────────────────────────────────────────────
+
+export function getContent(
+  customerId: string,
+  projectId: string,
+  filters?: { type?: ContentType; status?: ContentItemStatus; category?: string },
+): Promise<{ total: number; items: ContentItem[] }> {
+  const params = new URLSearchParams();
+  if (filters?.type) params.set("type", filters.type);
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.category) params.set("category", filters.category);
+  const qs = params.toString();
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content${qs ? `?${qs}` : ""}`);
+}
+
+export function getContentItem(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+): Promise<ContentItem> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}`);
+}
+
+export function createContent(
+  customerId: string,
+  projectId: string,
+  data: { type: ContentType; title: string; description?: string; category?: string; tags?: string[]; keywords?: string[] },
+): Promise<ContentItem> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateContent(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  data: Partial<Pick<ContentItem, "title" | "description" | "category" | "tags" | "keywords" | "translationKey">>,
+): Promise<ContentItem> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteContent(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  hard?: boolean,
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}${hard ? "?hard=true" : ""}`, {
+    method: "DELETE",
+  });
+}
+
+export function getContentVersions(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+): Promise<ContentVersion[]> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/versions`);
+}
+
+export async function getContentFile(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  versionId: string,
+  lang: string,
+): Promise<string> {
+  const res = await fetch(
+    `${API_URL}/customers/${customerId}/projects/${projectId}/content/${contentId}/versions/${versionId}/file?lang=${lang}`,
+  );
+  if (!res.ok) throw new Error(`Failed to load content file: ${res.status}`);
+  return res.text();
+}
+
+// Lifecycle transitions
+export function submitContent(customerId: string, projectId: string, contentId: string): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/submit`, { method: "POST" });
+}
+
+export function approveContent(customerId: string, projectId: string, contentId: string): Promise<{ message: string; published?: boolean; ref?: string; url?: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/approve`, { method: "POST" });
+}
+
+export function rejectContent(customerId: string, projectId: string, contentId: string, reason?: string): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function publishContent(customerId: string, projectId: string, contentId: string, ref?: string): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/publish`, {
+    method: "POST",
+    body: JSON.stringify({ ref }),
+  });
+}
+
+export function requestContentUpdate(customerId: string, projectId: string, contentId: string): Promise<{ message: string; published?: boolean; ref?: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/update`, { method: "POST" });
+}
+
+export function archiveContent(customerId: string, projectId: string, contentId: string): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/archive`, { method: "POST" });
+}
+
+export function restoreContent(customerId: string, projectId: string, contentId: string): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/restore`, { method: "POST" });
+}
+
 // ── GitHub ────────────────────────────────────────────────────────
 
 export function getGitHubStatus(): Promise<{ configured: boolean }> {
@@ -127,4 +241,24 @@ export function getGitHubRepos(installationId: number): Promise<{ fullName: stri
 
 export function getGitHubBranches(installationId: number, owner: string, repo: string): Promise<string[]> {
   return fetchJson(`/github/repos/${owner}/${repo}/branches?installation_id=${installationId}`);
+}
+
+// ── Connector Sync ───────────────────────────────────────────────
+
+export interface ConnectorSyncResult {
+  categories?: { id: string; name: Record<string, string>; slug?: Record<string, string>; description?: Record<string, string>; order?: number }[];
+  authors?: { id: string; name: string; slug?: string; title?: Record<string, string>; bio?: Record<string, string>; image?: string }[];
+  errors: string[];
+}
+
+export function syncConnectorData(customerId: string, projectId: string): Promise<ConnectorSyncResult> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/sync`, { method: "POST" });
+}
+
+export async function getGitHubFile(installationId: number, owner: string, repo: string, path: string, ref?: string): Promise<string> {
+  const params = new URLSearchParams({ installation_id: String(installationId), path });
+  if (ref) params.set("ref", ref);
+  const res = await fetch(`${API_URL}/github/repos/${owner}/${repo}/file?${params}`);
+  if (!res.ok) throw new Error(`Failed to load file: ${res.status}`);
+  return res.text();
 }

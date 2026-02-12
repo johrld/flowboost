@@ -11,16 +11,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TopicStatusBadge } from "@/components/status-badge";
+import { useProject } from "@/lib/project-context";
 import {
-  getCustomers,
-  getProjects,
   getTopics,
   approveTopic,
   rejectTopic,
   startStrategy,
   startProduction,
 } from "@/lib/api";
-import type { Topic, Category } from "@/lib/types";
+import type { Topic } from "@/lib/types";
 import { format } from "date-fns";
 import {
   Search,
@@ -51,9 +50,7 @@ function IntentBadge({ intent }: { intent: string }) {
 
 export default function ResearchPage() {
   const router = useRouter();
-  const [customerId, setCustomerId] = useState("");
-  const [projectId, setProjectId] = useState("");
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { customerId, projectId, categories, loading: projectLoading } = useProject();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,37 +59,15 @@ export default function ResearchPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [researchLoading, setResearchLoading] = useState(false);
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const customers = await getCustomers();
-      if (customers.length === 0) {
-        setError("No customers found");
-        return;
-      }
-      const cid = customers[0].id;
-      setCustomerId(cid);
-
-      const projects = await getProjects(cid);
-      if (projects.length === 0) {
-        setError("No projects found");
-        return;
-      }
-      const project = projects[0];
-      setProjectId(project.id);
-      setCategories(project.categories);
-
-      const t = await getTopics(cid, project.id);
-      setTopics(t);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    if (!customerId || !projectId) return;
+    setLoading(true);
+    setError(null);
+    getTopics(customerId, projectId)
+      .then(setTopics)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load data"))
+      .finally(() => setLoading(false));
+  }, [customerId, projectId]);
 
   const toggleExpanded = (id: string) => {
     setExpandedTopics((prev) => {
@@ -159,7 +134,7 @@ export default function ResearchPage() {
 
   const proposedCount = topics.filter((t) => t.status === "proposed").length;
 
-  if (loading) {
+  if (projectLoading || loading) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

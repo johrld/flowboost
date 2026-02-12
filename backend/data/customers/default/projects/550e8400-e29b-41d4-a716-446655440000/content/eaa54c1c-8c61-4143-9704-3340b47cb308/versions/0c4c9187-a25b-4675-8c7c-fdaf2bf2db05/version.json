@@ -1,0 +1,40 @@
+{
+  "id": "0c4c9187-a25b-4675-8c7c-fdaf2bf2db05",
+  "contentId": "eaa54c1c-8c61-4143-9704-3340b47cb308",
+  "versionNumber": 1,
+  "languages": [
+    {
+      "lang": "de",
+      "slug": "atemuebungen-arbeitsplatzstress",
+      "title": "Atemübungen für Arbeitsplatzstress: 4 Techniken direkt am Schreibtisch",
+      "description": "Reduziere Stress im Büro mit diskreten Atemübungen. 4 Techniken für Präsentationen, Konflikte und Pausen. Sofort anwendbar am Schreibtisch.",
+      "contentPath": "content/de/atemuebungen-arbeitsplatzstress.md",
+      "wordCount": 0
+    },
+    {
+      "lang": "es",
+      "slug": "ejercicios-respiracion-estres-laboral",
+      "title": "Atemübungen für Arbeitsplatzstress: 4 Techniken direkt am Schreibtisch",
+      "description": "Reduziere Stress im Büro mit diskreten Atemübungen. 4 Techniken für Präsentationen, Konflikte und Pausen. Sofort anwendbar am Schreibtisch.",
+      "contentPath": "content/es/ejercicios-respiracion-estres-laboral.md",
+      "wordCount": 0
+    },
+    {
+      "lang": "en",
+      "slug": "breathing-exercises-workplace-stress",
+      "title": "Atemübungen für Arbeitsplatzstress: 4 Techniken direkt am Schreibtisch",
+      "description": "Reduziere Stress im Büro mit diskreten Atemübungen. 4 Techniken für Präsentationen, Konflikte und Pausen. Sofort anwendbar am Schreibtisch.",
+      "contentPath": "content/en/breathing-exercises-workplace-stress.md",
+      "wordCount": 0
+    }
+  ],
+  "assets": [],
+  "text": {
+    "wordCount": 0,
+    "headingCount": 0,
+    "hasFaq": true,
+    "hasAnswerCapsule": true
+  },
+  "createdAt": "2026-02-12T11:33:21.954Z",
+  "createdBy": "pipeline"
+}

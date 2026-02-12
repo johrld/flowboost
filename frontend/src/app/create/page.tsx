@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,69 +10,102 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StageBadge, ConditionBadge } from "@/components/status-badge";
-import { articles, categories, authors } from "@/lib/mock-data";
-import { FileText, Eye } from "lucide-react";
+import { ContentStatusBadge, ContentTypeBadge } from "@/components/status-badge";
+import { useProject } from "@/lib/project-context";
+import { getContent } from "@/lib/api";
+import type { ContentItem } from "@/lib/types";
+import { FileText, Eye, Plus, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 
 export default function CreatePage() {
-  const [filterStage, setFilterStage] = useState<string>("all");
+  const { customerId, projectId, categories, loading: projectLoading } = useProject();
+  const [items, setItems] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
 
-  const filtered = articles.filter((a) => {
-    if (filterStage !== "all" && a.stage !== filterStage) return false;
-    if (filterCategory !== "all" && a.category !== filterCategory) return false;
+  useEffect(() => {
+    if (!customerId || !projectId) return;
+    setLoading(true);
+    getContent(customerId, projectId)
+      .then((res) => setItems(res.items))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [customerId, projectId]);
+
+  const filtered = items.filter((item) => {
+    if (filterStatus !== "all" && item.status !== filterStatus) return false;
+    if (filterCategory !== "all" && item.category !== filterCategory) return false;
     return true;
   });
 
-  const sorted = [...filtered].sort((a, b) => {
-    if (a.lastEditedAt && b.lastEditedAt) return b.lastEditedAt.localeCompare(a.lastEditedAt);
-    return 0;
-  });
+  const sorted = [...filtered].sort(
+    (a, b) => b.updatedAt.localeCompare(a.updatedAt),
+  );
 
-  const stageCounts = articles.reduce(
-    (acc, a) => {
-      acc[a.stage] = (acc[a.stage] || 0) + 1;
+  const statusCounts = items.reduce(
+    (acc, item) => {
+      acc[item.status] = (acc[item.status] || 0) + 1;
       return acc;
     },
-    {} as Record<string, number>
+    {} as Record<string, number>,
   );
+
+  if (projectLoading || loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Create</h1>
-        <p className="text-muted-foreground">Articles & content editor</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Create</h1>
+          <p className="text-muted-foreground">Content editor & lifecycle management</p>
+        </div>
+        <Link href="/create/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            New Content
+          </Button>
+        </Link>
       </div>
 
-      {/* Stage Summary */}
-      <div className="flex gap-2">
-        {Object.entries(stageCounts).map(([stage, count]) => (
+      {/* Status Summary */}
+      <div className="flex gap-2 flex-wrap">
+        {Object.entries(statusCounts).map(([status, count]) => (
           <Badge
-            key={stage}
+            key={status}
             variant="outline"
             className="gap-1 px-3 py-1.5 cursor-pointer"
-            onClick={() => setFilterStage(stage === filterStage ? "all" : stage)}
+            onClick={() => setFilterStatus(status === filterStatus ? "all" : status)}
           >
-            {count} {stage}
+            {count} {status}
           </Badge>
         ))}
       </div>
 
       {/* Filters */}
       <div className="flex gap-3">
-        <Select value={filterStage} onValueChange={setFilterStage}>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="Stage" />
+            <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Stages</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="planned">Planned</SelectItem>
             <SelectItem value="producing">Producing</SelectItem>
-            <SelectItem value="ready">Ready</SelectItem>
-            <SelectItem value="live">Live</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="review">Review</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="delivered">Delivered</SelectItem>
+            <SelectItem value="published">Published</SelectItem>
+            <SelectItem value="updating">Updating</SelectItem>
             <SelectItem value="archived">Archived</SelectItem>
           </SelectContent>
         </Select>
@@ -85,78 +118,80 @@ export default function CreatePage() {
             <SelectItem value="all">All Categories</SelectItem>
             {categories.map((cat) => (
               <SelectItem key={cat.id} value={cat.id}>
-                {cat.labels.de}
+                {cat.labels.de ?? cat.labels.en ?? cat.id}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Article List */}
+      {/* Content List */}
       <div className="rounded-lg border overflow-hidden">
         <div className="flex items-center gap-4 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground border-b">
-          <div className="flex-1">Article</div>
+          <div className="flex-1">Content</div>
+          <div className="w-20 hidden md:block">Type</div>
           <div className="w-24 hidden md:block">Created</div>
-          <div className="w-24 hidden lg:block">Live since</div>
-          <div className="w-24 hidden lg:block">Last edited</div>
-          <div className="w-20">Stage</div>
-          <div className="w-28">Condition</div>
+          <div className="w-24 hidden lg:block">Published</div>
+          <div className="w-24 hidden lg:block">Updated</div>
+          <div className="w-24">Status</div>
           <div className="w-10"></div>
         </div>
 
-        {sorted.map((article, idx) => {
-          const author = authors.find((a) => a.id === article.author);
-          const category = categories.find((c) => c.id === article.category);
+        {sorted.map((item, idx) => {
+          const cat = categories.find((c) => c.id === item.category);
           const fmt = (iso: string) => format(new Date(iso), "dd.MM.yy");
 
           return (
             <Link
-              key={article.id}
-              href={`/create/${article.id}`}
+              key={item.id}
+              href={`/create/${item.id}`}
               className={`flex items-center gap-4 px-4 py-3 hover:bg-accent/50 transition-colors ${
                 idx < sorted.length - 1 ? "border-b" : ""
               }`}
             >
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{article.title}</p>
+                <p className="text-sm font-medium truncate">{item.title || "Untitled"}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <Badge variant="outline" className="text-[10px] px-1 py-0">
-                    {article.lang.toUpperCase()}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {author?.name ?? article.author}
-                  </span>
-                  <span className="text-xs text-muted-foreground">·</span>
-                  <span className="text-xs text-muted-foreground">
-                    {category?.labels.de ?? article.category}
-                  </span>
+                  {item.category && (
+                    <span className="text-xs text-muted-foreground">
+                      {cat?.labels.de ?? item.category}
+                    </span>
+                  )}
+                  {item.tags && item.tags.length > 0 && (
+                    <>
+                      <span className="text-xs text-muted-foreground">·</span>
+                      <span className="text-xs text-muted-foreground">
+                        {item.tags.slice(0, 2).join(", ")}
+                      </span>
+                    </>
+                  )}
                 </div>
+              </div>
+
+              <div className="w-20 hidden md:block">
+                <ContentTypeBadge type={item.type} />
               </div>
 
               <div className="w-24 hidden md:block">
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {fmt(article.createdAt)}
+                  {fmt(item.createdAt)}
                 </p>
               </div>
 
               <div className="w-24 hidden lg:block">
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {article.publishedAt ? fmt(article.publishedAt) : "—"}
+                  {item.publishedAt ? fmt(item.publishedAt) : "—"}
                 </p>
               </div>
 
               <div className="w-24 hidden lg:block">
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {article.lastEditedAt ? fmt(article.lastEditedAt) : "—"}
+                  {fmt(item.updatedAt)}
                 </p>
               </div>
 
-              <div className="w-20">
-                <StageBadge stage={article.stage} />
-              </div>
-
-              <div className="w-28">
-                <ConditionBadge condition={article.condition} />
+              <div className="w-24">
+                <ContentStatusBadge status={item.status} />
               </div>
 
               <div className="w-10 text-right">
@@ -172,9 +207,9 @@ export default function CreatePage() {
       {sorted.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center">
           <FileText className="mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-sm font-medium">No articles found</p>
+          <p className="text-sm font-medium">No content found</p>
           <p className="text-xs text-muted-foreground">
-            Produce topics from Plan to see articles here
+            Produce topics from Plan or create content manually
           </p>
         </div>
       )}

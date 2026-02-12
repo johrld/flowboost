@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { isConfigured, listRepos, listBranches } from "../../services/github.js";
+import { isConfigured, listRepos, listBranches, getFileContent } from "../../services/github.js";
 import { createLogger } from "../../utils/logger.js";
 
 /**
@@ -24,13 +24,13 @@ export async function githubAuthRoutes(app: FastifyInstance) {
 
     if (!installation_id) {
       return reply.redirect(
-        `${process.env.FRONTEND_URL ?? "http://localhost:6001"}/settings?tab=connector&github=error&reason=no_installation_id`,
+        `${process.env.FRONTEND_URL ?? "http://localhost:6001"}/connectors?tab=connections&github=error&reason=no_installation_id`,
       );
     }
 
     // Redirect to frontend with installation_id so it can update the project connector
     return reply.redirect(
-      `${process.env.FRONTEND_URL ?? "http://localhost:6001"}/settings?tab=connector&github=connected&installation_id=${installation_id}`,
+      `${process.env.FRONTEND_URL ?? "http://localhost:6001"}/connectors?tab=connections&github=connected&installation_id=${installation_id}`,
     );
   });
 }
@@ -83,6 +83,34 @@ export async function githubApiRoutes(app: FastifyInstance) {
       try {
         const branches = await listBranches(installationId, owner, repo);
         return branches;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        return reply.status(502).send({ error: `GitHub API error: ${msg}` });
+      }
+    },
+  );
+
+  // GET /github/repos/:owner/:repo/file — Read a file from the repo
+  app.get<{
+    Params: { owner: string; repo: string };
+    Querystring: { installation_id: string; path: string; ref?: string };
+  }>(
+    "/repos/:owner/:repo/file",
+    async (request, reply) => {
+      const { owner, repo } = request.params;
+      const { installation_id, path, ref } = request.query;
+      const installationId = Number(installation_id);
+
+      if (!installationId) {
+        return reply.status(400).send({ error: "installation_id query parameter required" });
+      }
+      if (!path) {
+        return reply.status(400).send({ error: "path query parameter required" });
+      }
+
+      try {
+        const content = await getFileContent(installationId, owner, repo, path, ref);
+        return reply.type("text/plain; charset=utf-8").send(content);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         return reply.status(502).send({ error: `GitHub API error: ${msg}` });

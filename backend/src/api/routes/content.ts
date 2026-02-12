@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { createLogger } from "../../utils/logger.js";
 import { createSiteConnector } from "../../connectors/site/factory.js";
@@ -508,6 +510,34 @@ export async function contentRoutes(app: FastifyInstance) {
     if (!item) return reply.status(404).send({ error: "Content not found" });
 
     return content.getVersions(contentId);
+  });
+
+  // GET /content/:contentId/versions/:versionId/file?lang=de
+  app.get<{
+    Params: { customerId: string; projectId: string; contentId: string; versionId: string };
+    Querystring: { lang?: string };
+  }>("/:contentId/versions/:versionId/file", async (request, reply) => {
+    const { customerId, projectId, contentId, versionId } = request.params;
+    const lang = request.query.lang;
+    const content = app.ctx.contentFor(customerId, projectId);
+
+    const version = content.getVersion(contentId, versionId);
+    if (!version) return reply.status(404).send({ error: "Version not found" });
+
+    const langVariant = lang
+      ? version.languages.find((l) => l.lang === lang)
+      : version.languages[0];
+    if (!langVariant) return reply.status(404).send({ error: `Language '${lang}' not found in version` });
+
+    const versionDir = content.getVersionDir(contentId, versionId);
+    const filePath = path.join(versionDir, langVariant.contentPath);
+
+    if (!fs.existsSync(filePath)) {
+      return reply.status(404).send({ error: "Content file not found on disk" });
+    }
+
+    const markdown = fs.readFileSync(filePath, "utf-8");
+    return reply.type("text/markdown; charset=utf-8").send(markdown);
   });
 }
 
