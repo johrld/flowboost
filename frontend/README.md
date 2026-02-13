@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FlowBoost Dashboard
 
-## Getting Started
+Next.js 15 Frontend fuer den FlowBoost Content Hub.
 
-First, run the development server:
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router)
+- **UI**: shadcn/ui + Tailwind CSS
+- **State**: React hooks + Context (ProjectContext)
+- **API**: REST calls to FlowBoost Backend (port 6100)
+
+## Pages
+
+| Route | Beschreibung |
+|-------|-------------|
+| `/dashboard` | Aktionsorientiertes Dashboard |
+| `/research` | Topic Discovery + Content Gaps |
+| `/plan` | Kalender + Content Scheduling |
+| `/create` | Content-Liste + Editor |
+| `/create/new` | Neuen Content erstellen |
+| `/create/[id]` | Content bearbeiten |
+| `/monitor` | Pipeline Runs + Agent Activity |
+| `/connectors` | Git Repository, Social, Media Connectors |
+| `/settings` | Projekt-Config (7 Tabs) |
+
+## Connectors Page
+
+Eigene Seite fuer Connector-Verwaltung mit zwei Tabs:
+
+- **Connections**: Connector-Karten (Site, Social, Media). Git Repository Detail-View mit Framework-Auswahl (Astro/Hugo/Next.js/Custom), Repo/Branch, Content/Assets/Categories/Authors Pfade.
+- **Routing**: Welcher Connector ist aktiv fuer welchen Content-Typ.
+
+## Settings Page
+
+7 Tabs: General, Project Brief, Authors, Brand Voice, Categories, Competitors, Pipeline.
+
+**Categories + Authors** sind read-only und werden ueber zentralen Sync vom verbundenen Repository gelesen (`POST /projects/:id/sync`). Auto-Sync beim Laden, manueller Sync-Button als Fallback.
+
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # Dev Server (localhost:3000)
+npm run build        # Production Build
+npx tsc --noEmit     # Type Check
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+NEXT_PUBLIC_API_URL=http://localhost:6100
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Docker
 
-## Learn More
+```bash
+# Aus dem Root-Verzeichnis:
+docker compose up -d --build dashboard
+```
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Port: 6001 (mapped von Container-Port 3000)

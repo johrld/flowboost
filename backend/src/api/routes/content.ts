@@ -8,6 +8,7 @@ import type {
   ContentItem,
   ContentItemStatus,
   ContentType,
+  LanguageVariant,
   SiteContentLangMeta,
 } from "../../models/types.js";
 
@@ -254,6 +255,11 @@ export async function contentRoutes(app: FastifyInstance) {
         updatedAt: now,
       });
 
+      // Mark version as published
+      if (result.published) {
+        content.updateVersion(contentId, latestVersion.id, { publishedAt: now });
+      }
+
       // Update Content Index
       if (result.published) {
         await updateContentIndex(app, customerId, projectId, item, latestVersion, connector.platform, result.ref);
@@ -324,6 +330,9 @@ export async function contentRoutes(app: FastifyInstance) {
         lastPublishedVersionId: item.currentVersionId,
         updatedAt: now,
       });
+      if (item.currentVersionId) {
+        content.updateVersion(contentId, item.currentVersionId, { publishedAt: now });
+      }
       return { message: "Content published", contentId };
     }
 
@@ -344,6 +353,9 @@ export async function contentRoutes(app: FastifyInstance) {
       lastPublishedVersionId: item.currentVersionId,
       updatedAt: now,
     });
+    if (item.currentVersionId) {
+      content.updateVersion(contentId, item.currentVersionId, { publishedAt: now });
+    }
 
     // Update Content Index
     const latestVersion = content.getLatestVersion(contentId);
@@ -423,6 +435,9 @@ export async function contentRoutes(app: FastifyInstance) {
       ...(result.published ? { publishedAt: now, lastPublishedVersionId: latestVersion.id } : {}),
       updatedAt: now,
     });
+    if (result.published) {
+      content.updateVersion(contentId, latestVersion.id, { publishedAt: now });
+    }
 
     log.info({ contentId, platform: connector.platform }, "content update delivered");
     return {
@@ -538,6 +553,103 @@ export async function contentRoutes(app: FastifyInstance) {
 
     const markdown = fs.readFileSync(filePath, "utf-8");
     return reply.type("text/markdown; charset=utf-8").send(markdown);
+  });
+
+  // POST /content/:contentId/versions — create new version from editor
+  app.post<{
+    Params: { customerId: string; projectId: string; contentId: string };
+    Body: { files: Record<string, string>; createdBy?: "pipeline" | "user" | "sync"; createdByName?: string };
+  }>("/:contentId/versions", async (request, reply) => {
+    const { customerId, projectId, contentId } = request.params;
+    const { files, createdBy = "user", createdByName } = request.body as {
+      files: Record<string, string>;
+      createdBy?: "pipeline" | "user" | "sync";
+      createdByName?: string;
+    };
+    const content = app.ctx.contentFor(customerId, projectId);
+
+    const item = content.get(contentId);
+    if (!item) return reply.status(404).send({ error: "Content not found" });
+
+    if (!files || Object.keys(files).length === 0) {
+      return reply.status(400).send({ error: "At least one file is required" });
+    }
+
+    // Parse each language file
+    const languages: LanguageVariant[] = [];
+    let totalWordCount = 0;
+    let totalHeadingCount = 0;
+    let hasFaq = false;
+    let hasAnswerCapsule = false;
+
+    for (const [lang, markdown] of Object.entries(files)) {
+      const fmMatch = markdown.match(/^---\n([\s\S]*?)\n---/);
+      const fm = fmMatch?.[1] ?? "";
+      const body = markdown.replace(/^---\n[\s\S]*?\n---\n*/, "");
+
+      // Extract metadata from frontmatter
+      const titleMatch = fm.match(/^title:\s*"(.+?)"\s*$/m);
+      const descMatch = fm.match(/^description:\s*"(.+?)"\s*$/m);
+      const title = titleMatch?.[1] ?? item.title;
+      const description = descMatch?.[1] ?? item.description ?? "";
+
+      // Slug: from frontmatter, or from existing version, or from translationKey/id
+      const existingVersion = content.getLatestVersion(contentId);
+      const existingLang = existingVersion?.languages.find((l) => l.lang === lang);
+      const slug = existingLang?.slug ?? item.translationKey ?? item.id;
+
+      // Calculate metrics
+      const words = body.split(/\s+/).filter(Boolean).length;
+      const headings = (body.match(/^##\s+/gm) ?? []).length;
+      totalWordCount += words;
+      totalHeadingCount += headings;
+      if (fm.includes("faq:")) hasFaq = true;
+      if (body.trimStart().startsWith(">")) hasAnswerCapsule = true;
+
+      const contentPath = `content/${lang}/${slug}.md`;
+      languages.push({ lang, slug, title, description, contentPath, wordCount: words });
+    }
+
+    // Create version
+    const version = content.createVersion(contentId, {
+      contentId,
+      languages,
+      assets: [],
+      text: {
+        wordCount: totalWordCount,
+        headingCount: totalHeadingCount,
+        hasFaq,
+        hasAnswerCapsule,
+      },
+      createdAt: new Date().toISOString(),
+      createdBy,
+      ...(createdByName ? { createdByName } : {}),
+    });
+
+    // Write markdown files to version directory
+    const versionDir = content.getVersionDir(contentId, version.id);
+    for (const [lang] of Object.entries(files)) {
+      const langVariant = languages.find((l) => l.lang === lang)!;
+      const filePath = path.join(versionDir, langVariant.contentPath);
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, files[lang]);
+    }
+
+    // Update currentVersionId + auto-transition to draft
+    const updates: Record<string, unknown> = {
+      currentVersionId: version.id,
+      updatedAt: new Date().toISOString(),
+    };
+    if (item.status === "planned" || item.status === "producing") {
+      updates.status = "draft";
+    }
+    content.update(contentId, updates as Partial<ContentItem>);
+
+    log.info(
+      { contentId, versionId: version.id, versionNumber: version.versionNumber, langs: languages.map((l) => l.lang) },
+      "version created",
+    );
+    return version;
   });
 }
 

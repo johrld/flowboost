@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect, useCallback } from "react";
+import { use, useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContentStatusBadge, ContentTypeBadge } from "@/components/status-badge";
 import { TiptapEditor } from "@/components/tiptap-editor";
 import { useProject } from "@/lib/project-context";
@@ -27,6 +28,7 @@ import {
   getContentItem,
   getContentFile,
   updateContent,
+  createContentVersion,
   submitContent,
   approveContent,
   rejectContent,
@@ -34,12 +36,15 @@ import {
   requestContentUpdate,
   archiveContent,
   restoreContent,
+  getTopics,
+  scheduleTopic,
 } from "@/lib/api";
-import type { ContentItem, ContentVersion } from "@/lib/types";
+import type { ContentItem, ContentVersion, Topic } from "@/lib/types";
 import {
   ArrowLeft,
   Save,
   Check,
+  ChevronDown,
   ImageIcon,
   Plus,
   Trash2,
@@ -51,6 +56,8 @@ import {
   RotateCcw,
   Loader2,
   X,
+  CalendarIcon,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -110,6 +117,41 @@ function stripFrontmatter(md: string): string {
   return md.replace(/^---\n[\s\S]*?\n---\n*/, "");
 }
 
+/** Rebuild YAML frontmatter from sidebar fields */
+function buildFrontmatter(
+  meta: { title: string; description: string; category: string; tags: string; keywords: string; faqs: { question: string; answer: string }[] },
+  lang: string,
+): string {
+  const lines: string[] = ["---"];
+  lines.push(`title: "${meta.title}"`);
+  if (meta.description) lines.push(`description: "${meta.description}"`);
+  if (meta.category) lines.push(`category: ${meta.category}`);
+  if (meta.tags) {
+    const items = meta.tags.split(",").map((t) => t.trim()).filter(Boolean);
+    if (items.length > 0) {
+      lines.push("tags:");
+      items.forEach((t) => lines.push(`  - ${t}`));
+    }
+  }
+  if (meta.keywords) {
+    const items = meta.keywords.split(",").map((k) => k.trim()).filter(Boolean);
+    if (items.length > 0) {
+      lines.push("keywords:");
+      items.forEach((k) => lines.push(`  - ${k}`));
+    }
+  }
+  lines.push(`lang: ${lang}`);
+  if (meta.faqs.length > 0) {
+    lines.push("faq:");
+    meta.faqs.forEach((f) => {
+      lines.push(`  - question: "${f.question}"`);
+      lines.push(`    answer: "${f.answer}"`);
+    });
+  }
+  lines.push("---");
+  return lines.join("\n") + "\n";
+}
+
 interface LangMeta {
   title: string;
   description: string;
@@ -129,6 +171,7 @@ export default function ContentEditorPage({
 
   const [item, setItem] = useState<ContentItem | null>(null);
   const [versions, setVersions] = useState<ContentVersion[]>([]);
+  const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -139,6 +182,17 @@ export default function ContentEditorPage({
   // Editor content per language (body only, no frontmatter)
   const [activeLang, setActiveLang] = useState("de");
   const [editorContent, setEditorContent] = useState<Record<string, string>>({});
+  const [originalContent, setOriginalContent] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [versionPopoverOpen, setVersionPopoverOpen] = useState(false);
+
+  // Topic scheduling
+  const [topic, setTopic] = useState<Topic | null>(null);
+  const [schedDate, setSchedDate] = useState("");
+  const [schedTime, setSchedTime] = useState("");
+
+  // Track which languages the user actually edited (vs TiptapEditor roundtrip noise)
+  const userEditedLangs = useRef<Set<string>>(new Set());
 
   // Derived sidebar fields from active language
   const langMeta = metaByLang[activeLang];
@@ -170,41 +224,29 @@ export default function ContentEditorPage({
       setItem(data);
       setVersions(data.versions ?? []);
 
+      // Load topic for scheduling info
+      if (data.topicId) {
+        try {
+          const topics = await getTopics(customerId, projectId);
+          const t = topics.find((tp) => tp.id === data.topicId);
+          if (t) {
+            setTopic(t);
+            if (t.scheduledDate) {
+              const [d, time] = t.scheduledDate.includes("T")
+                ? t.scheduledDate.split("T")
+                : [t.scheduledDate, ""];
+              setSchedDate(d);
+              setSchedTime(time);
+            }
+          }
+        } catch { /* ignore */ }
+      }
+
       // Load editor content from latest version's markdown files
       if (data.versions && data.versions.length > 0) {
         const latest = data.versions[data.versions.length - 1];
-        const rawContent: Record<string, string> = {};
-        await Promise.all(
-          latest.languages.map(async (lang) => {
-            try {
-              rawContent[lang.lang] = await getContentFile(
-                customerId!, projectId!, id, latest.id, lang.lang,
-              );
-            } catch {
-              rawContent[lang.lang] = "";
-            }
-          }),
-        );
-
-        // Parse frontmatter per language → metadata + stripped body
-        const allMeta: Record<string, LangMeta> = {};
-        const bodyContent: Record<string, string> = {};
-        for (const lang of latest.languages) {
-          const md = rawContent[lang.lang] ?? "";
-          const fmMatch = md.match(/^---\n([\s\S]*?)\n---/);
-          if (fmMatch) {
-            allMeta[lang.lang] = parseFrontmatter(fmMatch[1]);
-          } else {
-            allMeta[lang.lang] = { title: lang.title, description: "", category: data.category ?? "", tags: "", keywords: "", faqs: [] };
-          }
-          bodyContent[lang.lang] = stripFrontmatter(md) || `# ${lang.title}\n\n*No content*`;
-        }
-        setMetaByLang(allMeta);
-        setEditorContent(bodyContent);
-
-        if (latest.languages.length > 0) {
-          setActiveLang(latest.languages[0].lang);
-        }
+        setActiveVersionId(latest.id);
+        await loadVersionContent(latest, data);
       } else {
         // No versions — use ContentItem-level metadata
         setTitle(data.title);
@@ -220,15 +262,66 @@ export default function ContentEditorPage({
     }
   }, [customerId, projectId, id]);
 
+  // Shared helper: load a version's files into the editor
+  const loadVersionContent = useCallback(async (version: ContentVersion, data: ContentItem) => {
+    const rawContent: Record<string, string> = {};
+    await Promise.all(
+      version.languages.map(async (lang) => {
+        try {
+          rawContent[lang.lang] = await getContentFile(
+            customerId!, projectId!, id, version.id, lang.lang,
+          );
+        } catch {
+          rawContent[lang.lang] = "";
+        }
+      }),
+    );
+
+    const allMeta: Record<string, LangMeta> = {};
+    const bodyContent: Record<string, string> = {};
+    for (const lang of version.languages) {
+      const md = rawContent[lang.lang] ?? "";
+      const fmMatch = md.match(/^---\n([\s\S]*?)\n---/);
+      if (fmMatch) {
+        allMeta[lang.lang] = parseFrontmatter(fmMatch[1]);
+      } else {
+        allMeta[lang.lang] = { title: lang.title, description: "", category: data.category ?? "", tags: "", keywords: "", faqs: [] };
+      }
+      bodyContent[lang.lang] = stripFrontmatter(md) || `# ${lang.title}\n\n*No content*`;
+    }
+    setMetaByLang(allMeta);
+    setEditorContent(bodyContent);
+    setOriginalContent(bodyContent);
+    userEditedLangs.current = new Set();
+
+    if (version.languages.length > 0) {
+      setActiveLang(version.languages[0].lang);
+    }
+  }, [customerId, projectId, id]);
+
   useEffect(() => {
     loadItem();
   }, [loadItem]);
 
-  // Save metadata
+  // Switch to a different version
+  const switchVersion = useCallback(async (versionId: string) => {
+    if (!item || versionId === activeVersionId) return;
+    const version = versions.find((v) => v.id === versionId);
+    if (!version) return;
+    setActiveVersionId(versionId);
+    await loadVersionContent(version, item);
+  }, [item, versions, activeVersionId, loadVersionContent]);
+
+  // Body dirty = user explicitly edited at least one language
+  const bodyDirty = userEditedLangs.current.size > 0;
+
+  // Save metadata + body (creates new version if body changed)
   const handleSave = async () => {
     if (!item) return;
     setSaving(true);
+    setSaveError(null);
     try {
+      // 1. Always save metadata
       const updated = await updateContent(customerId, projectId, item.id, {
         title,
         description: description || undefined,
@@ -237,6 +330,26 @@ export default function ContentEditorPage({
         keywords: keywords ? keywords.split(",").map((k) => k.trim()).filter(Boolean) : undefined,
       });
       setItem({ ...item, ...updated });
+
+      // 2. If body changed, create new version
+      if (bodyDirty) {
+        const files: Record<string, string> = {};
+        for (const lang of Object.keys(editorContent)) {
+          const meta = metaByLang[lang] ?? { title, description, category, tags, keywords, faqs: [] };
+          const fm = buildFrontmatter(
+            { title: lang === activeLang ? title : meta.title, description: lang === activeLang ? description : meta.description, category: lang === activeLang ? category : meta.category, tags: lang === activeLang ? tags : meta.tags, keywords: lang === activeLang ? keywords : meta.keywords, faqs: meta.faqs },
+            lang,
+          );
+          files[lang] = fm + editorContent[lang];
+        }
+        await createContentVersion(customerId, projectId, item.id, files);
+        userEditedLangs.current = new Set();
+        await loadItem(); // reload to show new version
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSaveError(msg);
+      console.error("Save failed:", err);
     } finally {
       setSaving(false);
     }
@@ -296,10 +409,13 @@ export default function ContentEditorPage({
   }
 
   const latestVersion = versions.length > 0 ? versions[versions.length - 1] : null;
+  const activeVersion = versions.find((v) => v.id === activeVersionId) ?? latestVersion;
+  const isViewingOldVersion = activeVersion && latestVersion && activeVersion.id !== latestVersion.id;
   const origMeta = metaByLang[activeLang];
-  const hasChanges = origMeta
+  const metaDirty = origMeta
     ? title !== origMeta.title || description !== origMeta.description || category !== origMeta.category
     : title !== (item.title ?? "") || description !== (item.description ?? "") || category !== (item.category ?? "");
+  const hasChanges = metaDirty || bodyDirty;
 
   return (
     <div className="flex h-full">
@@ -317,9 +433,9 @@ export default function ContentEditorPage({
             <div className="flex items-center gap-2 mt-1">
               <ContentStatusBadge status={item.status} />
               <ContentTypeBadge type={item.type} />
-              {latestVersion && (
-                <span className="text-xs text-muted-foreground">
-                  v{latestVersion.versionNumber}
+              {activeVersion && (
+                <span className={`text-xs ${isViewingOldVersion ? "text-violet-600 font-medium" : "text-muted-foreground"}`}>
+                  v{activeVersion.versionNumber}{isViewingOldVersion ? ` (latest: v${latestVersion!.versionNumber})` : ""}
                 </span>
               )}
               <span className="text-xs text-muted-foreground">
@@ -380,6 +496,40 @@ export default function ContentEditorPage({
           </div>
         </div>
 
+        {/* Save Error Banner */}
+        {saveError && (
+          <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-950">
+            <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+            <p className="text-sm text-red-800 dark:text-red-200 flex-1">{saveError}</p>
+            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setSaveError(null)}>
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+
+        {/* Viewing Older Version Banner */}
+        {isViewingOldVersion && (
+          <div className="flex items-center gap-3 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-800 dark:bg-violet-950">
+            <RotateCcw className="h-4 w-4 text-violet-600 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-violet-800 dark:text-violet-200">
+                Viewing v{activeVersion!.versionNumber} — latest is v{latestVersion!.versionNumber}
+              </p>
+              <p className="text-xs text-violet-600 dark:text-violet-400">
+                Editing and saving will create a new version based on this content.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => switchVersion(latestVersion!.id)}
+            >
+              Go to latest
+            </Button>
+          </div>
+        )}
+
         {/* Status Banners */}
         {item.status === "producing" && (
           <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-950">
@@ -426,7 +576,7 @@ export default function ContentEditorPage({
         {/* Language Tabs + Editor */}
         <Tabs value={activeLang} onValueChange={setActiveLang}>
           <TabsList>
-            {latestVersion?.languages.map((lang) => (
+            {activeVersion?.languages.map((lang) => (
               <TabsTrigger key={lang.lang} value={lang.lang}>
                 {lang.lang.toUpperCase()}
                 {lang.wordCount ? (
@@ -442,14 +592,15 @@ export default function ContentEditorPage({
             )}
           </TabsList>
 
-          {(latestVersion?.languages ?? [{ lang: "de", slug: "", title: "", description: "", contentPath: "" }]).map((lang) => (
+          {(activeVersion?.languages ?? [{ lang: "de", slug: "", title: "", description: "", contentPath: "" }]).map((lang) => (
             <TabsContent key={lang.lang} value={lang.lang} className="mt-4">
               {editorContent[lang.lang] ? (
                 <TiptapEditor
                   content={editorContent[lang.lang]}
-                  onChange={(md) =>
-                    setEditorContent((prev) => ({ ...prev, [lang.lang]: md }))
-                  }
+                  onChange={(md) => {
+                    userEditedLangs.current.add(lang.lang);
+                    setEditorContent((prev) => ({ ...prev, [lang.lang]: md }));
+                  }}
                 />
               ) : (
                 <Card>
@@ -529,48 +680,74 @@ export default function ContentEditorPage({
           </CardContent>
         </Card>
 
-        {/* Version History */}
-        {versions.length > 0 && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Version History ({versions.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {[...versions].reverse().map((v) => (
-                  <div
-                    key={v.id}
-                    className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm"
-                  >
-                    <Badge variant="outline" className="text-xs">
-                      v{v.versionNumber}
-                    </Badge>
-                    <span className="text-muted-foreground">
-                      {v.languages.map((l) => l.lang.toUpperCase()).join(", ")}
-                    </span>
-                    {v.text && (
-                      <span className="text-muted-foreground">
-                        {v.text.wordCount}w
-                      </span>
-                    )}
-                    {v.seoScore != null && (
-                      <span className="text-muted-foreground">
-                        SEO: {v.seoScore}
-                      </span>
-                    )}
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {new Date(v.createdAt).toLocaleDateString("de-DE")} — {v.createdBy}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
 
-      {/* Right Sidebar - Metadata */}
+      {/* Right Sidebar */}
       <div className="w-80 shrink-0 overflow-y-auto border-l bg-muted/30 p-6 space-y-6">
+        {/* Version Selector */}
+        {versions.length > 0 && activeVersion && (
+          <div className="space-y-2">
+            <h3 className="font-semibold text-sm">Version</h3>
+            <Popover open={versionPopoverOpen} onOpenChange={setVersionPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-between text-xs h-9">
+                  <span className="flex items-center gap-2">
+                    <Badge
+                      variant={activeVersion.publishedAt ? "default" : "outline"}
+                      className={`text-[10px] px-1.5 ${activeVersion.publishedAt ? "bg-green-600 hover:bg-green-600" : ""}`}
+                    >
+                      v{activeVersion.versionNumber}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      {activeVersion.languages?.[0]?.wordCount ? `${activeVersion.languages[0].wordCount}w` : ""} · {activeVersion.createdByName ?? activeVersion.createdBy}
+                    </span>
+                    {isViewingOldVersion && (
+                      <span className="text-violet-600 font-medium">older</span>
+                    )}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-1.5" align="start">
+                <div className="space-y-1">
+                  {[...versions].reverse().map((v) => {
+                    const isActive = v.id === activeVersionId;
+                    const isPublished = !!v.publishedAt;
+                    return (
+                      <button
+                        type="button"
+                        key={v.id}
+                        className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors hover:bg-muted ${isActive ? "bg-muted" : ""}`}
+                        onClick={() => {
+                          switchVersion(v.id);
+                          setVersionPopoverOpen(false);
+                        }}
+                      >
+                        <Badge
+                          variant={isPublished ? "default" : "outline"}
+                          className={`text-[10px] px-1.5 shrink-0 ${isPublished ? "bg-green-600 hover:bg-green-600" : ""}`}
+                        >
+                          v{v.versionNumber}
+                        </Badge>
+                        <span className="text-muted-foreground truncate">
+                          {v.languages?.[0]?.wordCount ? `${v.languages[0].wordCount}w` : ""}
+                          {" · "}
+                          {new Date(v.createdAt).toLocaleDateString("de-DE")}
+                          {" · "}
+                          {v.createdByName ?? v.createdBy}
+                        </span>
+                        {isPublished && (
+                          <span className="ml-auto text-[10px] text-green-600 shrink-0">live</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
+
         {/* Metadata */}
         <div className="space-y-4">
           <h3 className="font-semibold text-sm">Metadata</h3>
@@ -636,6 +813,48 @@ export default function ContentEditorPage({
             />
           </div>
         </div>
+
+        {/* Scheduling */}
+        {topic && (
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm flex items-center gap-1.5">
+              <CalendarIcon className="h-3.5 w-3.5" />
+              Scheduling
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="sched-date" className="text-xs">Date</Label>
+                <Input
+                  id="sched-date"
+                  type="date"
+                  value={schedDate}
+                  onChange={(e) => {
+                    setSchedDate(e.target.value);
+                    if (e.target.value && customerId && projectId && topic) {
+                      const newVal = schedTime ? `${e.target.value}T${schedTime}` : e.target.value;
+                      scheduleTopic(customerId, projectId, topic.id, newVal);
+                    }
+                  }}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sched-time" className="text-xs">Time</Label>
+                <Input
+                  id="sched-time"
+                  type="time"
+                  value={schedTime}
+                  onChange={(e) => {
+                    setSchedTime(e.target.value);
+                    if (schedDate && customerId && projectId && topic) {
+                      const newVal = e.target.value ? `${schedDate}T${e.target.value}` : schedDate;
+                      scheduleTopic(customerId, projectId, topic.id, newVal);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Hero Image */}
         <div className="space-y-3">

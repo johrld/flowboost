@@ -944,6 +944,26 @@ GET    /pipeline/runs                     # Alle Runs
 GET    /pipeline/runs/:runId              # Run Detail
 ```
 
+### Connector Sync
+
+```
+POST   /sync                              # Zentraler Sync: Categories + Authors aus Repo
+```
+
+Liest `categoriesPath` und `authorsPath` aus der Connector-Config, holt die JSON-Dateien
+via GitHub Contents API und gibt sie zurueck:
+
+```json
+{
+  "categories": [...],
+  "authors": [...],
+  "errors": ["authors: File not found"]
+}
+```
+
+Categories und Authors sind **read-only** im Dashboard — das Repository ist Source of Truth.
+Auto-Sync beim Laden der Settings-Seite, manueller Sync-Button als Fallback.
+
 ### Webhooks
 
 ```
@@ -1025,6 +1045,19 @@ type SiteConnectorConfig =
   | { type: "webflow"; webflow: WebflowConnectorFields }
   | { type: "filesystem"; filesystem: FilesystemConnectorFields };
 
+// GitHub Connector Fields (aktuell implementiert)
+interface GitHubConnectorFields {
+  installationId: number;
+  owner: string;
+  repo: string;
+  branch: string;
+  framework?: "astro" | "hugo" | "nextjs" | "custom";  // Steuert Default-Pfade
+  contentPath: string;       // z.B. "src/content/posts"
+  assetsPath: string;        // z.B. "src/assets/posts"
+  categoriesPath?: string;   // z.B. "src/data/categories.json" — fuer Sync
+  authorsPath?: string;      // z.B. "src/data/authors.json" — fuer Sync
+}
+
 interface MediaConnectorConfig {
   platform: "youtube" | "vimeo" | "spotify" | "apple_podcasts" | "soundcloud";
   enabled: boolean;
@@ -1089,14 +1122,17 @@ Kritische Schulden schliessen bevor neue Features.
 
 | Step | Scope | Aufwand |
 |------|-------|---------|
-| **0.1** | ContentItem Type (erweitert Article) | S |
-| **0.2** | ContentStore (erweitert ArticleStore, Version-Numbering) | M |
-| **0.3** | Content CRUD API (create, update, delete) | M |
-| **0.4** | Review/Reject Workflow API | S |
-| **0.5** | SiteConnector.update() + unpublish() | M |
-| **0.6** | Content Index PATCH/DELETE Endpoints | S |
-| **0.7** | Alte V1 Connector-Dateien aufraumen | S |
-| **0.8** | Migration Script (Article → ContentItem) | M |
+| **0.1** | ContentItem Type (erweitert Article) | ✅ Done |
+| **0.2** | ContentStore (erweitert ArticleStore, Version-Numbering) | ✅ Done |
+| **0.3** | Content CRUD API (create, update, delete) | ✅ Done |
+| **0.4** | Review/Reject Workflow API + Lifecycle Transitions | ✅ Done |
+| **0.5** | Centralized Connector Sync (categories + authors from repo) | ✅ Done |
+| **0.6** | Frontend: Connectors Page + Framework Selection | ✅ Done |
+| **0.7** | Frontend: Read-only Categories + Authors with Auto-Sync | ✅ Done |
+| **0.8** | SiteConnector.update() + unpublish() | M |
+| **0.9** | Content Index PATCH/DELETE Endpoints | S |
+| **0.10** | Alte V1 Connector-Dateien aufraumen | S |
+| **0.11** | Migration Script (Article → ContentItem) | M |
 
 ### Phase 1: Media Asset Management
 
@@ -1188,6 +1224,9 @@ backend/src/
 ├── utils/
 │   └── frontmatter.ts                    # ✅ Markdown Frontmatter Parser
 └── api/routes/
+    ├── content.ts                        # ✅ Content CRUD + Lifecycle Transitions
+    ├── projects.ts                       # ✅ Project CRUD + POST /sync (centralized connector sync)
+    ├── github.ts                         # ✅ GitHub OAuth + Repos/Branches/File API
     ├── articles.ts                       # ✅ Approve/Publish (SiteConnector)
     ├── webhooks.ts                       # ✅ Webhook Router (async, idempotent)
     ├── content-index.ts                  # ✅ Content Index API
