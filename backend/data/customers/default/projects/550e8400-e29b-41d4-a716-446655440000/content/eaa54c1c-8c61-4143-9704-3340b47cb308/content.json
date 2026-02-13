@@ -3,7 +3,7 @@
   "customerId": "default",
   "projectId": "550e8400-e29b-41d4-a716-446655440000",
   "type": "article",
-  "status": "review",
+  "status": "draft",
   "title": "Atemübungen für Arbeitsplatzstress: 4 Techniken direkt am Schreibtisch",
   "description": "Reduziere Stress im Büro mit diskreten Atemübungen. 4 Techniken für Präsentationen, Konflikte und Pausen. Sofort anwendbar am Schreibtisch.",
   "category": "breathing",
@@ -24,6 +24,6 @@
   "topicId": "topic-1",
   "translationKey": "breathing-exercises-workplace-stress",
   "createdAt": "2026-02-12T11:33:21.953Z",
-  "updatedAt": "2026-02-12T11:46:13.319Z",
-  "currentVersionId": "0c4c9187-a25b-4675-8c7c-fdaf2bf2db05"
+  "updatedAt": "2026-02-13T13:13:12.781Z",
+  "currentVersionId": "907d96bf-0148-49a1-8280-bd1e615d5eaf"
 }

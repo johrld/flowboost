@@ -87,6 +87,13 @@ export function approveTopic(customerId: string, projectId: string, topicId: str
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/approve`, { method: "POST" });
 }
 
+export function scheduleTopic(customerId: string, projectId: string, topicId: string, scheduledDate: string | null): Promise<{ message: string; topic: Topic }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ scheduledDate }),
+  });
+}
+
 export function rejectTopic(customerId: string, projectId: string, topicId: string, reason?: string): Promise<{ message: string; topic: Topic }> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/reject`, {
     method: "POST",
@@ -192,6 +199,19 @@ export async function getContentFile(
   );
   if (!res.ok) throw new Error(`Failed to load content file: ${res.status}`);
   return res.text();
+}
+
+export function createContentVersion(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  files: Record<string, string>,
+  createdByName?: string,
+): Promise<ContentVersion> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/versions`, {
+    method: "POST",
+    body: JSON.stringify({ files, createdBy: "user", ...(createdByName ? { createdByName } : {}) }),
+  });
 }
 
 // Lifecycle transitions

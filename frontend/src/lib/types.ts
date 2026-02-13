@@ -57,6 +57,8 @@ export interface ContentVersion {
   qualityScore?: number;
   createdAt: string;
   createdBy: "pipeline" | "user" | "sync";
+  createdByName?: string;
+  publishedAt?: string;
 }
 
 export interface LanguageVariant {
