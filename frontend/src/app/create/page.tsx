@@ -12,15 +12,16 @@ import {
 } from "@/components/ui/select";
 import { ContentStatusBadge, ContentTypeBadge } from "@/components/status-badge";
 import { useProject } from "@/lib/project-context";
-import { getContent } from "@/lib/api";
-import type { ContentItem } from "@/lib/types";
-import { FileText, Eye, Plus, Loader2 } from "lucide-react";
+import { getContent, getTopics } from "@/lib/api";
+import type { ContentItem, Topic } from "@/lib/types";
+import { FileText, Eye, Plus, Loader2, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 
 export default function CreatePage() {
   const { customerId, projectId, categories, loading: projectLoading } = useProject();
   const [items, setItems] = useState<ContentItem[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -28,11 +29,16 @@ export default function CreatePage() {
   useEffect(() => {
     if (!customerId || !projectId) return;
     setLoading(true);
-    getContent(customerId, projectId)
-      .then((res) => setItems(res.items))
-      .catch(() => setItems([]))
+    Promise.all([
+      getContent(customerId, projectId).then((res) => res.items),
+      getTopics(customerId, projectId),
+    ])
+      .then(([c, t]) => { setItems(c); setTopics(t); })
+      .catch(() => { setItems([]); setTopics([]); })
       .finally(() => setLoading(false));
   }, [customerId, projectId]);
+
+  const topicByTopicId = new Map(topics.map((t) => [t.id, t]));
 
   const filtered = items.filter((item) => {
     if (filterStatus !== "all" && item.status !== filterStatus) return false;
@@ -130,8 +136,7 @@ export default function CreatePage() {
         <div className="flex items-center gap-4 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground border-b">
           <div className="flex-1">Content</div>
           <div className="w-20 hidden md:block">Type</div>
-          <div className="w-24 hidden md:block">Created</div>
-          <div className="w-24 hidden lg:block">Published</div>
+          <div className="w-32 hidden md:block">Scheduled</div>
           <div className="w-24 hidden lg:block">Updated</div>
           <div className="w-24">Status</div>
           <div className="w-10"></div>
@@ -139,6 +144,8 @@ export default function CreatePage() {
 
         {sorted.map((item, idx) => {
           const cat = categories.find((c) => c.id === item.category);
+          const topic = item.topicId ? topicByTopicId.get(item.topicId) : undefined;
+          const schedDate = topic?.scheduledDate;
           const fmt = (iso: string) => format(new Date(iso), "dd.MM.yy");
 
           return (
@@ -172,16 +179,18 @@ export default function CreatePage() {
                 <ContentTypeBadge type={item.type} />
               </div>
 
-              <div className="w-24 hidden md:block">
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  {fmt(item.createdAt)}
-                </p>
-              </div>
-
-              <div className="w-24 hidden lg:block">
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  {item.publishedAt ? fmt(item.publishedAt) : "—"}
-                </p>
+              <div className="w-32 hidden md:block">
+                {schedDate ? (
+                  <div className="flex items-center gap-1.5 text-xs tabular-nums">
+                    <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span>{fmt(schedDate)}</span>
+                    {schedDate.includes("T") && (
+                      <span className="text-muted-foreground">{schedDate.split("T")[1]}</span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
               </div>
 
               <div className="w-24 hidden lg:block">

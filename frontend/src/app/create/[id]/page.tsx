@@ -41,6 +41,23 @@ import {
 } from "@/lib/api";
 import type { ContentItem, ContentVersion, Topic } from "@/lib/types";
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   ArrowLeft,
   Save,
   Check,
@@ -58,8 +75,219 @@ import {
   X,
   CalendarIcon,
   Clock,
+  GripVertical,
 } from "lucide-react";
 import Link from "next/link";
+
+/** Tag input with chips */
+function TagInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  const [input, setInput] = useState("");
+  const items = value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  function addItem(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || items.includes(trimmed)) return;
+    onChange([...items, trimmed].join(", "));
+    setInput("");
+  }
+
+  function removeItem(index: number) {
+    onChange(items.filter((_, i) => i !== index).join(", "));
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5 rounded-md border border-input bg-background px-2 py-2 focus-within:ring-1 focus-within:ring-ring">
+      {items.map((item, i) => (
+        <span
+          key={`${item}-${i}`}
+          className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"
+        >
+          {item}
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={() => removeItem(i)}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            addItem(input);
+          }
+          if (e.key === "Backspace" && !input && items.length > 0) {
+            removeItem(items.length - 1);
+          }
+        }}
+        onBlur={() => { if (input) addItem(input); }}
+        placeholder={items.length === 0 ? placeholder : ""}
+        className="flex-1 min-w-[80px] bg-transparent text-xs outline-none placeholder:text-muted-foreground/50"
+      />
+    </div>
+  );
+}
+
+/** Sortable FAQ item */
+function SortableFaqItem({
+  id,
+  index,
+  faq,
+  onUpdate,
+  onRemove,
+}: {
+  id: string;
+  index: number;
+  faq: { question: string; answer: string };
+  onUpdate: (field: "question" | "answer", value: string) => void;
+  onRemove: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex gap-3 items-start rounded-md border p-3 bg-background"
+    >
+      <button
+        type="button"
+        className="mt-1 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <Badge variant="outline" className="text-xs shrink-0 mt-1">
+        Q{index + 1}
+      </Badge>
+      <div className="flex-1 space-y-2">
+        <Input
+          placeholder="Question"
+          value={faq.question}
+          onChange={(e) => onUpdate("question", e.target.value)}
+          className="text-sm"
+        />
+        <Textarea
+          placeholder="Answer"
+          value={faq.answer}
+          onChange={(e) => onUpdate("answer", e.target.value)}
+          rows={2}
+          className="text-sm"
+        />
+      </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 shrink-0"
+        onClick={onRemove}
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+}
+
+/** FAQ section with drag-and-drop reordering */
+function FaqSection({
+  faqs,
+  setFaqs,
+}: {
+  faqs: { question: string; answer: string }[];
+  setFaqs: (items: { question: string; answer: string }[]) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  // Stable IDs for sortable items
+  const faqIds = faqs.map((_, i) => `faq-${i}`);
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = faqIds.indexOf(active.id as string);
+    const newIndex = faqIds.indexOf(over.id as string);
+    setFaqs(arrayMove(faqs, oldIndex, newIndex));
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm">FAQ ({faqs.length})</CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setFaqs([...faqs, { question: "", answer: "" }])}
+          >
+            <Plus className="mr-1 h-3 w-3" />
+            Add
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {faqs.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            No FAQ items yet. Add questions for rich snippets.
+          </p>
+        )}
+        {faqs.length > 0 && (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={faqIds} strategy={verticalListSortingStrategy}>
+              <div className="space-y-3">
+                {faqs.map((faq, i) => (
+                  <SortableFaqItem
+                    key={faqIds[i]}
+                    id={faqIds[i]}
+                    index={i}
+                    faq={faq}
+                    onUpdate={(field, value) => {
+                      const updated = [...faqs];
+                      updated[i] = { ...updated[i], [field]: value };
+                      setFaqs(updated);
+                    }}
+                    onRemove={() => setFaqs(faqs.filter((_, j) => j !== i))}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 /** Parse YAML frontmatter into metadata fields */
 function parseFrontmatter(fm: string) {
@@ -428,20 +656,17 @@ export default function ContentEditorPage({
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold">{item.title || "Untitled"}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <ContentStatusBadge status={item.status} />
-              <ContentTypeBadge type={item.type} />
-              {activeVersion && (
-                <span className={`text-xs ${isViewingOldVersion ? "text-violet-600 font-medium" : "text-muted-foreground"}`}>
-                  v{activeVersion.versionNumber}{isViewingOldVersion ? ` (latest: v${latestVersion!.versionNumber})` : ""}
-                </span>
-              )}
-              <span className="text-xs text-muted-foreground">
-                Updated: {new Date(item.updatedAt).toLocaleDateString("de-DE")}
+          <div className="flex-1 flex items-center gap-2">
+            <ContentStatusBadge status={item.status} />
+            <ContentTypeBadge type={item.type} />
+            {activeVersion && (
+              <span className={`text-xs ${isViewingOldVersion ? "text-violet-600 font-medium" : "text-muted-foreground"}`}>
+                v{activeVersion.versionNumber}{isViewingOldVersion ? ` (latest: v${latestVersion!.versionNumber})` : ""}
               </span>
-            </div>
+            )}
+            <span className="text-xs text-muted-foreground">
+              Updated: {new Date(item.updatedAt).toLocaleDateString("de-DE")}
+            </span>
           </div>
           <div className="flex gap-2">
             {/* Save */}
@@ -573,6 +798,19 @@ export default function ContentEditorPage({
           </div>
         )}
 
+        {/* Title */}
+        <div className="space-y-1.5">
+          <Label htmlFor="editor-title" className="text-xs text-muted-foreground">Title</Label>
+          <Input
+            id="editor-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Article title…"
+            className="text-xl font-bold h-auto py-2"
+          />
+          <p className="text-xs text-muted-foreground">{title.length}/70 characters</p>
+        </div>
+
         {/* Language Tabs + Editor */}
         <Tabs value={activeLang} onValueChange={setActiveLang}>
           <TabsList>
@@ -619,66 +857,7 @@ export default function ContentEditorPage({
         </Tabs>
 
         {/* FAQ Section */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm">FAQ ({faqs.length})</CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setFaqs([...faqs, { question: "", answer: "" }])}
-              >
-                <Plus className="mr-1 h-3 w-3" />
-                Add
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {faqs.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-4">
-                No FAQ items yet. Add questions for rich snippets.
-              </p>
-            )}
-            {faqs.map((faq, i) => (
-              <div key={i} className="flex gap-3 items-start rounded-md border p-3">
-                <Badge variant="outline" className="text-xs shrink-0 mt-1">
-                  Q{i + 1}
-                </Badge>
-                <div className="flex-1 space-y-2">
-                  <Input
-                    placeholder="Question"
-                    value={faq.question}
-                    onChange={(e) => {
-                      const updated = [...faqs];
-                      updated[i] = { ...updated[i], question: e.target.value };
-                      setFaqs(updated);
-                    }}
-                    className="text-sm"
-                  />
-                  <Textarea
-                    placeholder="Answer"
-                    value={faq.answer}
-                    onChange={(e) => {
-                      const updated = [...faqs];
-                      updated[i] = { ...updated[i], answer: e.target.value };
-                      setFaqs(updated);
-                    }}
-                    rows={2}
-                    className="text-sm"
-                  />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => setFaqs(faqs.filter((_, j) => j !== i))}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <FaqSection faqs={faqs} setFaqs={setFaqs} />
 
       </div>
 
@@ -748,75 +927,9 @@ export default function ContentEditorPage({
           </div>
         )}
 
-        {/* Metadata */}
-        <div className="space-y-4">
-          <h3 className="font-semibold text-sm">Metadata</h3>
-
-          <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              {title.length}/70 characters
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-            />
-            <p className="text-xs text-muted-foreground">
-              {description.length}/160 characters
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Category</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.labels.de ?? cat.labels.en ?? cat.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="tags">Tags</Label>
-            <Input
-              id="tags"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="tag1, tag2, tag3"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="keywords">Keywords</Label>
-            <Input
-              id="keywords"
-              value={keywords}
-              onChange={(e) => setKeywords(e.target.value)}
-              placeholder="keyword1, keyword2"
-            />
-          </div>
-        </div>
-
         {/* Scheduling */}
         {topic && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <h3 className="font-semibold text-sm flex items-center gap-1.5">
               <CalendarIcon className="h-3.5 w-3.5" />
               Scheduling
@@ -855,6 +968,50 @@ export default function ContentEditorPage({
             </div>
           </div>
         )}
+
+        {/* Metadata */}
+        <div className="space-y-4">
+          <h3 className="font-semibold text-sm">Metadata</h3>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">
+              {description.length}/160 characters
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.labels.de ?? cat.labels.en ?? cat.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <TagInput value={tags} onChange={setTags} placeholder="Add tag…" />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Keywords</Label>
+            <TagInput value={keywords} onChange={setKeywords} placeholder="Add keyword…" />
+          </div>
+        </div>
 
         {/* Hero Image */}
         <div className="space-y-3">
