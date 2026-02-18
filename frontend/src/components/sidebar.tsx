@@ -4,11 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  Compass,
   CalendarDays,
-  PenSquare,
+  FileText,
+  Share2,
   Activity,
+  Users,
   Cable,
   Settings,
   ChevronDown,
@@ -24,11 +24,11 @@ import {
 import { useProject } from "@/lib/project-context";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/research", label: "Research", icon: Compass },
-  { href: "/plan", label: "Plan", icon: CalendarDays },
-  { href: "/create", label: "Create", icon: PenSquare },
+  { href: "/dashboard", label: "Plan", icon: CalendarDays },
+  { href: "/content", label: "Articles", icon: FileText },
+  { href: "/social", label: "Social Posts", icon: Share2 },
   { href: "/monitor", label: "Monitor", icon: Activity },
+  { href: "/team", label: "Team", icon: Users },
 ];
 
 const settingsItems = [

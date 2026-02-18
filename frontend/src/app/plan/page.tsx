@@ -11,6 +11,8 @@ import {
   addDays,
   addMonths,
   subMonths,
+  addWeeks,
+  subWeeks,
   getISOWeek,
   isSameDay,
   isSameMonth,
@@ -39,12 +41,12 @@ import {
   ArrowRight,
   Search,
   Clock,
+  Check,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -54,7 +56,7 @@ import {
 } from "@/components/ui/dialog";
 import { ContentStatusBadge, TopicStatusBadge } from "@/components/status-badge";
 import { useProject } from "@/lib/project-context";
-import { getTopics, getContent, scheduleTopic } from "@/lib/api";
+import { getTopics, getContent, scheduleTopic, approveTopic, startProduction } from "@/lib/api";
 import type { Topic, ContentItem, ContentItemStatus, TopicStatus } from "@/lib/types";
 import Link from "next/link";
 
@@ -71,28 +73,30 @@ interface CalendarItem {
   topicId?: string;
 }
 
-interface Week {
-  kw: number;
-  days: Date[];
-}
+type CalendarView = "month" | "week";
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-function getWeeksOfMonth(date: Date): Week[] {
+function getWeeksOfMonth(date: Date): Date[][] {
   const monthStart = startOfMonth(date);
   const monthEnd = endOfMonth(date);
   const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
 
-  const weeks: Week[] = [];
+  const weeks: Date[][] = [];
   let cursor = calStart;
   while (cursor <= calEnd) {
     const days: Date[] = [];
     for (let i = 0; i < 7; i++) days.push(addDays(cursor, i));
-    weeks.push({ kw: getISOWeek(cursor), days });
+    weeks.push(days);
     cursor = addDays(cursor, 7);
   }
   return weeks;
+}
+
+function getWeekDays(date: Date): Date[] {
+  const start = startOfWeek(date, { weekStartsOn: 1 });
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
 
 function buildCalendarItems(
@@ -134,103 +138,163 @@ function buildCalendarItems(
   return items;
 }
 
-// ── Draggable Item (compact inline) ─────────────────────────────
+// ── Shared Constants ─────────────────────────────────────────────
 
 const LOCKED_STATUSES: ContentItemStatus[] = ["published", "delivered", "archived"];
+const DAY_HEADERS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
-function DraggableItem({
+function getStatusColor(item: CalendarItem): string {
+  if (item.contentStatus === "published") return "bg-green-500";
+  if (item.contentStatus === "approved" || item.contentStatus === "delivered") return "bg-blue-500";
+  if (item.contentStatus === "review") return "bg-amber-500";
+  if (item.type === "topic") return "bg-violet-400";
+  return "bg-muted-foreground/50";
+}
+
+// ── Droppable Day Cell (shared by Month + Week) ──────────────────
+
+function DroppableDayCell({
+  dateStr,
+  children,
+  className,
+}: {
+  dateStr: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: `day-${dateStr}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${className ?? ""} transition-colors ${isOver ? "bg-primary/5 ring-1 ring-inset ring-primary/20" : ""}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── Month View: Compact Chip (draggable) ──────────────────────
+
+function DraggableChip({
   item,
-  locked,
-  onTimeChange,
-  onUnschedule,
+  onClick,
 }: {
   item: CalendarItem;
-  locked: boolean;
-  onTimeChange?: (newTime: string) => void;
-  onUnschedule?: () => void;
+  onClick: () => void;
 }) {
-  const isLocked = locked || (item.contentStatus && LOCKED_STATUSES.includes(item.contentStatus));
+  const isLocked = item.contentStatus && LOCKED_STATUSES.includes(item.contentStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: item.id,
     data: item,
     disabled: !!isLocked,
   });
 
-  const statusColor = item.contentStatus === "published" ? "bg-green-500"
-    : item.contentStatus === "approved" || item.contentStatus === "delivered" ? "bg-blue-500"
-    : item.contentStatus === "review" ? "bg-amber-500"
-    : item.type === "topic" ? "bg-violet-400"
-    : "bg-muted-foreground/50";
-
-  const time = item.scheduledDate.includes("T")
-    ? item.scheduledDate.split("T")[1]
-    : null;
-  const datePrefix = item.scheduledDate.split("T")[0];
+  const time = item.scheduledDate.includes("T") ? item.scheduledDate.split("T")[1] : null;
 
   return (
     <div
       ref={setNodeRef}
-      className={`flex items-center gap-2 flex-1 min-w-0 transition-opacity ${isDragging ? "opacity-30" : ""}`}
+      {...(!isLocked ? { ...listeners, ...attributes } : {})}
+      className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-xs cursor-pointer hover:bg-accent/50 transition-opacity ${
+        isDragging ? "opacity-30" : ""
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
     >
-      {!isLocked && (
-        <div
-          {...listeners}
-          {...attributes}
-          className="cursor-grab shrink-0 touch-none opacity-0 group-hover/day:opacity-100 transition-opacity"
-        >
-          <GripVertical className="h-3 w-3 text-muted-foreground" />
-        </div>
-      )}
-      <span className={`h-2 w-2 rounded-full shrink-0 ${statusColor}`} />
-      {!isLocked && onTimeChange ? (
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 tabular-nums hover:text-foreground transition-colors rounded px-1 -ml-1 hover:bg-muted"
+      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${getStatusColor(item)}`} />
+      <span className="truncate">{item.title}</span>
+      {time && <span className="text-muted-foreground tabular-nums shrink-0">{time}</span>}
+    </div>
+  );
+}
+
+// ── Week View: Rich Card (draggable) ──────────────────────────
+
+function DraggableCard({
+  item,
+  topic,
+  categories,
+  onClick,
+}: {
+  item: CalendarItem;
+  topic?: Topic;
+  categories: { id: string; labels: Record<string, string> }[];
+  onClick: () => void;
+}) {
+  const isLocked = item.contentStatus && LOCKED_STATUSES.includes(item.contentStatus);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: item.id,
+    data: item,
+    disabled: !!isLocked,
+  });
+
+  const time = item.scheduledDate.includes("T") ? item.scheduledDate.split("T")[1] : null;
+  const catLabel = topic?.category
+    ? categories.find((c) => c.id === topic.category)?.labels.de ?? topic.category
+    : null;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`group/card rounded-lg border bg-card p-3 cursor-pointer hover:border-primary/30 transition-all ${
+        isDragging ? "opacity-30" : ""
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      {/* Drag Handle + Type + Time */}
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5">
+          {!isLocked && (
+            <div
+              {...listeners}
+              {...attributes}
+              className="cursor-grab touch-none opacity-0 group-hover/card:opacity-100 transition-opacity"
               onClick={(e) => e.stopPropagation()}
             >
-              <Clock className="h-3 w-3" />
-              {time ?? "—"}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-3" align="start" onClick={(e) => e.stopPropagation()}>
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Change time</p>
-              <input
-                type="time"
-                defaultValue={time ?? "09:00"}
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
-                onChange={(e) => {
-                  if (e.target.value) {
-                    onTimeChange(`${datePrefix}T${e.target.value}`);
-                  }
-                }}
-              />
+              <GripVertical className="h-3 w-3 text-muted-foreground" />
             </div>
-          </PopoverContent>
-        </Popover>
-      ) : time ? (
-        <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 tabular-nums">
-          <Clock className="h-3 w-3" />
-          {time}
-        </span>
-      ) : null}
-      <span className="truncate text-sm">{item.title}</span>
-      <div className="shrink-0 ml-auto flex items-center gap-1">
-        {item.contentStatus && <ContentStatusBadge status={item.contentStatus} />}
-        {item.topicStatus && <TopicStatusBadge status={item.topicStatus} />}
-        {!isLocked && onUnschedule && (
-          <button
-            className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/day:opacity-100 transition-all"
-            onClick={(e) => {
-              e.stopPropagation();
-              onUnschedule();
-            }}
-            title="Unschedule"
-          >
-            <X className="h-3 w-3" />
-          </button>
+          )}
+          <span className="text-[11px] text-muted-foreground capitalize">
+            {item.type === "content" ? "article" : "topic"}
+          </span>
+        </div>
+        {time && (
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+            <Clock className="h-3 w-3" />
+            {time}
+          </span>
         )}
+      </div>
+
+      {/* Title */}
+      <p className="text-sm font-medium line-clamp-2">{item.title}</p>
+
+      {/* Description */}
+      {topic?.suggestedAngle && (
+        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{topic.suggestedAngle}</p>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {topic?.keywords?.primary && (
+            <span className="inline-flex items-center rounded-md bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium truncate">
+              {topic.keywords.primary}
+            </span>
+          )}
+          {catLabel && (
+            <span className="text-[10px] text-muted-foreground truncate">{catLabel}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {item.contentStatus && <ContentStatusBadge status={item.contentStatus} />}
+          {item.topicStatus && <TopicStatusBadge status={item.topicStatus} />}
+        </div>
       </div>
     </div>
   );
@@ -251,30 +315,7 @@ function DragOverlayCard({ item }: { item: CalendarItem }) {
   );
 }
 
-// ── Droppable Day Slot ──────────────────────────────────────────
-
-function DroppableDaySlot({
-  dateStr,
-  children,
-}: {
-  dateStr: string;
-  children: React.ReactNode;
-}) {
-  const { isOver, setNodeRef } = useDroppable({ id: `day-${dateStr}` });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`flex-1 px-3 py-1.5 min-h-[36px] flex items-center transition-colors ${
-        isOver ? "bg-primary/10" : ""
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
-
-// ── Detail Sheet: Shows topic/content details ───────────────────
+// ── Detail Dialog ───────────────────────────────────────────────
 
 function DetailDialog({
   item,
@@ -283,6 +324,9 @@ function DetailDialog({
   categories,
   onClose,
   onUnschedule,
+  onReschedule,
+  onApprove,
+  onProduce,
 }: {
   item: CalendarItem | null;
   topic: Topic | null;
@@ -290,6 +334,9 @@ function DetailDialog({
   categories: { id: string; labels: Record<string, string> }[];
   onClose: () => void;
   onUnschedule: (item: CalendarItem) => void;
+  onReschedule: (item: CalendarItem, newDate: string) => void;
+  onApprove: (topicId: string) => void;
+  onProduce: (topicId: string) => void;
 }) {
   if (!item) return null;
 
@@ -303,6 +350,13 @@ function DetailDialog({
     ?? (topic?.keywords
       ? [topic.keywords.primary, ...topic.keywords.secondary, ...topic.keywords.longTail]
       : []);
+
+  const datePrefix = item.scheduledDate.split("T")[0];
+  const time = item.scheduledDate.includes("T")
+    ? item.scheduledDate.split("T")[1]
+    : null;
+  const isLocked = item.contentStatus && LOCKED_STATUSES.includes(item.contentStatus);
+  const hasAnalysis = topic?.reasoning || topic?.competitorInsights;
 
   return (
     <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
@@ -325,7 +379,7 @@ function DetailDialog({
           )}
         </DialogHeader>
 
-        {/* Metadata as compact list */}
+        {/* Metadata */}
         <div className="divide-y text-sm">
           {topic?.category && (
             <div className="flex items-center justify-between py-2">
@@ -395,38 +449,101 @@ function DetailDialog({
           </div>
         )}
 
-        {/* Agent Reasoning */}
-        {topic?.reasoning && (
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Agent Reasoning</p>
-            <p className="text-sm text-foreground/80 leading-relaxed">{topic.reasoning}</p>
-          </div>
+        {/* AI Analysis (collapsible) */}
+        {hasAnalysis && (
+          <details className="group">
+            <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground transition-colors select-none py-1">
+              <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" />
+              AI Analysis
+            </summary>
+            <div className="space-y-3 pt-2 pl-5">
+              {topic?.reasoning && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Agent Reasoning</p>
+                  <p className="text-sm text-foreground/80 leading-relaxed">{topic.reasoning}</p>
+                </div>
+              )}
+              {topic?.competitorInsights && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Competitor Insights</p>
+                  <p className="text-sm text-foreground/80 leading-relaxed">{topic.competitorInsights}</p>
+                </div>
+              )}
+            </div>
+          </details>
         )}
 
-        {/* Competitor Insights */}
-        {topic?.competitorInsights && (
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Competitor Insights</p>
-            <p className="text-sm text-foreground/80 leading-relaxed">{topic.competitorInsights}</p>
-          </div>
+        {/* Reschedule */}
+        {!isLocked && (
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              const d = fd.get("date") as string;
+              const t = fd.get("time") as string;
+              if (d && t) {
+                onReschedule(item, `${d}T${t}`);
+                onClose();
+              }
+            }}
+          >
+            <p className="text-xs font-medium text-muted-foreground">Reschedule</p>
+            <div className="flex gap-2">
+              <input
+                name="date"
+                type="date"
+                defaultValue={datePrefix}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <input
+                name="time"
+                type="time"
+                defaultValue={time ?? "09:00"}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <Button type="submit" size="sm" variant="outline">
+                Apply
+              </Button>
+            </div>
+          </form>
         )}
 
         {/* Actions */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 pt-2 border-t">
           {item.type === "content" && (
-            <Link href={`/create/${item.id}`} className="flex-1">
+            <Link href={`/content/${item.id}`} className="flex-1">
               <Button className="w-full gap-1.5">
                 Open in Editor
                 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </Link>
           )}
-          {item.type === "topic" && (
-            <Button variant="outline" className="flex-1" disabled>
-              Not yet produced
+          {item.type === "topic" && item.topicStatus === "proposed" && (
+            <Button
+              className="flex-1 gap-1.5"
+              onClick={() => {
+                if (item.topicId) onApprove(item.topicId);
+                onClose();
+              }}
+            >
+              <Check className="h-3.5 w-3.5" />
+              Approve
             </Button>
           )}
-          {!(item.contentStatus && LOCKED_STATUSES.includes(item.contentStatus)) && (
+          {item.type === "topic" && item.topicStatus === "approved" && (
+            <Button
+              className="flex-1 gap-1.5"
+              onClick={() => {
+                if (item.topicId) onProduce(item.topicId);
+                onClose();
+              }}
+            >
+              Produce
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {!isLocked && (
             <Button
               variant="outline"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -445,7 +562,7 @@ function DetailDialog({
   );
 }
 
-// ── Assign Sheet: Full topic selector ───────────────────────────
+// ── Assign Dialog ───────────────────────────────────────────────
 
 function AssignDialog({
   dateStr,
@@ -597,12 +714,13 @@ function AssignDialog({
 export default function PlanPage() {
   const { customerId, projectId, categories, loading: projectLoading } = useProject();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [calendarView, setCalendarView] = useState<CalendarView>("week");
   const [topicData, setTopicData] = useState<Topic[]>([]);
   const [contentData, setContentData] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeItem, setActiveItem] = useState<CalendarItem | null>(null);
 
-  // Sheet state
+  // Dialog state
   const [selectedItem, setSelectedItem] = useState<CalendarItem | null>(null);
   const [assignDate, setAssignDate] = useState<string | null>(null);
 
@@ -621,9 +739,9 @@ export default function PlanPage() {
       .finally(() => setLoading(false));
   }, [customerId, projectId]);
 
-  const weeks = getWeeksOfMonth(currentDate);
   const today = new Date();
   const calendarItems = buildCalendarItems(contentData, topicData);
+  const topicById = new Map(topicData.map((t) => [t.id, t]));
 
   const scheduledTopicIds = new Set(
     topicData.filter((t) => t.scheduledDate).map((t) => t.id),
@@ -649,7 +767,7 @@ export default function PlanPage() {
     [calendarItems]
   );
 
-  // Resolve topic/content for detail sheet
+  // Resolve topic/content for detail dialog
   const selectedTopic = selectedItem?.topicId
     ? topicData.find((t) => t.id === selectedItem.topicId) ?? null
     : null;
@@ -670,11 +788,9 @@ export default function PlanPage() {
     const item = active.data.current as CalendarItem;
     if (!item || item.scheduledDate.startsWith(targetDateStr)) return;
 
-    // Block dropping on past dates
     const targetDate = new Date(targetDateStr);
     if (isBefore(startOfDay(targetDate), startOfDay(today))) return;
 
-    // Calculate default time: if day has items, use last time + 1h, else 09:00
     const existingItems = calendarItems.filter(
       (ci) => ci.scheduledDate.startsWith(targetDateStr) && ci.id !== item.id
     );
@@ -685,7 +801,6 @@ export default function PlanPage() {
       const [h] = lastTime.split(":").map(Number);
       defaultTime = `${String(Math.min(h + 1, 23)).padStart(2, "0")}:00`;
     }
-    // Preserve original time if dragging between days
     const originalTime = item.scheduledDate.includes("T") ? item.scheduledDate.split("T")[1] : defaultTime;
     const newScheduledDate = `${targetDateStr}T${originalTime}`;
 
@@ -694,15 +809,12 @@ export default function PlanPage() {
       : contentData.find((c) => c.id === item.id)?.topicId;
 
     if (topicId && customerId && projectId) {
-      // Optimistic UI update
       setTopicData((prev) =>
         prev.map((t) =>
           t.id === topicId ? { ...t, scheduledDate: newScheduledDate } : t
         )
       );
-      // Persist to backend
       scheduleTopic(customerId, projectId, topicId, newScheduledDate).catch(() => {
-        // Revert on failure
         setTopicData((prev) =>
           prev.map((t) =>
             t.id === topicId ? { ...t, scheduledDate: item.scheduledDate } : t
@@ -719,7 +831,6 @@ export default function PlanPage() {
       : contentData.find((c) => c.id === item.id)?.topicId;
     if (!topicId) return;
     const oldDate = item.scheduledDate;
-    // Optimistic
     setTopicData((prev) =>
       prev.map((t) => (t.id === topicId ? { ...t, scheduledDate: undefined } : t))
     );
@@ -737,7 +848,6 @@ export default function PlanPage() {
       : contentData.find((c) => c.id === item.id)?.topicId;
     if (!topicId) return;
     const oldDate = item.scheduledDate;
-    // Optimistic
     setTopicData((prev) =>
       prev.map((t) => (t.id === topicId ? { ...t, scheduledDate: newScheduledDate } : t))
     );
@@ -750,7 +860,6 @@ export default function PlanPage() {
 
   function handleAssign(topicId: string, dateStr: string) {
     if (!customerId || !projectId) return;
-    // Optimistic UI update
     setTopicData((prev) =>
       prev.map((t) =>
         t.id === topicId
@@ -758,7 +867,6 @@ export default function PlanPage() {
           : t
       )
     );
-    // Persist to backend
     scheduleTopic(customerId, projectId, topicId, dateStr).catch(() => {
       setTopicData((prev) =>
         prev.map((t) =>
@@ -766,6 +874,66 @@ export default function PlanPage() {
         )
       );
     });
+  }
+
+  async function handleApproveTopic(topicId: string) {
+    if (!customerId || !projectId) return;
+    setTopicData((prev) =>
+      prev.map((t) => (t.id === topicId ? { ...t, status: "approved" as const } : t))
+    );
+    try {
+      await approveTopic(customerId, projectId, topicId);
+    } catch {
+      setTopicData((prev) =>
+        prev.map((t) => (t.id === topicId ? { ...t, status: "proposed" as const } : t))
+      );
+    }
+  }
+
+  async function handleProduceTopic(topicId: string) {
+    if (!customerId || !projectId) return;
+    try {
+      await startProduction(customerId, projectId, topicId);
+      const [t, c] = await Promise.all([
+        getTopics(customerId, projectId),
+        getContent(customerId, projectId).then((r) => r.items),
+      ]);
+      setTopicData(t);
+      setContentData(c);
+    } catch {}
+  }
+
+  // ── Navigation helpers ──────────────────────────────────────────
+
+  function navigateBack() {
+    if (calendarView === "month") {
+      setCurrentDate(subMonths(currentDate, 1));
+    } else {
+      setCurrentDate(subWeeks(currentDate, 1));
+    }
+  }
+
+  function navigateForward() {
+    if (calendarView === "month") {
+      setCurrentDate(addMonths(currentDate, 1));
+    } else {
+      setCurrentDate(addWeeks(currentDate, 1));
+    }
+  }
+
+  function navigateToday() {
+    setCurrentDate(new Date());
+  }
+
+  function getNavigationLabel(): string {
+    if (calendarView === "month") {
+      return format(currentDate, "MMMM yyyy", { locale: de });
+    }
+    const weekDays = getWeekDays(currentDate);
+    const kw = getISOWeek(weekDays[0]);
+    const start = format(weekDays[0], "d.", { locale: de });
+    const end = format(weekDays[6], "d. MMM", { locale: de });
+    return `KW ${kw} · ${start} – ${end}`;
   }
 
   if (projectLoading || loading) {
@@ -776,6 +944,183 @@ export default function PlanPage() {
     );
   }
 
+  // ── Month View Grid ─────────────────────────────────────────────
+
+  const monthWeeks = getWeeksOfMonth(currentDate);
+
+  function renderMonthView() {
+    return (
+      <div className="rounded-lg border overflow-hidden">
+        {/* Day Headers */}
+        <div className="grid grid-cols-7 border-b bg-muted/40">
+          {DAY_HEADERS.map((day) => (
+            <div key={day} className="px-2 py-2 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Week Rows */}
+        {monthWeeks.map((weekDays, weekIdx) => (
+          <div key={weekIdx} className={`grid grid-cols-7 ${weekIdx < monthWeeks.length - 1 ? "border-b" : ""}`}>
+            {weekDays.map((day, dayIdx) => {
+              const dayItems = getItemsForDate(day);
+              const isToday = isSameDay(day, today);
+              const isPast = isBefore(startOfDay(day), startOfDay(today));
+              const isOutside = !isSameMonth(day, currentDate);
+              const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+              const dateStr = format(day, "yyyy-MM-dd");
+
+              return (
+                <DroppableDayCell
+                  key={day.toISOString()}
+                  dateStr={dateStr}
+                  className={`min-h-[120px] p-1.5 ${dayIdx < 6 ? "border-r" : ""} ${
+                    isOutside ? "opacity-40 bg-muted/10" : ""
+                  } ${isWeekend && !isPast && !isOutside ? "bg-muted/10" : ""} ${
+                    isPast && !isToday ? "bg-muted/30" : ""
+                  }`}
+                >
+                  {/* Day Number + Plus */}
+                  <div className="flex items-center justify-between mb-1">
+                    <span
+                      className={`inline-flex items-center justify-center h-6 w-6 text-xs font-medium rounded-full ${
+                        isToday
+                          ? "bg-primary text-primary-foreground"
+                          : isPast
+                            ? "text-muted-foreground/50"
+                            : ""
+                      }`}
+                    >
+                      {format(day, "d")}
+                    </span>
+                    {!isPast && !isOutside && unscheduled.length > 0 && (
+                      <button
+                        className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:bg-muted opacity-0 hover:opacity-100 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAssignDate(dateStr);
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Items as Chips */}
+                  <div className="space-y-0.5">
+                    {dayItems.map((item) => (
+                      <DraggableChip
+                        key={item.id}
+                        item={item}
+                        onClick={() => setSelectedItem(item)}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Empty day click → assign */}
+                  {dayItems.length === 0 && !isPast && !isOutside && (
+                    <div
+                      className="flex-1 min-h-[60px] cursor-pointer"
+                      onClick={() => {
+                        if (unscheduled.length > 0) setAssignDate(dateStr);
+                      }}
+                    />
+                  )}
+                </DroppableDayCell>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── Week View Grid ──────────────────────────────────────────────
+
+  const weekDays = getWeekDays(currentDate);
+
+  function renderWeekView() {
+    return (
+      <div className="rounded-lg border overflow-hidden">
+        <div className="grid grid-cols-7 divide-x">
+          {weekDays.map((day) => {
+            const dayItems = getItemsForDate(day);
+            const isToday = isSameDay(day, today);
+            const isPast = isBefore(startOfDay(day), startOfDay(today));
+            const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+            const dateStr = format(day, "yyyy-MM-dd");
+
+            return (
+              <DroppableDayCell
+                key={day.toISOString()}
+                dateStr={dateStr}
+                className={`min-h-[500px] flex flex-col ${
+                  isWeekend && !isPast ? "bg-muted/10" : ""
+                } ${isPast && !isToday ? "bg-muted/20" : ""}`}
+              >
+                {/* Day Header */}
+                <div className={`px-2 py-2 border-b text-center ${isToday ? "bg-primary/10" : "bg-muted/40"}`}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {format(day, "EEE", { locale: de })}
+                  </p>
+                  <p className={`text-lg font-bold ${
+                    isToday
+                      ? "text-primary"
+                      : isPast
+                        ? "text-muted-foreground/50"
+                        : ""
+                  }`}>
+                    {format(day, "d")}
+                  </p>
+                  {!isPast && unscheduled.length > 0 && (
+                    <button
+                      className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAssignDate(dateStr);
+                      }}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Cards */}
+                <div className="flex-1 p-2 space-y-2">
+                  {dayItems.map((item) => (
+                    <DraggableCard
+                      key={item.id}
+                      item={item}
+                      topic={item.topicId ? topicById.get(item.topicId) : undefined}
+                      categories={categories}
+                      onClick={() => setSelectedItem(item)}
+                    />
+                  ))}
+
+                  {dayItems.length === 0 && !isPast && (
+                    <div
+                      className="flex-1 min-h-[100px] flex items-center justify-center rounded-md border border-dashed cursor-pointer hover:bg-muted/20 transition-colors"
+                      onClick={() => {
+                        if (unscheduled.length > 0) setAssignDate(dateStr);
+                      }}
+                    >
+                      <span className="text-xs text-muted-foreground">
+                        {unscheduled.length > 0 ? "+ Schedule" : "—"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </DroppableDayCell>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render ──────────────────────────────────────────────────────
+
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
@@ -784,7 +1129,7 @@ export default function PlanPage() {
           <h1 className="text-2xl font-bold">Plan</h1>
           <p className="text-muted-foreground">Editorial calendar</p>
         </div>
-        <Link href="/create/new">
+        <Link href="/content/new">
           <Button>
             <Plus className="mr-2 h-4 w-4" />
             New Content
@@ -798,148 +1143,47 @@ export default function PlanPage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="space-y-6">
-          {/* Month Navigation */}
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-
-            <div className="text-center min-w-[180px]">
-              <p className="text-lg font-semibold">
-                {format(currentDate, "MMMM yyyy", { locale: de })}
-              </p>
+        <div className="space-y-4">
+          {/* Navigation */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={navigateToday}>
+                Today
+              </Button>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={navigateBack}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={navigateForward}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <span className="text-lg font-semibold ml-2">
+                {getNavigationLabel()}
+              </span>
             </div>
 
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setCurrentDate(new Date())}
-            >
-              Today
-            </Button>
-          </div>
-
-          {/* Month View grouped by KW */}
-          <div className="space-y-4">
-            {weeks.map((week) => (
-              <div
-                key={week.kw}
-                className="rounded-lg border overflow-hidden"
+            {/* View Toggle */}
+            <div className="flex items-center rounded-md border">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-8 px-3 rounded-r-none text-xs ${calendarView === "month" ? "bg-muted font-medium" : "text-muted-foreground"}`}
+                onClick={() => setCalendarView("month")}
               >
-                <div className="bg-muted/60 px-4 py-1.5 border-b">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    KW {week.kw}
-                  </span>
-                </div>
-
-                {week.days.map((day, idx) => {
-                  const dayItems = getItemsForDate(day);
-                  const isToday = isSameDay(day, today);
-                  const isPast = isBefore(startOfDay(day), startOfDay(today));
-                  const isWeekend =
-                    day.getDay() === 0 || day.getDay() === 6;
-                  const isOutsideMonth = !isSameMonth(day, currentDate);
-                  const dateStr = format(day, "yyyy-MM-dd");
-
-                  return (
-                    <div
-                      key={day.toISOString()}
-                      className={`group/day flex items-stretch transition-colors ${
-                        idx < 6 ? "border-b" : ""
-                      } ${isToday ? "bg-primary/5" : ""} ${
-                        isWeekend && !isPast ? "bg-muted/20" : ""
-                      } ${isOutsideMonth ? "opacity-40" : ""} ${
-                        isPast && !isToday
-                          ? "bg-muted/40 text-muted-foreground/60"
-                          : "cursor-pointer hover:bg-muted/40"
-                      }`}
-                      onClick={() => {
-                        if (isPast && dayItems.length === 0) return;
-                        if (dayItems.length === 1) {
-                          setSelectedItem(dayItems[0]);
-                        } else if (dayItems.length === 0 && !isPast && unscheduled.length > 0) {
-                          setAssignDate(dateStr);
-                        }
-                      }}
-                    >
-                      <div
-                        className={`w-16 shrink-0 flex flex-col items-center justify-center py-2 border-r ${
-                          isToday
-                            ? "bg-primary text-primary-foreground"
-                            : isPast
-                              ? "text-muted-foreground/50"
-                              : ""
-                        }`}
-                      >
-                        <span className="text-[10px] font-medium uppercase leading-none">
-                          {format(day, "EEE", { locale: de })}
-                        </span>
-                        <span className={`text-base font-bold leading-tight ${isPast && !isToday ? "line-through decoration-muted-foreground/30" : ""}`}>
-                          {format(day, "dd")}
-                        </span>
-                      </div>
-
-                      <DroppableDaySlot dateStr={dateStr}>
-                        {dayItems.length > 0 ? (
-                          <div className="flex items-center gap-2 flex-1 py-0.5">
-                            <div className="flex flex-col gap-1 flex-1 min-w-0">
-                              {dayItems.map((item) => (
-                                <div
-                                  key={item.id}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedItem(item);
-                                  }}
-                                >
-                                  <DraggableItem
-                                    item={item}
-                                    locked={isPast}
-                                    onTimeChange={(newDate) => handleTimeChange(item, newDate)}
-                                    onUnschedule={() => handleUnschedule(item)}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                            {!isPast && unscheduled.length > 0 && (
-                              <button
-                                className="shrink-0 h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted opacity-0 group-hover/day:opacity-100 transition-opacity"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setAssignDate(dateStr);
-                                }}
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        ) : isPast ? (
-                          <span className="text-xs text-muted-foreground/40 italic">—</span>
-                        ) : (
-                          <span className="flex items-center gap-1.5 text-xs text-muted-foreground opacity-0 group-hover/day:opacity-100 transition-opacity">
-                            <Plus className="h-3 w-3" />
-                            Schedule
-                          </span>
-                        )}
-                      </DroppableDaySlot>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+                Month
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-8 px-3 rounded-l-none text-xs ${calendarView === "week" ? "bg-muted font-medium" : "text-muted-foreground"}`}
+                onClick={() => setCalendarView("week")}
+              >
+                Week
+              </Button>
+            </div>
           </div>
+
+          {/* Calendar Body */}
+          {calendarView === "month" ? renderMonthView() : renderWeekView()}
         </div>
 
         <DragOverlay>
@@ -952,12 +1196,12 @@ export default function PlanPage() {
           <FileText className="mb-3 h-8 w-8 text-muted-foreground" />
           <p className="text-sm font-medium">No scheduled content</p>
           <p className="text-xs text-muted-foreground">
-            Approve topics in Research to schedule them here
+            Approve topics in Content to schedule them here
           </p>
         </div>
       )}
 
-      {/* Detail Dialog — click on scheduled item */}
+      {/* Detail Dialog */}
       <DetailDialog
         item={selectedItem}
         topic={selectedTopic}
@@ -965,9 +1209,12 @@ export default function PlanPage() {
         categories={categories}
         onClose={() => setSelectedItem(null)}
         onUnschedule={handleUnschedule}
+        onReschedule={handleTimeChange}
+        onApprove={handleApproveTopic}
+        onProduce={handleProduceTopic}
       />
 
-      {/* Assign Dialog — click on empty day */}
+      {/* Assign Dialog */}
       <AssignDialog
         dateStr={assignDate ?? ""}
         open={!!assignDate}

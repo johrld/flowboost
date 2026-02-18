@@ -629,7 +629,7 @@ export default function ContentEditorPage({
     return (
       <div className="p-8">
         <p className="text-muted-foreground">Content not found</p>
-        <Link href="/create" className="text-primary underline text-sm">
+        <Link href="/content" className="text-primary underline text-sm">
           Back to Content
         </Link>
       </div>
@@ -651,7 +651,7 @@ export default function ContentEditorPage({
       <div className="flex-1 overflow-y-auto p-8 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <Link href="/create">
+          <Link href="/content">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-4 w-4" />
             </Button>

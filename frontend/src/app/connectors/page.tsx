@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -535,6 +536,9 @@ function ConnectorsPageContent() {
                         <div className="flex items-center gap-2 shrink-0">
                           {connector.id === "git" && status === "connected" ? (
                             <>
+                              <Button variant="ghost" size="sm" className="text-xs h-8" asChild>
+                                <Link href="/website">View Index</Link>
+                              </Button>
                               <span className="text-sm font-medium text-green-600">Connected</span>
                               <Button
                                 variant="outline"

@@ -1,4 +1,4 @@
-import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus } from "./types";
+import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
 
@@ -98,6 +98,28 @@ export function rejectTopic(customerId: string, projectId: string, topicId: stri
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/reject`, {
     method: "POST",
     body: JSON.stringify({ reason }),
+  });
+}
+
+export function createTopic(
+  customerId: string,
+  projectId: string,
+  data: { title: string; category?: string; userNotes?: string },
+): Promise<Topic> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function enrichTopic(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+): Promise<{ message: string; runId: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/pipeline/enrich`, {
+    method: "POST",
+    body: JSON.stringify({ topicId }),
   });
 }
 
@@ -247,6 +269,29 @@ export function archiveContent(customerId: string, projectId: string, contentId:
 
 export function restoreContent(customerId: string, projectId: string, contentId: string): Promise<{ message: string }> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/restore`, { method: "POST" });
+}
+
+// ── Content Index ────────────────────────────────────────────────
+
+export function getContentIndex(
+  customerId: string,
+  projectId: string,
+  filters?: { channel?: string; status?: string; source?: string; lang?: string },
+): Promise<ContentIndex> {
+  const params = new URLSearchParams();
+  if (filters?.channel) params.set("channel", filters.channel);
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.source) params.set("source", filters.source);
+  if (filters?.lang) params.set("lang", filters.lang);
+  const qs = params.toString();
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content-index${qs ? `?${qs}` : ""}`);
+}
+
+export function syncContentIndex(
+  customerId: string,
+  projectId: string,
+): Promise<{ added: number; updated: number; removed: number; total: number }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content-index/sync`, { method: "POST" });
 }
 
 // ── GitHub ────────────────────────────────────────────────────────

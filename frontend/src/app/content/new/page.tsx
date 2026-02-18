@@ -65,7 +65,7 @@ export default function NewContentPage() {
         tags: tags.length > 0 ? tags : undefined,
         keywords: keywords.length > 0 ? keywords : undefined,
       });
-      router.push(`/create/${item.id}`);
+      router.push(`/content/${item.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create content");
       setSaving(false);
@@ -83,7 +83,7 @@ export default function NewContentPage() {
   return (
     <div className="p-8 max-w-2xl">
       <Link
-        href="/create"
+        href="/content"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -191,7 +191,7 @@ export default function NewContentPage() {
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create Content
           </Button>
-          <Link href="/create">
+          <Link href="/content">
             <Button type="button" variant="outline">
               Cancel
             </Button>

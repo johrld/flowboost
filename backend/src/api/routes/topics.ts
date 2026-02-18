@@ -7,6 +7,42 @@ export async function topicRoutes(app: FastifyInstance) {
     return app.ctx.topicsFor(customerId, projectId).list();
   });
 
+  // POST /customers/:customerId/projects/:projectId/topics
+  app.post<{
+    Params: { customerId: string; projectId: string };
+    Body: { title: string; category?: string; userNotes?: string };
+  }>("/", async (request, reply) => {
+    const { customerId, projectId } = request.params;
+    const { title, category, userNotes } = (request.body ?? {}) as {
+      title?: string;
+      category?: string;
+      userNotes?: string;
+    };
+
+    if (!title?.trim()) {
+      return reply.status(400).send({ error: "Title is required" });
+    }
+
+    const topic = app.ctx.topicsFor(customerId, projectId).create({
+      status: "proposed",
+      title: title.trim(),
+      category: category || "",
+      priority: 0,
+      keywords: { primary: "", secondary: [], longTail: [] },
+      searchIntent: "informational",
+      competitorInsights: "",
+      suggestedAngle: "",
+      estimatedSections: 0,
+      reasoning: "",
+      source: "user",
+      enriched: false,
+      userNotes: userNotes?.trim() || undefined,
+      createdAt: new Date().toISOString(),
+    });
+
+    return reply.status(201).send(topic);
+  });
+
   // GET /customers/:customerId/projects/:projectId/topics/:topicId
   app.get<{ Params: { customerId: string; projectId: string; topicId: string } }>(
     "/:topicId",

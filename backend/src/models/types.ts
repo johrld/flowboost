@@ -154,6 +154,11 @@ export interface Topic {
   estimatedSections: number;
   reasoning: string;
 
+  // Origin tracking
+  source?: "pipeline" | "user";
+  enriched?: boolean;
+  userNotes?: string;
+
   createdAt?: string;
   runId?: string;
 

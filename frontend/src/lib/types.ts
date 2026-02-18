@@ -198,6 +198,9 @@ export interface Topic {
   suggestedAngle: string;
   estimatedSections: number;
   reasoning: string;
+  source?: "pipeline" | "user";
+  enriched?: boolean;
+  userNotes?: string;
   createdAt?: string;
   runId?: string;
   scheduledDate?: string;
@@ -263,6 +266,53 @@ export interface Author {
 export interface Category {
   id: string;
   labels: Record<string, string>; // lang -> label
+}
+
+// ── Content Index ────────────────────────────────────────────────
+
+export type ContentStatus = "planned" | "producing" | "review" | "delivered" | "live" | "archived";
+
+export interface SiteContentLangMeta {
+  lang: string;
+  slug: string;
+  title: string;
+  description: string;
+  wordCount: number;
+  filePath: string;
+  sha: string;
+}
+
+export interface SiteContentMeta {
+  type: "blog" | "landing" | "guide" | "page";
+  translationKey: string;
+  languages: SiteContentLangMeta[];
+  category?: string;
+  tags?: string[];
+  keywords?: string[];
+  canonicalUrl?: string;
+}
+
+export interface ContentIndexEntry {
+  id: string;
+  channel: "website" | "social";
+  source: "flowboost" | "external";
+  status: ContentStatus;
+  site?: SiteContentMeta;
+  parentId?: string;
+  articleId?: string;
+  topicId?: string;
+  createdAt: string;
+  firstPublishedAt?: string;
+  lastUpdatedAt?: string;
+  lastSyncedAt: string;
+  publications: { platform: string; status: string; url?: string; publishedAt?: string }[];
+}
+
+export interface ContentIndex {
+  projectId: string;
+  lastSyncedAt: string;
+  total: number;
+  entries: ContentIndexEntry[];
 }
 
 // ── Brief ─────────────────────────────────────────────────────────
