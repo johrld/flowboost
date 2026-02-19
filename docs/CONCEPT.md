@@ -34,7 +34,8 @@ Bedeutet: Es gibt EINEN Workflow. Der ist richtig. Das UI zwingt dich nicht zu E
 | Planner | KW-Kalender mit Drag & Drop | Gut, aber nur Kalender - keine Kampagnen |
 | Articles | Liste mit Stage/Condition + Editor | Editor braucht Rich Text, kein Content Score |
 | Pipeline | Phase-Progress + Agent Activity | Gut, aber kein Agent Reasoning sichtbar |
-| Settings | Projekt, Authors, Categories, Brand, Connector | Grundlagen da |
+| Settings | Projekt, Authors (read-only sync), Categories (read-only sync), Brand, Competitors, Pipeline | Grundlagen da |
+| Connectors | Eigene Seite: Git Repository (GitHub), Framework-Auswahl, Pfad-Config | ✅ Implementiert |
 | Landing Pages | - | Fehlt komplett |
 | Analytics/Performance | - | Fehlt komplett |
 | Content Graph | - | Fehlt komplett |
@@ -69,13 +70,15 @@ Aktuell: Dashboard, Research, Planner, Articles, Pipeline, Settings
 ```
 [Projekt-Selector]
 
+  Dashboard              ← Aktionsorientiert: "Was ist zu tun?"
   Discover               ← "Was soll ich schreiben?" (Research + Gaps + Graph)
   Plan                   ← Kalender + Briefs + Kampagnen
   Create                 ← Artikel + Landing Pages (der eigentliche Editor-Bereich)
   Monitor                ← Pipeline + Performance + Content Health
 
   ── Settings ──
-  Project                ← Connector, Languages, Frequency, Sources
+  Connectors             ← Git Repository, Social, Media (eigene Seite)
+  Project                ← General, Brief, Authors, Brand Voice, Categories, Competitors, Pipeline
 ```
 
 ### Warum diese Struktur?
@@ -436,11 +439,45 @@ Content-Health Übersicht aller veröffentlichten Artikel:
 
 ---
 
-### 5. SETTINGS (erweitert)
+### 5. CONNECTORS (eigene Seite)
 
-Neue Tabs zusätzlich zu den bestehenden:
+Eigene `/connectors` Seite mit zwei Tabs: **Connections** und **Routing**.
 
-#### Tab: Sources (NEU)
+#### Tab: Connections
+
+Connector-Karten nach drei Kategorien:
+
+**Site Delivery:**
+- Git Repository (✅ funktional: GitHub OAuth + Repo/Branch/Framework/Path Config)
+- WordPress, Shopify, Webflow (Coming Soon)
+
+**Social Channels:**
+- LinkedIn, Instagram, TikTok, X (Coming Soon)
+
+**Media Platforms:**
+- YouTube, Spotify (Coming Soon)
+
+Klick auf einen verbundenen Connector oeffnet die **Detail-Ansicht** (eigene Seite, nicht Modal):
+- "< All Connectors" Back-Link
+- Repository + Branch Auswahl
+- Framework Dropdown (Astro, Hugo, Next.js, Custom) — steuert Default-Pfade
+- Content Path, Assets Path, Categories File, Authors File
+- Framework-spezifischer Info-Hint
+
+#### Tab: Routing
+
+Zeigt nur verbundene Connectoren:
+- **Site Delivery**: Radio-Buttons (nur einer aktiv)
+- **Social Channels**: Checkboxen (mehrere moeglich)
+- **Media Platforms**: Checkboxen (mehrere moeglich)
+
+### 6. SETTINGS
+
+7 Tabs: General, Project Brief, Authors, Brand Voice, Categories, Competitors, Pipeline.
+
+**Categories + Authors sind read-only** — werden ueber zentralen Sync vom verbundenen Repository gelesen (`POST /sync`). Auto-Sync beim Laden der Settings-Seite, manueller Sync-Button als Fallback.
+
+#### Tab: Sources (NEU, geplant)
 
 Quellenverwaltung für den Research-Agent:
 

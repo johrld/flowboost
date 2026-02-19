@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createLogger } from "../../utils/logger.js";
 import type { PipelineContext } from "../context.js";
-import type { Article, ArticleVersion } from "../../models/types.js";
+import type { Article, ArticleVersion, ContentItemStatus, LanguageVariant } from "../../models/types.js";
 import { runOutlinePhase } from "./outline.js";
 import { runWritingPhase } from "./writing.js";
 import { runAssemblyPhase } from "./assembly.js";
@@ -119,11 +119,68 @@ export async function runProductionPipeline(ctx: PipelineContext): Promise<Artic
   }
 
   // ── Done ───────────────────────────────────────────────────────
-  // Update article status
+  // Update article status (V2 — kept for backward compat)
   const finalStatus = qualityPassed ? "review" : "draft";
   ctx.stores.articles.update(article.id, {
     status: finalStatus,
     updatedAt: new Date().toISOString(),
+  });
+
+  // ── Create ContentItem + ContentVersion (V3) ─────────────────
+  const contentStatus: ContentItemStatus = qualityPassed ? "review" : "draft";
+  const now = new Date().toISOString();
+
+  // Extract metadata from outline
+  const metaSection = outline.sections.find((s) => s.type === "meta");
+  const metaFm = (metaSection?.frontmatter ?? {}) as Record<string, unknown>;
+
+  const contentItem = ctx.stores.content.create({
+    customerId: ctx.customerId,
+    projectId: project.id,
+    type: "article",
+    status: contentStatus,
+    title: topic.title,
+    description: typeof metaFm.description === "string" ? metaFm.description : undefined,
+    category: topic.category,
+    tags: Array.isArray(metaFm.tags) ? metaFm.tags as string[] : undefined,
+    keywords: topic.keywords
+      ? [topic.keywords.primary, ...topic.keywords.secondary]
+      : undefined,
+    topicId: topic.id,
+    translationKey: article.translationKey,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // Build language variants from article versions
+  const allArticleVersions = ctx.stores.articles.getVersions(article.id);
+  const languages: LanguageVariant[] = allArticleVersions.map((av) => ({
+    lang: av.lang,
+    slug: av.slug,
+    title: topic.title, // Will be refined per-language in future
+    description: typeof metaFm.description === "string" ? metaFm.description : "",
+    contentPath: av.contentPath,
+    wordCount: av.wordCount,
+  }));
+
+  const contentVersion = ctx.stores.content.createVersion(contentItem.id, {
+    contentId: contentItem.id,
+    languages,
+    assets: [],
+    text: {
+      wordCount: allArticleVersions.reduce((sum, v) => sum + (v.wordCount || 0), 0),
+      headingCount: 0,
+      hasFaq: !!metaFm.faq,
+      hasAnswerCapsule: true,
+    },
+    pipelineRunId: ctx.run.id,
+    createdAt: now,
+    createdBy: "pipeline",
+  });
+
+  // Update ContentItem with version reference
+  ctx.stores.content.update(contentItem.id, {
+    currentVersionId: contentVersion.id,
   });
 
   // Update topic status in TopicStore
@@ -136,6 +193,7 @@ export async function runProductionPipeline(ctx: PipelineContext): Promise<Artic
   log.info({
     runId: ctx.run.id,
     articleId: article.id,
+    contentId: contentItem.id,
     status: finalStatus,
     languages: [project.defaultLanguage, ...translations.map((t) => t.lang)],
     cost: ctx.run.totalCostUsd,

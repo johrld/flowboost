@@ -4,7 +4,7 @@
   "slug": "breathe",
   "description": "SEO-optimized content website for the Breathe meditation app. Multilingual (DE/EN/ES).",
   "createdAt": "2026-02-06T00:00:00.000Z",
-  "updatedAt": "2026-02-10T18:59:44.656Z",
+  "updatedAt": "2026-02-12T18:42:41.777Z",
   "defaultLanguage": "de",
   "languages": [
     {
@@ -70,11 +70,14 @@
     "type": "github",
     "github": {
       "installationId": 109289932,
-      "owner": "",
-      "repo": "",
-      "branch": "main",
+      "owner": "joflywave",
+      "repo": "breathe-website",
+      "branch": "feat/website-redesign",
+      "framework": "astro",
       "contentPath": "src/content/posts",
-      "assetsPath": "src/assets/posts"
+      "assetsPath": "src/assets/posts",
+      "categoriesPath": "src/data/categories.json",
+      "authorsPath": "src/data/authors.json"
     }
   },
   "pipeline": {

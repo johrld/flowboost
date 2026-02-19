@@ -1,0 +1,166 @@
+{
+  "projectId": "550e8400-e29b-41d4-a716-446655440000",
+  "createdAt": "2026-02-16T19:41:06.383Z",
+  "updatedAt": "2026-02-16T19:41:06.383Z",
+  "audit": {
+    "totalArticles": 0,
+    "byCategory": {
+      "meditation": 0,
+      "breathing": 0,
+      "mindfulness": 0,
+      "sleep": 0,
+      "stress": 0
+    },
+    "byLanguage": {
+      "de": 0,
+      "en": 0,
+      "es": 0
+    },
+    "categoryGaps": [
+      "meditation",
+      "breathing",
+      "mindfulness",
+      "sleep",
+      "stress"
+    ],
+    "recommendations": [
+      "No existing content found. Start by creating foundational articles across all 5 categories (meditation, breathing, mindfulness, sleep, stress).",
+      "Prioritize creating content in the default language (de) first, then translate to en and es.",
+      "Aim for at least 3-5 articles per category to establish topical authority.",
+      "Ensure all new articles have corresponding translations in all 3 languages using consistent translationKey values.",
+      "Focus on high-value keywords for each category to maximize SEO impact from the start."
+    ]
+  },
+  "topics": [
+    {
+      "id": "topic-1",
+      "status": "proposed",
+      "title": "Box Breathing: Die 4-4-4-4 Atemtechnik der Navy SEALs",
+      "category": "breathing",
+      "priority": 1,
+      "keywords": {
+        "primary": "box breathing",
+        "secondary": [
+          "4-4-4-4 atemtechnik",
+          "atemübungen stress",
+          "atemtechnik entspannung",
+          "box breathing anleitung"
+        ],
+        "longTail": [
+          "box breathing navy seals technik",
+          "4-4-4-4 atmung anleitung",
+          "atemtechnik stress abbauen sofort"
+        ]
+      },
+      "searchIntent": "how-to",
+      "competitorInsights": "Competitors (flowlab.com, nicetomeetme.at, ousuca.com) mention Navy SEALs for credibility but provide generic breathing instructions. Most articles lack visual guides or practical integration tips. Gaps: missing common mistakes section, no troubleshooting for breath-holding difficulties, limited workplace application examples.",
+      "suggestedAngle": "Leverage Navy SEALs credibility but focus on practical workplace application. Include visual step-by-step guide, common beginner mistakes, and 3-minute desk-friendly routine. Evidence-based (parasympathetic activation) without esoteric language. Directly targets gestresste Berufstätige.",
+      "estimatedSections": 5,
+      "reasoning": "Priority 1: Fills 'breathing' category gap with unique military credibility + workplace angle. Perfectly aligns with brand mission (accessible, practical, evidence-based). Differentiates from wellness-focused competitors. Targets primary audience (stressed professionals). Core to Breathe app positioning (breath-focused)."
+    },
+    {
+      "id": "topic-2",
+      "status": "proposed",
+      "title": "Stress abbauen in 3 Minuten: 5 Sofort-Übungen für den Schreibtisch",
+      "category": "stress",
+      "priority": 2,
+      "keywords": {
+        "primary": "stress abbauen",
+        "secondary": [
+          "stress übungen",
+          "stress reduzieren schnell",
+          "atemübungen stress",
+          "stressbewältigung tipps"
+        ],
+        "longTail": [
+          "stress abbauen sofort übungen",
+          "stress reduzieren am arbeitsplatz",
+          "3 minuten entspannung büro"
+        ]
+      },
+      "searchIntent": "how-to",
+      "competitorInsights": "Top results (anti-stress-team.de, fisjo.de, tk.de, barmer.de) provide comprehensive stress management guides with breathing + PMR + exercise + sleep advice. Gaps: too comprehensive = overwhelming, missing ultra-short desk-friendly focus, unclear which technique for acute stress vs. prevention, no workplace discretion tips.",
+      "suggestedAngle": "Hyper-focused on desk-friendly, workplace-appropriate exercises doable in 3 minutes. Curate only 5 best techniques (1 breathing, 1 micro-movement, 1 mental, etc.). Emphasize discretion ('colleagues won't notice'). Scientific backing (cortisol reduction) with practical workplace scenarios ('before presentation', 'after difficult call').",
+      "estimatedSections": 5,
+      "reasoning": "Priority 2: Fills 'stress' gap with highest search demand keyword. Perfect brand fit (accessible 3-min format, workplace context, practical). Directly targets primary audience pain point. Complements Box Breathing article via internal linking. Differentiates by ultra-short duration + discretion angle."
+    },
+    {
+      "id": "topic-3",
+      "status": "proposed",
+      "title": "5-Minuten-Meditation für Anfänger: Dein sanfter Einstieg",
+      "category": "meditation",
+      "priority": 3,
+      "keywords": {
+        "primary": "meditation für anfänger",
+        "secondary": [
+          "5 minuten meditation",
+          "meditieren lernen",
+          "meditation einstieg",
+          "meditation anfänger tipps"
+        ],
+        "longTail": [
+          "wie meditieren anfänger",
+          "5 minuten meditation morgens",
+          "meditation lernen ohne vorkenntnisse"
+        ]
+      },
+      "searchIntent": "how-to",
+      "competitorInsights": "Top articles (entspannung-total.de, yoga-vidya.de, lotuscrafts.com) focus on comprehensive guides with 10+ meditation types, often overwhelming for beginners. Most recommend 10-20 minute sessions. Gaps: lack of quick-start approach, too much theory, missing practical 5-minute routines that busy professionals can implement immediately.",
+      "suggestedAngle": "Focus exclusively on 5-minute meditation as the entry point. No overwhelming choices—just one simple breath meditation technique with step-by-step instructions. Emphasize scientific evidence (Cortisol reduction) while avoiding esoteric language. Perfect for gestresste Berufstätige who need results fast.",
+      "estimatedSections": 5,
+      "reasoning": "Priority 3: Fills 'meditation' gap with high search volume. Strong brand alignment (accessible, no-pressure 5-min format, targets skeptics). Addresses primary audience (meditation newbies, busy professionals). Differentiates by radical simplification vs. overwhelming competitor guides. Foundation for future meditation cluster."
+    },
+    {
+      "id": "topic-4",
+      "status": "proposed",
+      "title": "Besser einschlafen in 5 Minuten: Die 4-7-8 Atemtechnik",
+      "category": "sleep",
+      "priority": 4,
+      "keywords": {
+        "primary": "besser einschlafen",
+        "secondary": [
+          "4-7-8 atmung",
+          "schnell einschlafen tipps",
+          "einschlafhilfe natürlich",
+          "atemtechnik einschlafen"
+        ],
+        "longTail": [
+          "4-7-8 atemtechnik anleitung einschlafen",
+          "in 5 minuten einschlafen technik",
+          "schnell einschlafen ohne medikamente"
+        ]
+      },
+      "searchIntent": "how-to",
+      "competitorInsights": "Competitors (brisant.de, schlafzimmer.de, tempur.com) explain 4-7-8 technique but embed it within generic sleep hygiene lists (screen time, room temperature, etc.). Gaps: 4-7-8 gets diluted among 10+ tips, missing standalone deep-dive, no troubleshooting for breath-hold difficulties, unclear what to do when technique 'doesn't work'.",
+      "suggestedAngle": "Dedicated deep-dive on 4-7-8 breathing only—no dilution with generic sleep tips. Include Dr. Andrew Weil credentials, scientific mechanism (parasympathetic activation), step-by-step video/visual, beginner modifications (3-5-6 variation), and realistic expectations ('works after 4-8 weeks practice'). Cross-link to Box Breathing article.",
+      "estimatedSections": 5,
+      "reasoning": "Priority 4: Fills 'sleep' gap targeting secondary audience (sleep issues). Strong search demand. Differentiates via deep-dive focus (competitors dilute topic). Reinforces breath-technique expertise. Natural internal linking to Box Breathing. Evidence-based angle (Dr. Weil) builds authority."
+    },
+    {
+      "id": "topic-5",
+      "status": "proposed",
+      "title": "Achtsamkeit im Alltag: 10 Übungen für mehr Ruhe (ohne Meditation)",
+      "category": "mindfulness",
+      "priority": 5,
+      "keywords": {
+        "primary": "achtsamkeit im alltag",
+        "secondary": [
+          "achtsamkeitsübungen alltag",
+          "achtsamkeit lernen",
+          "achtsamkeit praktisch",
+          "achtsamkeit anfänger"
+        ],
+        "longTail": [
+          "achtsamkeit üben ohne meditation",
+          "achtsamkeit alltag 5 minuten",
+          "achtsam werden im beruf"
+        ]
+      },
+      "searchIntent": "how-to",
+      "competitorInsights": "Top results (dfme-achtsamkeit.com, anti-stress-team.de, tk.de) provide 20-30+ exercises, overwhelming readers. Most focus on traditional mindfulness meditation. Gaps: too many choices, unclear which to start with, missing 'meditation-skeptic' positioning, no workplace-specific exercises.",
+      "suggestedAngle": "Explicitly position as 'without formal meditation' to attract skeptics. Curate only 10 most practical exercises ranked by ease. Focus on micro-moments (brushing teeth, coffee breaks, commute) that require zero extra time. Scientific backing (stress reduction) without esoteric framing.",
+      "estimatedSections": 6,
+      "reasoning": "Priority 5: Fills 'mindfulness' gap while differentiating from meditation content. Addresses meditation skeptics (expands audience). High search volume. Strong brand fit (practical, accessible, no esoteric language). Complements meditation article by offering non-meditation path. Balances category coverage."
+    }
+  ]
+}

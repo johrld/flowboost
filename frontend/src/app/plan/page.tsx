@@ -1,18 +1,22 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   format,
   startOfMonth,
   endOfMonth,
   startOfWeek,
   endOfWeek,
+  startOfDay,
   addDays,
   addMonths,
   subMonths,
+  addWeeks,
+  subWeeks,
   getISOWeek,
   isSameDay,
   isSameMonth,
+  isBefore,
 } from "date-fns";
 import { de } from "date-fns/locale";
 import {
@@ -26,134 +30,272 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { ChevronLeft, ChevronRight, Plus, GripVertical, Target, ListChecks, Link2, Users, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  GripVertical,
+  Loader2,
+  FileText,
+  Calendar,
+  ArrowRight,
+  Search,
+  Clock,
+  Check,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { StageBadge, ConditionBadge, TopicStatusBadge } from "@/components/status-badge";
-import {
-  articles as initialArticles,
-  topics as initialTopics,
-  briefs,
-} from "@/lib/mock-data";
-import type { Article, Topic, ArticleStage, ArticleCondition, TopicStatus } from "@/lib/types";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { ContentStatusBadge, TopicStatusBadge } from "@/components/status-badge";
+import { useProject } from "@/lib/project-context";
+import { getTopics, getContent, scheduleTopic, approveTopic, startProduction } from "@/lib/api";
+import type { Topic, ContentItem, ContentItemStatus, TopicStatus } from "@/lib/types";
 import Link from "next/link";
 
 // ── Types ───────────────────────────────────────────────────────
-
-type Tab = "calendar" | "briefs";
 
 interface CalendarItem {
   id: string;
   title: string;
   subtitle: string;
-  type: "article" | "topic";
+  type: "content" | "topic";
   scheduledDate: string;
-  stage?: ArticleStage;
-  condition?: ArticleCondition;
+  contentStatus?: ContentItemStatus;
   topicStatus?: TopicStatus;
+  topicId?: string;
 }
 
-interface Week {
-  kw: number;
-  days: Date[];
-}
+type CalendarView = "month" | "week";
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-function getWeeksOfMonth(date: Date): Week[] {
+function getWeeksOfMonth(date: Date): Date[][] {
   const monthStart = startOfMonth(date);
   const monthEnd = endOfMonth(date);
   const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
 
-  const weeks: Week[] = [];
+  const weeks: Date[][] = [];
   let cursor = calStart;
   while (cursor <= calEnd) {
     const days: Date[] = [];
     for (let i = 0; i < 7; i++) days.push(addDays(cursor, i));
-    weeks.push({ kw: getISOWeek(cursor), days });
+    weeks.push(days);
     cursor = addDays(cursor, 7);
   }
   return weeks;
 }
 
+function getWeekDays(date: Date): Date[] {
+  const start = startOfWeek(date, { weekStartsOn: 1 });
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+
 function buildCalendarItems(
-  articles: Article[],
+  contentItems: ContentItem[],
   topics: Topic[]
 ): CalendarItem[] {
   const items: CalendarItem[] = [];
-  const articleTopicIds = new Set(articles.map((a) => a.topicId));
-
-  for (const a of articles) {
-    if (!a.scheduledDate) continue;
-    items.push({
-      id: a.id,
-      title: a.title,
-      subtitle: `${a.author} · ${a.category}`,
-      type: "article",
-      scheduledDate: a.scheduledDate,
-      stage: a.stage,
-      condition: a.condition,
-    });
+  const contentByTopicId = new Map<string, ContentItem>();
+  for (const c of contentItems) {
+    if (c.topicId) contentByTopicId.set(c.topicId, c);
   }
 
   for (const t of topics) {
-    if (!t.scheduledDate || articleTopicIds.has(t.id)) continue;
-    items.push({
-      id: t.id,
-      title: t.title,
-      subtitle: t.category,
-      type: "topic",
-      scheduledDate: t.scheduledDate,
-      topicStatus: t.status,
-    });
+    if (!t.scheduledDate) continue;
+    const content = contentByTopicId.get(t.id);
+    if (content) {
+      items.push({
+        id: content.id,
+        title: content.title,
+        subtitle: `${content.category ?? content.type} · ${t.category}`,
+        type: "content",
+        scheduledDate: t.scheduledDate,
+        contentStatus: content.status,
+        topicId: t.id,
+      });
+    } else {
+      items.push({
+        id: t.id,
+        title: t.title,
+        subtitle: t.category,
+        type: "topic",
+        scheduledDate: t.scheduledDate,
+        topicStatus: t.status,
+        topicId: t.id,
+      });
+    }
   }
 
   return items;
 }
 
-// ── Draggable Article Card ──────────────────────────────────────
+// ── Shared Constants ─────────────────────────────────────────────
 
-function DraggableItem({ item }: { item: CalendarItem }) {
+const LOCKED_STATUSES: ContentItemStatus[] = ["published", "delivered", "archived"];
+const DAY_HEADERS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+function getStatusColor(item: CalendarItem): string {
+  if (item.contentStatus === "published") return "bg-green-500";
+  if (item.contentStatus === "approved" || item.contentStatus === "delivered") return "bg-blue-500";
+  if (item.contentStatus === "review") return "bg-amber-500";
+  if (item.type === "topic") return "bg-violet-400";
+  return "bg-muted-foreground/50";
+}
+
+// ── Droppable Day Cell (shared by Month + Week) ──────────────────
+
+function DroppableDayCell({
+  dateStr,
+  children,
+  className,
+}: {
+  dateStr: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: `day-${dateStr}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${className ?? ""} transition-colors ${isOver ? "bg-primary/5 ring-1 ring-inset ring-primary/20" : ""}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── Month View: Compact Chip (draggable) ──────────────────────
+
+function DraggableChip({
+  item,
+  onClick,
+}: {
+  item: CalendarItem;
+  onClick: () => void;
+}) {
+  const isLocked = item.contentStatus && LOCKED_STATUSES.includes(item.contentStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: item.id,
     data: item,
+    disabled: !!isLocked,
   });
+
+  const time = item.scheduledDate.includes("T") ? item.scheduledDate.split("T")[1] : null;
 
   return (
     <div
       ref={setNodeRef}
-      className={`flex items-center gap-2 w-full rounded-md border px-3 py-2 bg-card transition-opacity ${
+      {...(!isLocked ? { ...listeners, ...attributes } : {})}
+      className={`flex items-center gap-1.5 px-1.5 py-1 rounded text-xs cursor-pointer hover:bg-accent/50 transition-opacity ${
         isDragging ? "opacity-30" : ""
-      } ${item.type === "topic" ? "border-dashed" : ""}`}
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
     >
-      <div
-        {...listeners}
-        {...attributes}
-        className="cursor-grab shrink-0 touch-none"
-      >
-        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${getStatusColor(item)}`} />
+      <span className="truncate">{item.title}</span>
+      {time && <span className="text-muted-foreground tabular-nums shrink-0">{time}</span>}
+    </div>
+  );
+}
+
+// ── Week View: Rich Card (draggable) ──────────────────────────
+
+function DraggableCard({
+  item,
+  topic,
+  categories,
+  onClick,
+}: {
+  item: CalendarItem;
+  topic?: Topic;
+  categories: { id: string; labels: Record<string, string> }[];
+  onClick: () => void;
+}) {
+  const isLocked = item.contentStatus && LOCKED_STATUSES.includes(item.contentStatus);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: item.id,
+    data: item,
+    disabled: !!isLocked,
+  });
+
+  const time = item.scheduledDate.includes("T") ? item.scheduledDate.split("T")[1] : null;
+  const catLabel = topic?.category
+    ? categories.find((c) => c.id === topic.category)?.labels.de ?? topic.category
+    : null;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`group/card rounded-lg border bg-card p-3 cursor-pointer hover:border-primary/30 transition-all ${
+        isDragging ? "opacity-30" : ""
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      {/* Drag Handle + Type + Time */}
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5">
+          {!isLocked && (
+            <div
+              {...listeners}
+              {...attributes}
+              className="cursor-grab touch-none opacity-0 group-hover/card:opacity-100 transition-opacity"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GripVertical className="h-3 w-3 text-muted-foreground" />
+            </div>
+          )}
+          <span className="text-[11px] text-muted-foreground capitalize">
+            {item.type === "content" ? "article" : "topic"}
+          </span>
+        </div>
+        {time && (
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+            <Clock className="h-3 w-3" />
+            {time}
+          </span>
+        )}
       </div>
-      <Link
-        href={item.type === "article" ? `/create/${item.id}` : "#"}
-        className="flex items-center justify-between gap-3 flex-1 min-w-0"
-      >
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{item.title}</p>
-          <p className="text-xs text-muted-foreground">{item.subtitle}</p>
+
+      {/* Title */}
+      <p className="text-sm font-medium line-clamp-2">{item.title}</p>
+
+      {/* Description */}
+      {topic?.suggestedAngle && (
+        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{topic.suggestedAngle}</p>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {topic?.keywords?.primary && (
+            <span className="inline-flex items-center rounded-md bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium truncate">
+              {topic.keywords.primary}
+            </span>
+          )}
+          {catLabel && (
+            <span className="text-[10px] text-muted-foreground truncate">{catLabel}</span>
+          )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {item.stage && <StageBadge stage={item.stage} />}
-          {item.condition && <ConditionBadge condition={item.condition} />}
+          {item.contentStatus && <ContentStatusBadge status={item.contentStatus} />}
           {item.topicStatus && <TopicStatusBadge status={item.topicStatus} />}
         </div>
-      </Link>
+      </div>
     </div>
   );
 }
@@ -162,127 +304,450 @@ function DraggableItem({ item }: { item: CalendarItem }) {
 
 function DragOverlayCard({ item }: { item: CalendarItem }) {
   return (
-    <div className="flex items-center gap-2 w-80 rounded-md border px-3 py-2 bg-card shadow-lg">
-      <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{item.title}</p>
-        <p className="text-xs text-muted-foreground">{item.subtitle}</p>
-      </div>
-      <div className="flex items-center gap-1 shrink-0">
-        {item.stage && <StageBadge stage={item.stage} />}
-        {item.condition && <ConditionBadge condition={item.condition} />}
+    <div className="flex items-center gap-2 w-72 rounded-md border px-3 py-1.5 bg-card shadow-lg">
+      <GripVertical className="h-3 w-3 text-muted-foreground shrink-0" />
+      <span className="truncate text-sm">{item.title}</span>
+      <div className="flex items-center gap-1 shrink-0 ml-auto">
+        {item.contentStatus && <ContentStatusBadge status={item.contentStatus} />}
         {item.topicStatus && <TopicStatusBadge status={item.topicStatus} />}
       </div>
     </div>
   );
 }
 
-// ── Droppable Day Slot ──────────────────────────────────────────
+// ── Detail Dialog ───────────────────────────────────────────────
 
-function DroppableDaySlot({
-  dateStr,
-  children,
+function DetailDialog({
+  item,
+  topic,
+  content,
+  categories,
+  onClose,
+  onUnschedule,
+  onReschedule,
+  onApprove,
+  onProduce,
 }: {
-  dateStr: string;
-  children: React.ReactNode;
+  item: CalendarItem | null;
+  topic: Topic | null;
+  content: ContentItem | null;
+  categories: { id: string; labels: Record<string, string> }[];
+  onClose: () => void;
+  onUnschedule: (item: CalendarItem) => void;
+  onReschedule: (item: CalendarItem, newDate: string) => void;
+  onApprove: (topicId: string) => void;
+  onProduce: (topicId: string) => void;
 }) {
-  const { isOver, setNodeRef } = useDroppable({ id: `day-${dateStr}` });
+  if (!item) return null;
+
+  const catLabel = (catId?: string) => {
+    if (!catId) return null;
+    const c = categories.find((cat) => cat.id === catId);
+    return c?.labels.de ?? c?.labels.en ?? catId;
+  };
+
+  const keywords = content?.keywords
+    ?? (topic?.keywords
+      ? [topic.keywords.primary, ...topic.keywords.secondary, ...topic.keywords.longTail]
+      : []);
+
+  const datePrefix = item.scheduledDate.split("T")[0];
+  const time = item.scheduledDate.includes("T")
+    ? item.scheduledDate.split("T")[1]
+    : null;
+  const isLocked = item.contentStatus && LOCKED_STATUSES.includes(item.contentStatus);
+  const hasAnalysis = topic?.reasoning || topic?.competitorInsights;
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`flex-1 px-3 py-2 min-h-[52px] flex items-center transition-colors ${
-        isOver ? "bg-primary/10" : ""
-      }`}
-    >
-      {children}
-    </div>
+    <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            {item.contentStatus && <ContentStatusBadge status={item.contentStatus} />}
+            {item.topicStatus && <TopicStatusBadge status={item.topicStatus} />}
+            <Badge variant="outline" className="text-[10px]">
+              {item.type === "content" ? "Content" : "Topic"}
+            </Badge>
+          </div>
+          <DialogTitle className="text-lg leading-snug pr-6">
+            {item.title}
+          </DialogTitle>
+          {(content?.description || topic?.suggestedAngle) && (
+            <DialogDescription>
+              {content?.description ?? topic?.suggestedAngle}
+            </DialogDescription>
+          )}
+        </DialogHeader>
+
+        {/* Metadata */}
+        <div className="divide-y text-sm">
+          {topic?.category && (
+            <div className="flex items-center justify-between py-2">
+              <span className="text-muted-foreground">Category</span>
+              <span className="font-medium">{catLabel(topic.category)}</span>
+            </div>
+          )}
+          {topic?.searchIntent && (
+            <div className="flex items-center justify-between py-2">
+              <span className="text-muted-foreground">Search Intent</span>
+              <span className="font-medium capitalize">{topic.searchIntent}</span>
+            </div>
+          )}
+{topic?.estimatedSections && (
+            <div className="flex items-center justify-between py-2">
+              <span className="text-muted-foreground">Sections</span>
+              <span className="font-medium">~{topic.estimatedSections}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between py-2">
+            <span className="text-muted-foreground">Scheduled</span>
+            <span className="font-medium">
+              {item.scheduledDate.includes("T")
+                ? format(new Date(item.scheduledDate), "dd. MMMM yyyy, HH:mm 'Uhr'", { locale: de })
+                : format(new Date(item.scheduledDate), "dd. MMMM yyyy", { locale: de })}
+            </span>
+          </div>
+          {(topic?.createdAt || content?.createdAt) && (
+            <div className="flex items-center justify-between py-2">
+              <span className="text-muted-foreground">Created</span>
+              <span className="font-medium">
+                {format(new Date((topic?.createdAt ?? content?.createdAt)!), "dd.MM.yyyy")}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Keywords */}
+        {keywords.length > 0 && (
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5">Keywords</p>
+            <div className="flex flex-wrap gap-1">
+              {keywords.map((kw, i) => (
+                <Badge key={kw} variant={i === 0 ? "default" : "outline"} className="text-xs">
+                  {kw}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tags */}
+        {content?.tags && content.tags.length > 0 && (
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5">Tags</p>
+            <div className="flex flex-wrap gap-1">
+              {content.tags.map((tag) => (
+                <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* AI Analysis (collapsible) */}
+        {hasAnalysis && (
+          <details className="group">
+            <summary className="flex items-center gap-2 cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground transition-colors select-none py-1">
+              <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" />
+              AI Analysis
+            </summary>
+            <div className="space-y-3 pt-2 pl-5">
+              {topic?.reasoning && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Agent Reasoning</p>
+                  <p className="text-sm text-foreground/80 leading-relaxed">{topic.reasoning}</p>
+                </div>
+              )}
+              {topic?.competitorInsights && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Competitor Insights</p>
+                  <p className="text-sm text-foreground/80 leading-relaxed">{topic.competitorInsights}</p>
+                </div>
+              )}
+            </div>
+          </details>
+        )}
+
+        {/* Reschedule */}
+        {!isLocked && (
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              const d = fd.get("date") as string;
+              const t = fd.get("time") as string;
+              if (d && t) {
+                onReschedule(item, `${d}T${t}`);
+                onClose();
+              }
+            }}
+          >
+            <p className="text-xs font-medium text-muted-foreground">Reschedule</p>
+            <div className="flex gap-2">
+              <input
+                name="date"
+                type="date"
+                defaultValue={datePrefix}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <input
+                name="time"
+                type="time"
+                defaultValue={time ?? "09:00"}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <Button type="submit" size="sm" variant="outline">
+                Apply
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-2 border-t">
+          {item.type === "content" && (
+            <Link href={`/content/${item.id}`} className="flex-1">
+              <Button className="w-full gap-1.5">
+                Open in Editor
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          )}
+          {item.type === "topic" && (
+            <Link href={`/content/topics/${item.topicId}`} className="flex-1">
+              <Button variant="outline" className="w-full gap-1.5">
+                View Details
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          )}
+          {item.type === "topic" && item.topicStatus === "proposed" && (
+            <Button
+              className="flex-1 gap-1.5"
+              onClick={() => {
+                if (item.topicId) onApprove(item.topicId);
+                onClose();
+              }}
+            >
+              <Check className="h-3.5 w-3.5" />
+              Approve
+            </Button>
+          )}
+          {item.type === "topic" && item.topicStatus === "approved" && (
+            <Button
+              className="flex-1 gap-1.5"
+              onClick={() => {
+                if (item.topicId) onProduce(item.topicId);
+                onClose();
+              }}
+            >
+              Produce
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {!isLocked && (
+            <Button
+              variant="outline"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => {
+                onUnschedule(item);
+                onClose();
+              }}
+            >
+              <X className="mr-1.5 h-3.5 w-3.5" />
+              Unschedule
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-// ── Assign Popover (click empty day → pick topic) ───────────────
+// ── Assign Dialog ───────────────────────────────────────────────
 
-function AssignPopover({
+function AssignDialog({
   dateStr,
+  open,
   unscheduled,
+  categories,
   onAssign,
+  onClose,
 }: {
   dateStr: string;
+  open: boolean;
   unscheduled: Topic[];
+  categories: { id: string; labels: Record<string, string> }[];
   onAssign: (topicId: string, date: string) => void;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [times, setTimes] = useState<Record<string, string>>({});
 
-  if (unscheduled.length === 0) {
-    return (
-      <span className="text-xs text-muted-foreground">
-        No article scheduled
-      </span>
-    );
-  }
+  const catLabel = (catId: string) => {
+    const c = categories.find((cat) => cat.id === catId);
+    return c?.labels.de ?? c?.labels.en ?? catId;
+  };
+
+  const sorted = [...unscheduled].sort((a, b) => a.priority - b.priority);
+  const query = search.toLowerCase().trim();
+  const filtered = query
+    ? sorted.filter(
+        (t) =>
+          t.title.toLowerCase().includes(query) ||
+          t.category.toLowerCase().includes(query) ||
+          catLabel(t.category).toLowerCase().includes(query) ||
+          t.keywords.primary.toLowerCase().includes(query) ||
+          t.keywords.secondary.some((kw) => kw.toLowerCase().includes(query)) ||
+          t.keywords.longTail.some((kw) => kw.toLowerCase().includes(query)),
+      )
+    : sorted;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors group w-full py-1">
-          <Plus className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <span>No article scheduled</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-2">
-        <p className="text-xs font-medium text-muted-foreground px-2 pb-2">
-          Assign topic to {dateStr}
-        </p>
-        <div className="max-h-60 overflow-y-auto space-y-0.5">
-          {unscheduled.map((topic) => (
-            <button
-              key={topic.id}
-              onClick={() => {
-                onAssign(topic.id, dateStr);
-                setOpen(false);
-              }}
-              className="flex items-center justify-between w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-sm">{topic.title}</p>
-                <p className="text-xs text-muted-foreground">
-                  {topic.category} · P{topic.priority}
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { onClose(); setSearch(""); setTimes({}); } }}>
+      <DialogContent className="sm:max-w-4xl h-[70vh] flex flex-col gap-0 p-0">
+        {/* Fixed header */}
+        <div className="px-6 pt-6 pb-4 space-y-4 border-b shrink-0">
+          <DialogHeader>
+            <DialogTitle>
+              Schedule for {dateStr ? format(new Date(dateStr), "EEEE, d. MMMM", { locale: de }) : ""}
+            </DialogTitle>
+            <DialogDescription>
+              {unscheduled.length} unscheduled topic{unscheduled.length !== 1 ? "s" : ""} available — sorted by priority
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by title, category, or keyword…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        {/* Scrollable list */}
+        <div className="overflow-y-auto flex-1 px-6 py-2">
+          <div className="divide-y">
+            {filtered.map((topic) => (
+              <div
+                key={topic.id}
+                className="flex items-start gap-4 py-3.5 group/row hover:bg-muted/30 -mx-2 px-2 rounded-md transition-colors"
+              >
+                {/* Main info */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[10px] shrink-0">P{topic.priority}</Badge>
+                    <p className="font-medium text-sm">{topic.title}</p>
+                    <TopicStatusBadge status={topic.status} />
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span>{catLabel(topic.category)}</span>
+                    <span>·</span>
+                    <span className="capitalize">{topic.searchIntent}</span>
+                    <span>·</span>
+                    <span>~{topic.estimatedSections} sections</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {[topic.keywords.primary, ...topic.keywords.secondary.slice(0, 3)].map((kw) => (
+                      <Badge key={kw} variant="secondary" className="text-[10px] px-1.5 py-0 font-normal">
+                        {kw}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Time + Schedule */}
+                <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                  <input
+                    type="time"
+                    defaultValue="09:00"
+                    className="h-8 rounded-md border border-input bg-background px-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setTimes((prev) => ({ ...prev, [topic.id]: e.target.value }))}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="opacity-60 group-hover/row:opacity-100 transition-opacity"
+                    onClick={() => {
+                      const time = times[topic.id] ?? "09:00";
+                      onAssign(topic.id, `${dateStr}T${time}`);
+                      onClose();
+                      setSearch("");
+                      setTimes({});
+                    }}
+                  >
+                    <Calendar className="mr-1.5 h-3 w-3" />
+                    Schedule
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {filtered.length === 0 && unscheduled.length > 0 && (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Search className="h-6 w-6 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">No topics match &ldquo;{search}&rdquo;</p>
+              </div>
+            )}
+
+            {unscheduled.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <FileText className="h-6 w-6 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">No unscheduled topics</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Run Research to discover new topics
                 </p>
               </div>
-            </button>
-          ))}
+            )}
+          </div>
         </div>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-// ── Brief Status Config ─────────────────────────────────────────
-
-const briefStatusConfig: Record<string, { label: string; className: string }> = {
-  draft: { label: "Draft", className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
-  ready: { label: "Ready", className: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200" },
-  in_production: { label: "In Production", className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
-  completed: { label: "Completed", className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
-};
 
 // ── Main Page ───────────────────────────────────────────────────
 
 export default function PlanPage() {
-  const [tab, setTab] = useState<Tab>("calendar");
+  const { customerId, projectId, categories, loading: projectLoading } = useProject();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [articleData, setArticleData] = useState(initialArticles);
-  const [topicData, setTopicData] = useState(initialTopics);
+  const [calendarView, setCalendarView] = useState<CalendarView>("week");
+  const [topicData, setTopicData] = useState<Topic[]>([]);
+  const [contentData, setContentData] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeItem, setActiveItem] = useState<CalendarItem | null>(null);
 
-  const weeks = getWeeksOfMonth(currentDate);
-  const today = new Date();
-  const calendarItems = buildCalendarItems(articleData, topicData);
+  // Dialog state
+  const [selectedItem, setSelectedItem] = useState<CalendarItem | null>(null);
+  const [assignDate, setAssignDate] = useState<string | null>(null);
 
-  const scheduledTopicIds = new Set([
-    ...articleData.map((a) => a.topicId),
-    ...topicData.filter((t) => t.scheduledDate).map((t) => t.id),
-  ]);
+  useEffect(() => {
+    if (!customerId || !projectId) return;
+    setLoading(true);
+    Promise.all([
+      getTopics(customerId, projectId),
+      getContent(customerId, projectId).then((r) => r.items),
+    ])
+      .then(([t, c]) => {
+        setTopicData(t);
+        setContentData(c);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [customerId, projectId]);
+
+  const today = new Date();
+  const calendarItems = buildCalendarItems(contentData, topicData);
+  const topicById = new Map(topicData.map((t) => [t.id, t]));
+
+  const scheduledTopicIds = new Set(
+    topicData.filter((t) => t.scheduledDate).map((t) => t.id),
+  );
   const unscheduled = topicData.filter(
     (t) =>
       !t.scheduledDate &&
@@ -294,13 +759,23 @@ export default function PlanPage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
-  const getItemForDate = useCallback(
-    (date: Date) => {
+  const getItemsForDate = useCallback(
+    (date: Date): CalendarItem[] => {
       const dateStr = format(date, "yyyy-MM-dd");
-      return calendarItems.find((item) => item.scheduledDate === dateStr);
+      return calendarItems
+        .filter((item) => item.scheduledDate.startsWith(dateStr))
+        .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
     },
     [calendarItems]
   );
+
+  // Resolve topic/content for detail dialog
+  const selectedTopic = selectedItem?.topicId
+    ? topicData.find((t) => t.id === selectedItem.topicId) ?? null
+    : null;
+  const selectedContent = selectedItem?.type === "content"
+    ? contentData.find((c) => c.id === selectedItem.id) ?? null
+    : null;
 
   function handleDragStart(event: DragStartEvent) {
     setActiveItem(event.active.data.current as CalendarItem);
@@ -313,29 +788,80 @@ export default function PlanPage() {
 
     const targetDateStr = String(over.id).replace("day-", "");
     const item = active.data.current as CalendarItem;
-    if (!item || item.scheduledDate === targetDateStr) return;
+    if (!item || item.scheduledDate.startsWith(targetDateStr)) return;
 
-    const targetOccupied = calendarItems.some(
-      (ci) => ci.scheduledDate === targetDateStr && ci.id !== item.id
+    const targetDate = new Date(targetDateStr);
+    if (isBefore(startOfDay(targetDate), startOfDay(today))) return;
+
+    const existingItems = calendarItems.filter(
+      (ci) => ci.scheduledDate.startsWith(targetDateStr) && ci.id !== item.id
     );
-    if (targetOccupied) return;
+    let defaultTime = "09:00";
+    if (existingItems.length > 0) {
+      const sorted = [...existingItems].sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+      const lastTime = sorted[sorted.length - 1].scheduledDate.split("T")[1] ?? "09:00";
+      const [h] = lastTime.split(":").map(Number);
+      defaultTime = `${String(Math.min(h + 1, 23)).padStart(2, "0")}:00`;
+    }
+    const originalTime = item.scheduledDate.includes("T") ? item.scheduledDate.split("T")[1] : defaultTime;
+    const newScheduledDate = `${targetDateStr}T${originalTime}`;
 
-    if (item.type === "article") {
-      setArticleData((prev) =>
-        prev.map((a) =>
-          a.id === item.id ? { ...a, scheduledDate: targetDateStr } : a
-        )
-      );
-    } else {
+    const topicId = item.type === "topic"
+      ? item.id
+      : contentData.find((c) => c.id === item.id)?.topicId;
+
+    if (topicId && customerId && projectId) {
       setTopicData((prev) =>
         prev.map((t) =>
-          t.id === item.id ? { ...t, scheduledDate: targetDateStr } : t
+          t.id === topicId ? { ...t, scheduledDate: newScheduledDate } : t
         )
       );
+      scheduleTopic(customerId, projectId, topicId, newScheduledDate).catch(() => {
+        setTopicData((prev) =>
+          prev.map((t) =>
+            t.id === topicId ? { ...t, scheduledDate: item.scheduledDate } : t
+          )
+        );
+      });
     }
   }
 
+  function handleUnschedule(item: CalendarItem) {
+    if (!customerId || !projectId) return;
+    const topicId = item.type === "topic"
+      ? item.id
+      : contentData.find((c) => c.id === item.id)?.topicId;
+    if (!topicId) return;
+    const oldDate = item.scheduledDate;
+    setTopicData((prev) =>
+      prev.map((t) => (t.id === topicId ? { ...t, scheduledDate: undefined } : t))
+    );
+    scheduleTopic(customerId, projectId, topicId, null).catch(() => {
+      setTopicData((prev) =>
+        prev.map((t) => (t.id === topicId ? { ...t, scheduledDate: oldDate } : t))
+      );
+    });
+  }
+
+  function handleTimeChange(item: CalendarItem, newScheduledDate: string) {
+    if (!customerId || !projectId) return;
+    const topicId = item.type === "topic"
+      ? item.id
+      : contentData.find((c) => c.id === item.id)?.topicId;
+    if (!topicId) return;
+    const oldDate = item.scheduledDate;
+    setTopicData((prev) =>
+      prev.map((t) => (t.id === topicId ? { ...t, scheduledDate: newScheduledDate } : t))
+    );
+    scheduleTopic(customerId, projectId, topicId, newScheduledDate).catch(() => {
+      setTopicData((prev) =>
+        prev.map((t) => (t.id === topicId ? { ...t, scheduledDate: oldDate } : t))
+      );
+    });
+  }
+
   function handleAssign(topicId: string, dateStr: string) {
+    if (!customerId || !projectId) return;
     setTopicData((prev) =>
       prev.map((t) =>
         t.id === topicId
@@ -343,7 +869,259 @@ export default function PlanPage() {
           : t
       )
     );
+    scheduleTopic(customerId, projectId, topicId, dateStr).catch(() => {
+      setTopicData((prev) =>
+        prev.map((t) =>
+          t.id === topicId ? { ...t, scheduledDate: undefined } : t
+        )
+      );
+    });
   }
+
+  async function handleApproveTopic(topicId: string) {
+    if (!customerId || !projectId) return;
+    setTopicData((prev) =>
+      prev.map((t) => (t.id === topicId ? { ...t, status: "approved" as const } : t))
+    );
+    try {
+      await approveTopic(customerId, projectId, topicId);
+    } catch {
+      setTopicData((prev) =>
+        prev.map((t) => (t.id === topicId ? { ...t, status: "proposed" as const } : t))
+      );
+    }
+  }
+
+  async function handleProduceTopic(topicId: string) {
+    if (!customerId || !projectId) return;
+    try {
+      await startProduction(customerId, projectId, topicId);
+      const [t, c] = await Promise.all([
+        getTopics(customerId, projectId),
+        getContent(customerId, projectId).then((r) => r.items),
+      ]);
+      setTopicData(t);
+      setContentData(c);
+    } catch {}
+  }
+
+  // ── Navigation helpers ──────────────────────────────────────────
+
+  function navigateBack() {
+    if (calendarView === "month") {
+      setCurrentDate(subMonths(currentDate, 1));
+    } else {
+      setCurrentDate(subWeeks(currentDate, 1));
+    }
+  }
+
+  function navigateForward() {
+    if (calendarView === "month") {
+      setCurrentDate(addMonths(currentDate, 1));
+    } else {
+      setCurrentDate(addWeeks(currentDate, 1));
+    }
+  }
+
+  function navigateToday() {
+    setCurrentDate(new Date());
+  }
+
+  function getNavigationLabel(): string {
+    if (calendarView === "month") {
+      return format(currentDate, "MMMM yyyy", { locale: de });
+    }
+    const weekDays = getWeekDays(currentDate);
+    const kw = getISOWeek(weekDays[0]);
+    const start = format(weekDays[0], "d.", { locale: de });
+    const end = format(weekDays[6], "d. MMM", { locale: de });
+    return `KW ${kw} · ${start} – ${end}`;
+  }
+
+  if (projectLoading || loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // ── Month View Grid ─────────────────────────────────────────────
+
+  const monthWeeks = getWeeksOfMonth(currentDate);
+
+  function renderMonthView() {
+    return (
+      <div className="rounded-lg border overflow-hidden">
+        {/* Day Headers */}
+        <div className="grid grid-cols-7 border-b bg-muted/40">
+          {DAY_HEADERS.map((day) => (
+            <div key={day} className="px-2 py-2 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Week Rows */}
+        {monthWeeks.map((weekDays, weekIdx) => (
+          <div key={weekIdx} className={`grid grid-cols-7 ${weekIdx < monthWeeks.length - 1 ? "border-b" : ""}`}>
+            {weekDays.map((day, dayIdx) => {
+              const dayItems = getItemsForDate(day);
+              const isToday = isSameDay(day, today);
+              const isPast = isBefore(startOfDay(day), startOfDay(today));
+              const isOutside = !isSameMonth(day, currentDate);
+              const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+              const dateStr = format(day, "yyyy-MM-dd");
+
+              return (
+                <DroppableDayCell
+                  key={day.toISOString()}
+                  dateStr={dateStr}
+                  className={`min-h-[120px] p-1.5 ${dayIdx < 6 ? "border-r" : ""} ${
+                    isOutside ? "opacity-40 bg-muted/10" : ""
+                  } ${isWeekend && !isPast && !isOutside ? "bg-muted/10" : ""} ${
+                    isPast && !isToday ? "bg-muted/30" : ""
+                  }`}
+                >
+                  {/* Day Number + Plus */}
+                  <div className="flex items-center justify-between mb-1">
+                    <span
+                      className={`inline-flex items-center justify-center h-6 w-6 text-xs font-medium rounded-full ${
+                        isToday
+                          ? "bg-primary text-primary-foreground"
+                          : isPast
+                            ? "text-muted-foreground/50"
+                            : ""
+                      }`}
+                    >
+                      {format(day, "d")}
+                    </span>
+                    {!isPast && !isOutside && unscheduled.length > 0 && (
+                      <button
+                        className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:bg-muted opacity-0 hover:opacity-100 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAssignDate(dateStr);
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Items as Chips */}
+                  <div className="space-y-0.5">
+                    {dayItems.map((item) => (
+                      <DraggableChip
+                        key={item.id}
+                        item={item}
+                        onClick={() => setSelectedItem(item)}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Empty day click → assign */}
+                  {dayItems.length === 0 && !isPast && !isOutside && (
+                    <div
+                      className="flex-1 min-h-[60px] cursor-pointer"
+                      onClick={() => {
+                        if (unscheduled.length > 0) setAssignDate(dateStr);
+                      }}
+                    />
+                  )}
+                </DroppableDayCell>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── Week View Grid ──────────────────────────────────────────────
+
+  const weekDays = getWeekDays(currentDate);
+
+  function renderWeekView() {
+    return (
+      <div className="rounded-lg border overflow-hidden">
+        <div className="grid grid-cols-7 divide-x">
+          {weekDays.map((day) => {
+            const dayItems = getItemsForDate(day);
+            const isToday = isSameDay(day, today);
+            const isPast = isBefore(startOfDay(day), startOfDay(today));
+            const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+            const dateStr = format(day, "yyyy-MM-dd");
+
+            return (
+              <DroppableDayCell
+                key={day.toISOString()}
+                dateStr={dateStr}
+                className={`min-h-[500px] flex flex-col ${
+                  isWeekend && !isPast ? "bg-muted/10" : ""
+                } ${isPast && !isToday ? "bg-muted/20" : ""}`}
+              >
+                {/* Day Header */}
+                <div className={`px-2 py-2 border-b text-center ${isToday ? "bg-primary/10" : "bg-muted/40"}`}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {format(day, "EEE", { locale: de })}
+                  </p>
+                  <p className={`text-lg font-bold ${
+                    isToday
+                      ? "text-primary"
+                      : isPast
+                        ? "text-muted-foreground/50"
+                        : ""
+                  }`}>
+                    {format(day, "d")}
+                  </p>
+                  {!isPast && unscheduled.length > 0 && (
+                    <button
+                      className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAssignDate(dateStr);
+                      }}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Cards */}
+                <div className="flex-1 p-2 space-y-2">
+                  {dayItems.map((item) => (
+                    <DraggableCard
+                      key={item.id}
+                      item={item}
+                      topic={item.topicId ? topicById.get(item.topicId) : undefined}
+                      categories={categories}
+                      onClick={() => setSelectedItem(item)}
+                    />
+                  ))}
+
+                  {dayItems.length === 0 && !isPast && (
+                    <div
+                      className="flex-1 min-h-[100px] flex items-center justify-center rounded-md border border-dashed cursor-pointer hover:bg-muted/20 transition-colors"
+                      onClick={() => {
+                        if (unscheduled.length > 0) setAssignDate(dateStr);
+                      }}
+                    >
+                      <span className="text-xs text-muted-foreground">
+                        {unscheduled.length > 0 ? "+ Schedule" : "—"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </DroppableDayCell>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render ──────────────────────────────────────────────────────
 
   return (
     <div className="p-8 space-y-6">
@@ -351,260 +1129,102 @@ export default function PlanPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Plan</h1>
-          <p className="text-muted-foreground">Editorial calendar & content briefs</p>
+          <p className="text-muted-foreground">Editorial calendar</p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          New Article
-        </Button>
+        <Link href="/content/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            New Content
+          </Button>
+        </Link>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
-        {(["calendar", "briefs"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors capitalize ${
-              tab === t
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Calendar Tab ──────────────────────────────────────── */}
-      {tab === "calendar" && (
-        <DndContext
-          sensors={sensors}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="space-y-6">
-            {/* Month Navigation */}
-            <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-              >
+      {/* Calendar */}
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="space-y-4">
+          {/* Navigation */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={navigateToday}>
+                Today
+              </Button>
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={navigateBack}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-
-              <div className="text-center min-w-[180px]">
-                <p className="text-lg font-semibold">
-                  {format(currentDate, "MMMM yyyy", { locale: de })}
-                </p>
-              </div>
-
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-              >
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={navigateForward}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
+              <span className="text-lg font-semibold ml-2">
+                {getNavigationLabel()}
+              </span>
+            </div>
 
+            {/* View Toggle */}
+            <div className="flex items-center rounded-md border">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setCurrentDate(new Date())}
+                className={`h-8 px-3 rounded-r-none text-xs ${calendarView === "month" ? "bg-muted font-medium" : "text-muted-foreground"}`}
+                onClick={() => setCalendarView("month")}
               >
-                Today
+                Month
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-8 px-3 rounded-l-none text-xs ${calendarView === "week" ? "bg-muted font-medium" : "text-muted-foreground"}`}
+                onClick={() => setCalendarView("week")}
+              >
+                Week
               </Button>
             </div>
-
-            {/* Month View grouped by KW */}
-            <div className="space-y-4">
-              {weeks.map((week) => (
-                <div
-                  key={week.kw}
-                  className="rounded-lg border overflow-hidden"
-                >
-                  <div className="bg-muted/60 px-4 py-1.5 border-b">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      KW {week.kw}
-                    </span>
-                  </div>
-
-                  {week.days.map((day, idx) => {
-                    const item = getItemForDate(day);
-                    const isToday = isSameDay(day, today);
-                    const isWeekend =
-                      day.getDay() === 0 || day.getDay() === 6;
-                    const isOutsideMonth = !isSameMonth(day, currentDate);
-                    const dateStr = format(day, "yyyy-MM-dd");
-
-                    return (
-                      <div
-                        key={day.toISOString()}
-                        className={`flex items-stretch ${
-                          idx < 6 ? "border-b" : ""
-                        } ${isToday ? "bg-primary/5" : ""} ${
-                          isWeekend ? "bg-muted/30" : ""
-                        } ${isOutsideMonth ? "opacity-40" : ""}`}
-                      >
-                        <div
-                          className={`w-20 shrink-0 flex flex-col items-center justify-center py-2.5 border-r ${
-                            isToday
-                              ? "bg-primary text-primary-foreground"
-                              : ""
-                          }`}
-                        >
-                          <span className="text-[10px] font-medium uppercase leading-none">
-                            {format(day, "EEE", { locale: de })}
-                          </span>
-                          <span className="text-lg font-bold leading-tight">
-                            {format(day, "dd")}
-                          </span>
-                        </div>
-
-                        <DroppableDaySlot dateStr={dateStr}>
-                          {item ? (
-                            <DraggableItem item={item} />
-                          ) : isWeekend ? null : (
-                            <AssignPopover
-                              dateStr={dateStr}
-                              unscheduled={unscheduled}
-                              onAssign={handleAssign}
-                            />
-                          )}
-                        </DroppableDaySlot>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
           </div>
 
-          <DragOverlay>
-            {activeItem ? <DragOverlayCard item={activeItem} /> : null}
-          </DragOverlay>
-        </DndContext>
+          {/* Calendar Body */}
+          {calendarView === "month" ? renderMonthView() : renderWeekView()}
+        </div>
+
+        <DragOverlay>
+          {activeItem ? <DragOverlayCard item={activeItem} /> : null}
+        </DragOverlay>
+      </DndContext>
+
+      {calendarItems.length === 0 && topicData.length === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center">
+          <FileText className="mb-3 h-8 w-8 text-muted-foreground" />
+          <p className="text-sm font-medium">No scheduled content</p>
+          <p className="text-xs text-muted-foreground">
+            Approve topics in Content to schedule them here
+          </p>
+        </div>
       )}
 
-      {/* ── Briefs Tab ──────────────────────────────────────── */}
-      {tab === "briefs" && (
-        <>
-          <div className="flex gap-2">
-            <Badge variant="outline" className="gap-1 px-3 py-1.5">
-              {briefs.filter((b) => b.status === "ready").length} Ready
-            </Badge>
-            <Badge variant="outline" className="gap-1 px-3 py-1.5">
-              {briefs.filter((b) => b.status === "in_production").length} In Production
-            </Badge>
-            <Badge variant="outline" className="gap-1 px-3 py-1.5">
-              {briefs.filter((b) => b.status === "completed").length} Completed
-            </Badge>
-          </div>
+      {/* Detail Dialog */}
+      <DetailDialog
+        item={selectedItem}
+        topic={selectedTopic}
+        content={selectedContent}
+        categories={categories}
+        onClose={() => setSelectedItem(null)}
+        onUnschedule={handleUnschedule}
+        onReschedule={handleTimeChange}
+        onApprove={handleApproveTopic}
+        onProduce={handleProduceTopic}
+      />
 
-          <div className="space-y-4">
-            {briefs.map((brief) => {
-              const statusCfg = briefStatusConfig[brief.status] ?? briefStatusConfig.draft;
-              return (
-                <Card key={brief.id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-base">{brief.topicTitle}</CardTitle>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Created {format(new Date(brief.createdAt), "dd.MM.yy")} · {brief.contentType} · {brief.wordCountTarget.min}–{brief.wordCountTarget.max} words
-                        </p>
-                      </div>
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusCfg.className}`}>
-                        {statusCfg.label}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Keywords */}
-                    <div className="flex items-start gap-2">
-                      <Target className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium">{brief.targetKeyword}</p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {brief.secondaryKeywords.map((kw) => (
-                            <Badge key={kw} variant="outline" className="text-[10px] px-1.5 py-0">
-                              {kw}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Structure */}
-                    <div className="flex items-start gap-2">
-                      <ListChecks className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                      <div className="flex flex-wrap gap-1.5">
-                        {brief.suggestedStructure.map((s) => (
-                          <span key={s.heading} className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                            {s.heading}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Internal Links */}
-                    {brief.internalLinks.length > 0 && (
-                      <div className="flex items-start gap-2">
-                        <Link2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                        <div className="flex flex-wrap gap-1.5">
-                          {brief.internalLinks.map((link) => (
-                            <span key={link.url} className="text-xs text-primary">
-                              {link.anchor}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Competitors */}
-                    {brief.competitors.length > 0 && (
-                      <div className="flex items-start gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                        <div className="flex gap-3">
-                          {brief.competitors.map((comp) => (
-                            <span key={comp.domain} className="text-xs text-muted-foreground">
-                              {comp.domain} <span className="font-medium">#{comp.position}</span> ({comp.wordCount}w, {comp.score}/100)
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex gap-2 pt-1">
-                      {brief.status === "ready" && (
-                        <Button size="sm">
-                          Start Production
-                        </Button>
-                      )}
-                      <Button size="sm" variant="outline">
-                        <FileText className="mr-1 h-3 w-3" />
-                        View Full Brief
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          {briefs.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center">
-              <FileText className="mb-3 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm font-medium">No briefs yet</p>
-              <p className="text-xs text-muted-foreground">
-                Create briefs from Discover to see them here
-              </p>
-            </div>
-          )}
-        </>
-      )}
+      {/* Assign Dialog */}
+      <AssignDialog
+        dateStr={assignDate ?? ""}
+        open={!!assignDate}
+        unscheduled={unscheduled}
+        categories={categories}
+        onAssign={handleAssign}
+        onClose={() => setAssignDate(null)}
+      />
     </div>
   );
 }

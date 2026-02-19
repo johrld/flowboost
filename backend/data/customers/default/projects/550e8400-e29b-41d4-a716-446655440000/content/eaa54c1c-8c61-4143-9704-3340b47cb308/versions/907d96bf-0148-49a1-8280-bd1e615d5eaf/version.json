@@ -1,0 +1,40 @@
+{
+  "id": "907d96bf-0148-49a1-8280-bd1e615d5eaf",
+  "versionNumber": 4,
+  "contentId": "eaa54c1c-8c61-4143-9704-3340b47cb308",
+  "languages": [
+    {
+      "lang": "de",
+      "slug": "atemuebungen-arbeitsplatzstress",
+      "title": "Atemübungen für Arbeitsplatzstress: 4 Techniken direkt am Schreibtisch",
+      "description": "Reduziere Stress im Büro mit diskreten Atemübungen. 4 Techniken für Präsentationen, Konflikte und Pausen. Sofort anwendbar am Schreibtisch.",
+      "contentPath": "content/de/atemuebungen-arbeitsplatzstress.md",
+      "wordCount": 2595
+    },
+    {
+      "lang": "es",
+      "slug": "ejercicios-respiracion-estres-laboral",
+      "title": "Ejercicios de Respiración para el Estrés Laboral: 4 Técnicas en tu Escritorio",
+      "description": "Reduce el estrés en la oficina con ejercicios de respiración discretos. 4 técnicas para presentaciones, conflictos y pausas. Aplicables al instante desde tu escritorio.",
+      "contentPath": "content/es/ejercicios-respiracion-estres-laboral.md",
+      "wordCount": 2899
+    },
+    {
+      "lang": "en",
+      "slug": "breathing-exercises-workplace-stress",
+      "title": "Breathing Exercises for Workplace Stress: 4 Techniques at Your Desk",
+      "description": "Reduce office stress with discreet breathing exercises. 4 techniques for presentations, conflicts, and breaks. Apply immediately at your desk.",
+      "contentPath": "content/en/breathing-exercises-workplace-stress.md",
+      "wordCount": 2563
+    }
+  ],
+  "assets": [],
+  "text": {
+    "wordCount": 8057,
+    "headingCount": 18,
+    "hasFaq": true,
+    "hasAnswerCapsule": false
+  },
+  "createdAt": "2026-02-13T10:46:29.723Z",
+  "createdBy": "user"
+}

@@ -50,6 +50,15 @@ export class ContentStore extends Store<ContentItem> {
     return versions.length > 0 ? versions[versions.length - 1] : null;
   }
 
+  updateVersion(contentId: string, versionId: string, updates: Partial<ContentVersion>): ContentVersion | null {
+    const version = this.getVersion(contentId, versionId);
+    if (!version) return null;
+    const updated = { ...version, ...updates };
+    const vPath = path.join(this.entityDir(contentId), "versions", versionId, "version.json");
+    fs.writeFileSync(vPath, JSON.stringify(updated, null, 2));
+    return updated;
+  }
+
   getVersionDir(contentId: string, versionId: string): string {
     return path.join(this.entityDir(contentId), "versions", versionId);
   }
