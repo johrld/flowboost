@@ -30,23 +30,19 @@ import {
   updateProject,
   updateProjectBrief,
   updateBrandVoice,
-  updateAuthors,
-  getGitHubRepos,
-  getGitHubBranches,
+  syncConnectorData,
 } from "@/lib/api";
-import type { Project, Customer, Author, Category, Competitor } from "@/lib/types";
+import type { Project, Customer, Competitor } from "@/lib/types";
 import {
   Save,
   Plus,
-  Trash2,
   Loader2,
   Check,
   AlertCircle,
   Globe,
+  RefreshCw,
+  Cable,
   X,
-  Github,
-  Unplug,
-  CheckCircle2,
 } from "lucide-react";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -61,11 +57,6 @@ function SaveButton({ status, onClick }: { status: SaveStatus; onClick: () => vo
       {status === "saving" ? "Saving..." : status === "saved" ? "Saved" : status === "error" ? "Error — Retry" : "Save"}
     </Button>
   );
-}
-
-function displayRole(role: string | Record<string, string>): string {
-  if (typeof role === "string") return role;
-  return role.de ?? role.en ?? Object.values(role)[0] ?? "";
 }
 
 function SettingsPageContent() {
@@ -84,37 +75,17 @@ function SettingsPageContent() {
   const [articlesPerWeek, setArticlesPerWeek] = useState(3);
   const [generalStatus, setGeneralStatus] = useState<SaveStatus>("idle");
 
-  // Authors tab state
-  const [authors, setAuthors] = useState<Author[]>([]);
-  const [authorsStatus, setAuthorsStatus] = useState<SaveStatus>("idle");
-
-  // Categories tab state
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesStatus, setCategoriesStatus] = useState<SaveStatus>("idle");
+  // Connector sync state (read-only categories + authors from repo)
+  interface RemoteCategory { id: string; name: Record<string, string>; slug?: Record<string, string>; description?: Record<string, string>; order?: number }
+  interface RemoteAuthor { id: string; name: string; slug?: string; title?: Record<string, string>; bio?: Record<string, string>; image?: string }
+  const [remoteCategories, setRemoteCategories] = useState<RemoteCategory[]>([]);
+  const [remoteAuthors, setRemoteAuthors] = useState<RemoteAuthor[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
 
   // Competitors tab state
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [competitorsStatus, setCompetitorsStatus] = useState<SaveStatus>("idle");
-
-  // Connector tab state
-  const [connectorType, setConnectorType] = useState("git");
-  const [gitRepoUrl, setGitRepoUrl] = useState("");
-  const [gitBranch, setGitBranch] = useState("");
-  const [gitContentPath, setGitContentPath] = useState("");
-  const [gitAssetsPath, setGitAssetsPath] = useState("");
-  const [connectorStatus, setConnectorStatus] = useState<SaveStatus>("idle");
-
-  // GitHub connector state
-  const [ghInstallationId, setGhInstallationId] = useState<number | null>(null);
-  const [ghOwner, setGhOwner] = useState("");
-  const [ghRepo, setGhRepo] = useState("");
-  const [ghBranch, setGhBranch] = useState("");
-  const [ghContentPath, setGhContentPath] = useState("src/content/posts");
-  const [ghAssetsPath, setGhAssetsPath] = useState("src/assets/posts");
-  const [ghRepos, setGhRepos] = useState<{ fullName: string; name: string; owner: string; defaultBranch: string; private: boolean }[]>([]);
-  const [ghBranches, setGhBranches] = useState<string[]>([]);
-  const [ghLoadingRepos, setGhLoadingRepos] = useState(false);
-  const [ghLoadingBranches, setGhLoadingBranches] = useState(false);
 
   const searchParams = useSearchParams();
 
@@ -144,7 +115,6 @@ function SettingsPageContent() {
       const cust = customers[0];
       setCustomerId(cust.id);
       setCustomer(cust);
-      setAuthors(cust.authors ?? []);
 
       const projects = await getProjects(cust.id);
       if (projects.length === 0) {
@@ -159,23 +129,7 @@ function SettingsPageContent() {
       setProjectDescription(proj.description ?? "");
       setLanguages(proj.languages ?? []);
       setArticlesPerWeek(proj.publishFrequency?.articlesPerWeek ?? 3);
-      setCategories(proj.categories ?? []);
       setCompetitors(proj.competitors ?? []);
-      setConnectorType(proj.connector?.type ?? "git");
-      setGitRepoUrl(proj.connector?.git?.repoUrl ?? "");
-      setGitBranch(proj.connector?.git?.branch ?? "");
-      setGitContentPath(proj.connector?.git?.contentPath ?? "");
-      setGitAssetsPath(proj.connector?.git?.assetsPath ?? "");
-
-      // GitHub connector
-      if (proj.connector?.github) {
-        setGhInstallationId(proj.connector.github.installationId);
-        setGhOwner(proj.connector.github.owner);
-        setGhRepo(proj.connector.github.repo);
-        setGhBranch(proj.connector.github.branch);
-        setGhContentPath(proj.connector.github.contentPath);
-        setGhAssetsPath(proj.connector.github.assetsPath);
-      }
 
       // Populate pipeline settings
       setDefaultModel(proj.pipeline?.defaultModel ?? "sonnet");
@@ -190,29 +144,6 @@ function SettingsPageContent() {
       ]);
       setBrandVoiceContent(bv.content);
       setProjectBriefContent(pb.content);
-
-      // Handle GitHub callback: ?github=connected&installation_id=123
-      // Must run AFTER project data is loaded to avoid being overwritten
-      const params = new URLSearchParams(window.location.search);
-      const ghStatus = params.get("github");
-      const installId = params.get("installation_id");
-      if (ghStatus === "connected" && installId) {
-        const id = Number(installId);
-        setGhInstallationId(id);
-        setConnectorType("github");
-        // Auto-save GitHub connection so it persists across reloads
-        await updateProject(cust.id, proj.id, {
-          connector: { type: "github", github: { installationId: id, owner: "", repo: "", branch: "main", contentPath: "src/content/posts", assetsPath: "src/assets/posts" } },
-        });
-        // Load repos for the new installation
-        setGhLoadingRepos(true);
-        try {
-          const repos = await getGitHubRepos(id);
-          setGhRepos(repos);
-        } catch { /* ignore */ }
-        setGhLoadingRepos(false);
-        window.history.replaceState({}, "", "/settings?tab=connector");
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
@@ -269,97 +200,9 @@ function SettingsPageContent() {
     setLanguages(languages.filter((l) => l.code !== code));
   };
 
-  const saveAuthors = () => withSave(setAuthorsStatus, async () => {
-    await updateAuthors(customerId, authors);
-  });
-
-  const saveCategories = () => withSave(setCategoriesStatus, async () => {
-    await updateProject(customerId, project!.id, { categories });
-  });
-
   const saveCompetitors = () => withSave(setCompetitorsStatus, async () => {
     await updateProject(customerId, project!.id, { competitors });
   });
-
-  const saveConnector = () => withSave(setConnectorStatus, async () => {
-    if (connectorType === "github" && ghInstallationId) {
-      await updateProject(customerId, project!.id, {
-        connector: {
-          type: "github",
-          github: {
-            installationId: ghInstallationId,
-            owner: ghOwner,
-            repo: ghRepo,
-            branch: ghBranch,
-            contentPath: ghContentPath,
-            assetsPath: ghAssetsPath,
-          },
-        },
-      });
-    } else {
-      await updateProject(customerId, project!.id, {
-        connector: {
-          type: connectorType as "git" | "filesystem" | "api",
-          ...(connectorType === "git" && {
-            git: { repoUrl: gitRepoUrl, branch: gitBranch, contentPath: gitContentPath, assetsPath: gitAssetsPath },
-          }),
-        },
-      });
-    }
-  });
-
-  const loadGhRepos = async (installationId: number) => {
-    setGhLoadingRepos(true);
-    try {
-      const repos = await getGitHubRepos(installationId);
-      setGhRepos(repos);
-    } catch { /* ignore */ }
-    setGhLoadingRepos(false);
-  };
-
-  const loadGhBranches = async (owner: string, repo: string) => {
-    if (!ghInstallationId) return;
-    setGhLoadingBranches(true);
-    try {
-      const branches = await getGitHubBranches(ghInstallationId, owner, repo);
-      setGhBranches(branches);
-    } catch { /* ignore */ }
-    setGhLoadingBranches(false);
-  };
-
-  const selectGhRepo = (fullName: string) => {
-    const repo = ghRepos.find((r) => r.fullName === fullName);
-    if (repo) {
-      setGhOwner(repo.owner);
-      setGhRepo(repo.name);
-      setGhBranch(repo.defaultBranch);
-      loadGhBranches(repo.owner, repo.name);
-    }
-  };
-
-  const disconnectGitHub = () => {
-    setConnectorType("git");
-    setGhInstallationId(null);
-    setGhOwner("");
-    setGhRepo("");
-    setGhBranch("");
-    setGhRepos([]);
-    setGhBranches([]);
-  };
-
-  // Load repos when GitHub is already connected
-  useEffect(() => {
-    if (connectorType === "github" && ghInstallationId && ghRepos.length === 0) {
-      loadGhRepos(ghInstallationId);
-    }
-  }, [connectorType, ghInstallationId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load branches when repo is selected
-  useEffect(() => {
-    if (connectorType === "github" && ghInstallationId && ghOwner && ghRepo) {
-      loadGhBranches(ghOwner, ghRepo);
-    }
-  }, [ghOwner, ghRepo, ghInstallationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const savePipeline = () => withSave(setPipelineStatus, async () => {
     await updateProject(customerId, project!.id, {
@@ -380,40 +223,30 @@ function SettingsPageContent() {
     await updateProjectBrief(customerId, project!.id, projectBriefContent);
   });
 
-  // Author helpers
-  const addAuthor = () => {
-    const id = `author-${Date.now()}`;
-    setAuthors([...authors, { id, name: "", role: "" }]);
-  };
+  // Centralized connector sync (categories + authors from repo)
+  const syncFromConnector = useCallback(async () => {
+    if (!customerId || !project?.connector?.github) return;
+    setSyncing(true);
+    try {
+      const result = await syncConnectorData(customerId, project.id);
+      if (result.categories) setRemoteCategories(result.categories as RemoteCategory[]);
+      if (result.authors) setRemoteAuthors(result.authors as RemoteAuthor[]);
+      setLastSync(new Date());
+      if (result.errors.length > 0) {
+        console.error("Sync errors:", result.errors);
+      }
+    } catch (err) {
+      console.error("Failed to sync from connector:", err);
+    }
+    setSyncing(false);
+  }, [customerId, project]);
 
-  const removeAuthor = (idx: number) => {
-    setAuthors(authors.filter((_, i) => i !== idx));
-  };
-
-  const updateAuthorField = (idx: number, field: "id" | "name" | "role", value: string) => {
-    setAuthors(authors.map((a, i) => (i === idx ? { ...a, [field]: value } : a)));
-  };
-
-  // Category helpers
-  const addCategory = () => {
-    setCategories([...categories, { id: `cat-${Date.now()}`, labels: { de: "", en: "" } }]);
-  };
-
-  const removeCategory = (idx: number) => {
-    setCategories(categories.filter((_, i) => i !== idx));
-  };
-
-  const updateCategoryLabel = (idx: number, lang: string, value: string) => {
-    setCategories(categories.map((c, i) =>
-      i === idx ? { ...c, labels: { ...c.labels, [lang]: value } } : c
-    ));
-  };
-
-  const updateCategoryId = (idx: number, value: string) => {
-    setCategories(categories.map((c, i) =>
-      i === idx ? { ...c, id: value } : c
-    ));
-  };
+  // Auto-sync categories + authors from connector after project loads
+  useEffect(() => {
+    if (!loading && project?.connector?.github && !lastSync) {
+      syncFromConnector();
+    }
+  }, [loading, project, lastSync, syncFromConnector]);
 
   // Competitor helpers
   const addCompetitor = () => {
@@ -464,7 +297,6 @@ function SettingsPageContent() {
           <TabsTrigger value="brand">Brand Voice</TabsTrigger>
           <TabsTrigger value="categories">Categories</TabsTrigger>
           <TabsTrigger value="competitors">Competitors</TabsTrigger>
-          <TabsTrigger value="connector">Connector</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
         </TabsList>
 
@@ -569,57 +401,67 @@ function SettingsPageContent() {
           </Card>
         </TabsContent>
 
-        {/* Authors */}
+        {/* Authors (read-only, synced from connector) */}
         <TabsContent value="authors" className="mt-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Authors</h3>
-            <Button variant="outline" size="sm" onClick={addAuthor}>
-              <Plus className="mr-2 h-3 w-3" />
-              Add Author
-            </Button>
+            <div>
+              <h3 className="text-lg font-semibold">Authors</h3>
+              <p className="text-sm text-muted-foreground">
+                Synced from your connected repository
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {lastSync && (
+                <span className="text-xs text-muted-foreground">
+                  Last synced: {lastSync.toLocaleTimeString()}
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={syncFromConnector}
+                disabled={syncing || !project?.connector?.github}
+              >
+                {syncing ? (
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-3 w-3" />
+                )}
+                Sync
+              </Button>
+            </div>
           </div>
-          {authors.map((author, idx) => (
-            <Card key={idx}>
-              <CardContent className="p-4">
-                <div className="flex items-start gap-4">
-                  <div className="flex-1 grid grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">ID</Label>
-                      <Input
-                        value={author.id}
-                        onChange={(e) => updateAuthorField(idx, "id", e.target.value)}
-                        className="h-8 font-mono text-sm"
-                        placeholder="johannes"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Name</Label>
-                      <Input
-                        value={author.name}
-                        onChange={(e) => updateAuthorField(idx, "name", e.target.value)}
-                        className="h-8"
-                        placeholder="Johannes Herold"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Role</Label>
-                      <Input
-                        value={displayRole(author.role)}
-                        onChange={(e) => updateAuthorField(idx, "role", e.target.value)}
-                        className="h-8"
-                        placeholder="Founder & Developer"
-                      />
-                    </div>
+
+          {remoteAuthors.length > 0 ? (
+            <div className="rounded-lg border divide-y">
+              {remoteAuthors.map((author) => (
+                <div key={author.id} className="flex items-center gap-4 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{author.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {author.title?.de || author.title?.en || ""}{author.title?.de || author.title?.en ? " · " : ""}<span className="font-mono">{author.id}</span>
+                    </p>
                   </div>
-                  <Button variant="ghost" size="icon" className="mt-5" onClick={() => removeAuthor(idx)}>
-                    <X className="h-4 w-4" />
-                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-          {authors.length > 0 && (
-            <SaveButton status={authorsStatus} onClick={saveAuthors} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border p-8 text-center">
+              {!project?.connector?.github ? (
+                <>
+                  <Cable className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">Connect a Git repository to sync authors</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">No authors synced yet</p>
+                  <Button variant="outline" size="sm" className="mt-3" onClick={syncFromConnector}>
+                    <RefreshCw className="mr-2 h-3 w-3" />
+                    Sync Now
+                  </Button>
+                </>
+              )}
+            </div>
           )}
         </TabsContent>
 
@@ -644,47 +486,66 @@ function SettingsPageContent() {
           </Card>
         </TabsContent>
 
-        {/* Categories */}
+        {/* Categories (read-only, synced from connector) */}
         <TabsContent value="categories" className="mt-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Categories</h3>
-            <Button variant="outline" size="sm" onClick={addCategory}>
-              <Plus className="mr-2 h-3 w-3" />
-              Add Category
-            </Button>
+            <div>
+              <h3 className="text-lg font-semibold">Categories</h3>
+              <p className="text-sm text-muted-foreground">
+                Synced from your connected repository
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {lastSync && (
+                <span className="text-xs text-muted-foreground">
+                  Last synced: {lastSync.toLocaleTimeString()}
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={syncFromConnector}
+                disabled={syncing || !project?.connector?.github}
+              >
+                {syncing ? (
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-3 w-3" />
+                )}
+                Sync
+              </Button>
+            </div>
           </div>
-          {categories.map((cat, idx) => (
-            <Card key={idx}>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1 flex-1 mr-4">
-                    <Label className="text-xs text-muted-foreground">ID</Label>
-                    <Input
-                      value={cat.id}
-                      onChange={(e) => updateCategoryId(idx, e.target.value)}
-                      className="h-8 font-mono text-sm"
-                    />
+
+          {remoteCategories.length > 0 ? (
+            <div className="rounded-lg border divide-y">
+              {remoteCategories.map((cat) => (
+                <div key={cat.id} className="flex items-center gap-4 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{cat.name.de || cat.name.en || cat.id}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{cat.id}</p>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => removeCategory(idx)}>
-                    <Trash2 className="h-4 w-4" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border p-8 text-center">
+              {!project?.connector?.github ? (
+                <>
+                  <Cable className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">Connect a Git repository to sync categories</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">No categories synced yet</p>
+                  <Button variant="outline" size="sm" className="mt-3" onClick={syncFromConnector}>
+                    <RefreshCw className="mr-2 h-3 w-3" />
+                    Sync Now
                   </Button>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.keys(cat.labels).map((lang) => (
-                    <div key={lang} className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">{lang.toUpperCase()}</Label>
-                      <Input
-                        value={cat.labels[lang]}
-                        onChange={(e) => updateCategoryLabel(idx, lang, e.target.value)}
-                        className="h-8"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          <SaveButton status={categoriesStatus} onClick={saveCategories} />
+                </>
+              )}
+            </div>
+          )}
         </TabsContent>
 
         {/* Competitors */}
@@ -755,118 +616,6 @@ function SettingsPageContent() {
           )}
         </TabsContent>
 
-        {/* Connector */}
-        <TabsContent value="connector" className="mt-6 space-y-6">
-          {/* GitHub Connected */}
-          {connectorType === "github" && ghInstallationId ? (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    <CardTitle>GitHub Connected</CardTitle>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={disconnectGitHub}>
-                    <Unplug className="mr-2 h-3 w-3" />
-                    Disconnect
-                  </Button>
-                </div>
-                <CardDescription>
-                  Content is delivered and read via your GitHub repository
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Repository</Label>
-                  {ghLoadingRepos ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Loading repositories...
-                    </div>
-                  ) : (
-                    <Select
-                      value={ghOwner && ghRepo ? `${ghOwner}/${ghRepo}` : ""}
-                      onValueChange={selectGhRepo}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select repository..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ghRepos.map((r) => (
-                          <SelectItem key={r.fullName} value={r.fullName}>
-                            {r.fullName}{r.private ? " (private)" : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-
-                {ghOwner && ghRepo && (
-                  <>
-                    <div className="space-y-2">
-                      <Label>Branch</Label>
-                      {ghLoadingBranches ? (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Loader2 className="h-4 w-4 animate-spin" /> Loading branches...
-                        </div>
-                      ) : (
-                        <Select value={ghBranch} onValueChange={setGhBranch}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select branch..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ghBranches.map((b) => (
-                              <SelectItem key={b} value={b}>{b}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Content Path</Label>
-                      <Input
-                        value={ghContentPath}
-                        onChange={(e) => setGhContentPath(e.target.value)}
-                        placeholder="src/content/posts"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Assets Path</Label>
-                      <Input
-                        value={ghAssetsPath}
-                        onChange={(e) => setGhAssetsPath(e.target.value)}
-                        placeholder="src/assets/posts"
-                      />
-                    </div>
-                  </>
-                )}
-
-                <SaveButton status={connectorStatus} onClick={saveConnector} />
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>Publishing Connector</CardTitle>
-                <CardDescription>
-                  Connect your GitHub repository to enable automatic content delivery and reading
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  onClick={() => {
-                    window.location.href = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100"}/auth/github/install`;
-                  }}
-                >
-                  <Github className="mr-2 h-4 w-4" />
-                  Connect GitHub
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
         {/* Pipeline */}
         <TabsContent value="pipeline" className="mt-6">
           <Card>

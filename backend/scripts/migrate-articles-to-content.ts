@@ -1,13 +1,15 @@
 #!/usr/bin/env npx tsx
 /**
- * Migration: Article → ContentItem
+ * Migration: Article (V2) → ContentItem (V3)
  *
  * Reads existing articles from data/customers/{cid}/projects/{pid}/articles/
- * and creates corresponding ContentItem entries in content/ directory.
+ * and creates corresponding ContentItem + ContentVersion entries in content/.
  *
- * - Articles are NOT deleted (backward-compatible, articles/ stays)
- * - Content items get the same ID as the original article
- * - Versions are migrated with auto-increment numbering
+ * - Articles are NOT deleted (backward-compatible)
+ * - Multiple ArticleVersions (per-language) are grouped into one ContentVersion
+ *   with a `languages[]` array
+ * - Content files (markdown + assets) are copied to the new version dir
+ * - Topic metadata (title, category, keywords) is used to enrich the ContentItem
  *
  * Usage:
  *   npx tsx scripts/migrate-articles-to-content.ts [--data-dir ./data]
@@ -44,6 +46,17 @@ interface OldArticleVersion {
   createdAt: string;
 }
 
+interface TopicData {
+  id: string;
+  title: string;
+  category: string;
+  keywords?: {
+    primary: string;
+    secondary: string[];
+    longTail: string[];
+  };
+}
+
 const STATUS_MAP: Record<string, string> = {
   draft: "draft",
   review: "review",
@@ -72,8 +85,22 @@ for (const customerDir of fs.readdirSync(customersDir, { withFileTypes: true }))
     const projectId = projectDir.name;
     const articlesDir = path.join(projectsDir, projectId, "articles");
     const contentDir = path.join(projectsDir, projectId, "content");
+    const topicsDir = path.join(projectsDir, projectId, "topics");
 
     if (!fs.existsSync(articlesDir)) continue;
+
+    // Load topics for enrichment
+    const topicMap = new Map<string, TopicData>();
+    if (fs.existsSync(topicsDir)) {
+      for (const td of fs.readdirSync(topicsDir, { withFileTypes: true })) {
+        if (!td.isDirectory()) continue;
+        const tp = path.join(topicsDir, td.name, "topic.json");
+        if (fs.existsSync(tp)) {
+          const topic: TopicData = JSON.parse(fs.readFileSync(tp, "utf-8"));
+          topicMap.set(topic.id, topic);
+        }
+      }
+    }
 
     for (const articleDir of fs.readdirSync(articlesDir, { withFileTypes: true })) {
       if (!articleDir.isDirectory()) continue;
@@ -85,20 +112,73 @@ for (const customerDir of fs.readdirSync(customersDir, { withFileTypes: true }))
       // Check if already migrated
       const contentItemDir = path.join(contentDir, articleId);
       if (fs.existsSync(path.join(contentItemDir, "content.json"))) {
+        console.log(`  SKIP: ${articleId} (already migrated)`);
         skipped++;
         continue;
       }
 
       const article: OldArticle = JSON.parse(fs.readFileSync(articlePath, "utf-8"));
+      const topic = article.topicId ? topicMap.get(article.topicId) : null;
+
+      // Extract title + description from frontmatter of first version
+      let title = topic?.title ?? article.translationKey.replace(/-/g, " ");
+      let description: string | undefined;
+      let tags: string[] | undefined;
+      let hasFaq = false;
+
+      const versionsDir = path.join(articlesDir, articleId, "versions");
+      const versions: OldArticleVersion[] = [];
+
+      if (fs.existsSync(versionsDir)) {
+        for (const vDir of fs.readdirSync(versionsDir, { withFileTypes: true })) {
+          if (!vDir.isDirectory()) continue;
+          const vPath = path.join(versionsDir, vDir.name, "version.json");
+          if (!fs.existsSync(vPath)) continue;
+          versions.push(JSON.parse(fs.readFileSync(vPath, "utf-8")));
+        }
+        versions.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      }
+
+      // Read frontmatter from first version's markdown
+      if (versions.length > 0) {
+        const firstVersion = versions[0];
+        const versionDir = path.join(versionsDir, firstVersion.id);
+        const mdPath = path.join(versionDir, firstVersion.contentPath);
+        if (fs.existsSync(mdPath)) {
+          const mdContent = fs.readFileSync(mdPath, "utf-8");
+          const fmMatch = mdContent.match(/^---\n([\s\S]*?)\n---/);
+          if (fmMatch) {
+            const fm = fmMatch[1];
+            const titleMatch = fm.match(/^title:\s*"(.+?)"\s*$/m);
+            const descMatch = fm.match(/^description:\s*"(.+?)"\s*$/m);
+            const tagsMatch = fm.match(/^tags:\n((?:\s+-\s+.+\n?)+)/m);
+            if (titleMatch) title = titleMatch[1];
+            if (descMatch) description = descMatch[1];
+            if (tagsMatch) {
+              tags = tagsMatch[1]
+                .split("\n")
+                .map((l) => l.replace(/^\s+-\s+/, "").trim())
+                .filter(Boolean);
+            }
+            hasFaq = fm.includes("faq:");
+          }
+        }
+      }
 
       // Create ContentItem
-      const contentItem = {
+      const contentItem: Record<string, unknown> = {
         id: article.id,
         customerId: article.customerId,
         projectId: article.projectId,
         type: "article",
         status: STATUS_MAP[article.status] ?? "draft",
-        title: article.translationKey.replace(/-/g, " "),
+        title,
+        description,
+        category: topic?.category,
+        tags,
+        keywords: topic?.keywords
+          ? [topic.keywords.primary, ...topic.keywords.secondary]
+          : undefined,
         topicId: article.topicId,
         translationKey: article.translationKey,
         createdAt: article.createdAt,
@@ -113,59 +193,50 @@ for (const customerDir of fs.readdirSync(customersDir, { withFileTypes: true }))
         JSON.stringify(contentItem, null, 2),
       );
 
-      // Migrate versions
-      const versionsDir = path.join(articlesDir, articleId, "versions");
-      if (fs.existsSync(versionsDir)) {
-        const versions: OldArticleVersion[] = [];
+      // Group versions into one ContentVersion with multiple languages
+      if (versions.length > 0) {
+        // Use the first version's ID as the ContentVersion ID
+        const primaryVersion = versions[0];
+        const newVersionDir = path.join(contentItemDir, "versions", primaryVersion.id);
 
-        for (const vDir of fs.readdirSync(versionsDir, { withFileTypes: true })) {
-          if (!vDir.isDirectory()) continue;
-          const vPath = path.join(versionsDir, vDir.name, "version.json");
-          if (!fs.existsSync(vPath)) continue;
-          versions.push(JSON.parse(fs.readFileSync(vPath, "utf-8")));
-        }
+        const languages = versions.map((v) => ({
+          lang: v.lang,
+          slug: v.slug,
+          title: title,
+          description: description ?? "",
+          contentPath: v.contentPath,
+          wordCount: v.wordCount ?? 0,
+        }));
 
-        // Sort by createdAt for version numbering
-        versions.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        const totalWords = versions.reduce((sum, v) => sum + (v.wordCount || 0), 0);
 
-        for (let i = 0; i < versions.length; i++) {
-          const oldVersion = versions[i];
-          const newVersionDir = path.join(contentItemDir, "versions", oldVersion.id);
+        const contentVersion = {
+          id: primaryVersion.id,
+          contentId: article.id,
+          versionNumber: 1,
+          languages,
+          assets: [],
+          text: {
+            wordCount: totalWords,
+            headingCount: 0,
+            hasFaq,
+            hasAnswerCapsule: true,
+          },
+          seoScore: primaryVersion.seoScore,
+          pipelineRunId: undefined,
+          createdAt: primaryVersion.createdAt,
+          createdBy: "pipeline" as const,
+        };
 
-          const contentVersion = {
-            id: oldVersion.id,
-            contentId: article.id,
-            versionNumber: i + 1,
-            languages: [{
-              lang: oldVersion.lang,
-              slug: oldVersion.slug,
-              title: article.translationKey.replace(/-/g, " "),
-              description: "",
-              contentPath: oldVersion.contentPath,
-              wordCount: oldVersion.wordCount,
-            }],
-            assets: oldVersion.assetsPath
-              ? [{ assetId: "", role: "hero" as const, lang: oldVersion.lang }]
-              : [],
-            text: {
-              wordCount: oldVersion.wordCount,
-              headingCount: 0,
-              hasFaq: false,
-              hasAnswerCapsule: false,
-            },
-            seoScore: oldVersion.seoScore,
-            createdAt: oldVersion.createdAt,
-            createdBy: "pipeline" as const,
-          };
+        fs.mkdirSync(newVersionDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(newVersionDir, "version.json"),
+          JSON.stringify(contentVersion, null, 2),
+        );
 
-          fs.mkdirSync(newVersionDir, { recursive: true });
-          fs.writeFileSync(
-            path.join(newVersionDir, "version.json"),
-            JSON.stringify(contentVersion, null, 2),
-          );
-
-          // Copy content files if they exist in old version dir
-          const oldVersionDir = path.join(versionsDir, oldVersion.id);
+        // Copy content files from all versions into one version dir
+        for (const v of versions) {
+          const oldVersionDir = path.join(versionsDir, v.id);
           for (const subDir of ["content", "assets"]) {
             const src = path.join(oldVersionDir, subDir);
             if (fs.existsSync(src)) {
@@ -173,15 +244,23 @@ for (const customerDir of fs.readdirSync(customersDir, { withFileTypes: true }))
             }
           }
         }
+
+        // Update contentItem with currentVersionId
+        contentItem.currentVersionId = primaryVersion.id;
+        fs.writeFileSync(
+          path.join(contentItemDir, "content.json"),
+          JSON.stringify(contentItem, null, 2),
+        );
       }
 
       migrated++;
-      console.log(`  ✓ ${customerId}/${projectId}: ${article.translationKey}`);
+      const langCount = new Set(versions.map((v) => v.lang)).size;
+      console.log(`  OK: ${article.translationKey} → ${contentItem.id} (${langCount} langs, status: ${contentItem.status})`);
     }
   }
 }
 
-console.log(`\nMigration complete: ${migrated} migrated, ${skipped} skipped (already exist)`);
+console.log(`\nDone: ${migrated} migrated, ${skipped} skipped`);
 
 function copyDirRecursive(src: string, dest: string) {
   fs.mkdirSync(dest, { recursive: true });

@@ -5,11 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { PhaseStatusBadge } from "@/components/status-badge";
 import { phaseAgents, phaseLabels, getAgent } from "@/lib/agents";
 import {
-  getCustomers,
-  getProjects,
   getTopics,
   getPipelineRuns,
 } from "@/lib/api";
+import { useProject } from "@/lib/project-context";
 import type { PipelineRun, Topic } from "@/lib/types";
 import { format } from "date-fns";
 import {
@@ -24,30 +23,20 @@ import {
 } from "lucide-react";
 
 export default function MonitorPage() {
+  const { customerId, projectId, loading: projectLoading } = useProject();
   const [runs, setRuns] = useState<PipelineRun[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [customerId, setCustomerId] = useState("");
-  const [projectId, setProjectId] = useState("");
   const [expandedRun, setExpandedRun] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
+    if (!customerId || !projectId) return;
     try {
       setError(null);
-      const customers = await getCustomers();
-      if (customers.length === 0) { setError("No customers found"); return; }
-      const cid = customers[0].id;
-      setCustomerId(cid);
-
-      const projects = await getProjects(cid);
-      if (projects.length === 0) { setError("No projects found"); return; }
-      const pid = projects[0].id;
-      setProjectId(pid);
-
       const [r, t] = await Promise.all([
-        getPipelineRuns(cid, pid),
-        getTopics(cid, pid),
+        getPipelineRuns(customerId, projectId),
+        getTopics(customerId, projectId),
       ]);
       setRuns(r.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
       setTopics(t);
@@ -56,7 +45,7 @@ export default function MonitorPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [customerId, projectId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -84,7 +73,7 @@ export default function MonitorPage() {
   const completed = runs.filter((r) => r.status === "completed");
   const failed = runs.filter((r) => r.status === "failed");
 
-  if (loading) {
+  if (projectLoading || loading) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

@@ -252,6 +252,25 @@ export async function deleteBranch(
 }
 
 /**
+ * Get file contents from a repository.
+ */
+export async function getFileContent(
+  installationId: number,
+  owner: string,
+  repo: string,
+  path: string,
+  ref?: string,
+): Promise<string> {
+  const token = await getInstallationToken(installationId);
+  const query = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+  const result = await githubFetch<{ content: string; encoding: string }>(
+    `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}${query}`,
+    token,
+  );
+  return Buffer.from(result.content, "base64").toString("utf-8");
+}
+
+/**
  * Check if GitHub App credentials are configured.
  */
 export function isConfigured(): boolean {

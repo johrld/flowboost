@@ -16,12 +16,19 @@ services:
   dashboard:
     build:
       context: ./frontend
-      dockerfile: ../Dockerfile.frontend
-      args:
-        NEXT_PUBLIC_API_URL: ${DEV_API_URL:-http://localhost:6100}
+      dockerfile: ../Dockerfile.frontend.dev
     ports:
-      - "${FRONTEND_PORT:-6001}:3000"
+      - "${FRONTEND_PORT:-6001}:6001"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     env_file: .env
+    environment:
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_API_URL=${DEV_API_URL:-http://localhost:6100}
+      - WATCHPACK_POLLING=true
     depends_on:
       - api
     restart: unless-stopped

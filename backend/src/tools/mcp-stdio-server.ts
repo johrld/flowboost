@@ -198,6 +198,81 @@ server.tool(
   },
 );
 
+// ── Tool 6: Read Content Index ───────────────────────────────────
+
+server.tool(
+  "flowboost_read_content_index",
+  "Read the project's content index — all published and in-progress articles with metadata (title, category, language, keywords, word count). Use this to understand what content already exists.",
+  {
+    status: z.string().optional().describe("Filter by status: live, archived, planned, producing, review, delivered"),
+    channel: z.string().optional().describe("Filter by channel: website, social"),
+  },
+  async (args) => {
+    if (!projectDir) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "FLOWBOOST_PROJECT_DIR not set" }) }] };
+    }
+    const indexPath = path.join(projectDir, "content-index.json");
+    if (!fs.existsSync(indexPath)) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ entries: [], total: 0 }) }] };
+    }
+    const index = JSON.parse(fs.readFileSync(indexPath, "utf-8")) as {
+      lastSyncedAt?: string;
+      entries?: Array<{ status?: string; channel?: string }>;
+    };
+    let entries = index.entries ?? [];
+    if (args.status) entries = entries.filter((e) => e.status === args.status);
+    if (args.channel) entries = entries.filter((e) => e.channel === args.channel);
+    return {
+      content: [{
+        type: "text" as const,
+        text: JSON.stringify({ total: entries.length, lastSyncedAt: index.lastSyncedAt, entries }),
+      }],
+    };
+  },
+);
+
+// ── Tool 7: Read Article via GitHub API ─────────────────────────
+
+server.tool(
+  "flowboost_read_article",
+  "Read the full markdown content of a specific article from the repository via GitHub API. Use sparingly — for most tasks, the content index metadata is sufficient.",
+  {
+    filePath: z.string().describe("File path within the repo (e.g. src/content/posts/de/article-slug.md)"),
+  },
+  async (args) => {
+    if (!projectDir) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "FLOWBOOST_PROJECT_DIR not set" }) }] };
+    }
+
+    // Load project config for GitHub connector
+    const projectPath = path.join(projectDir, "project.json");
+    if (!fs.existsSync(projectPath)) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "project.json not found" }) }] };
+    }
+
+    const project = JSON.parse(fs.readFileSync(projectPath, "utf-8")) as {
+      connector?: {
+        type?: string;
+        github?: { installationId: number; owner: string; repo: string; branch: string };
+      };
+    };
+    const gh = project.connector?.github;
+    if (!gh) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "No GitHub connector configured" }) }] };
+    }
+
+    try {
+      // Dynamic import to avoid hard dependency — github.ts uses env vars for auth
+      const { getFileContent } = await import("../services/github.js");
+      const content = await getFileContent(gh.installationId, gh.owner, gh.repo, args.filePath, gh.branch);
+      return { content: [{ type: "text" as const, text: content }] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: `Failed to read article: ${msg}` }) }] };
+    }
+  },
+);
+
 // ── Start server ─────────────────────────────────────────────────
 
 const transport = new StdioServerTransport();

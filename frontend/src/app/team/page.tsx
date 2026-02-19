@@ -1,18 +1,28 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { agents } from "@/lib/agents";
-import { Settings, Activity } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { agents, phaseLabels } from "@/lib/agents";
 
-const colorMap: Record<string, string> = {
-  purple: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  blue: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  green: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  orange: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-  pink: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
-  cyan: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
-  yellow: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  indigo: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+const bgColorMap: Record<string, string> = {
+  green: "bg-green-100 dark:bg-green-900/30",
+  blue: "bg-blue-100 dark:bg-blue-900/30",
+  amber: "bg-amber-100 dark:bg-amber-900/30",
+  purple: "bg-purple-100 dark:bg-purple-900/30",
+  emerald: "bg-emerald-100 dark:bg-emerald-900/30",
+  cyan: "bg-cyan-100 dark:bg-cyan-900/30",
+  orange: "bg-orange-100 dark:bg-orange-900/30",
+  violet: "bg-violet-100 dark:bg-violet-900/30",
+};
+
+const badgeColorMap: Record<string, string> = {
+  green: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800",
+  blue: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
+  amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
+  purple: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800",
+  emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800",
+  cyan: "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800",
+  orange: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800",
+  violet: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800",
 };
 
 export default function TeamPage() {
@@ -20,89 +30,63 @@ export default function TeamPage() {
     <div className="p-8 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Team</h1>
-        <p className="text-muted-foreground">
-          Your AI editorial team — each agent specializes in a part of the content pipeline
+        <h1 className="text-2xl font-bold">Your AI Team</h1>
+        <p className="text-muted-foreground text-sm">
+          8 specialized agents that research, write, edit, and publish your content
         </p>
       </div>
 
       {/* Pipeline Flow */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        {["Researcher", "Architect", "Writer", "Editor", "Designer", "SEO", "Reviewer", "Translator"].map(
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+        {["Research", "Outline", "Writing", "Assembly", "Image", "Quality", "Translation"].map(
           (step, i, arr) => (
-            <div key={step} className="flex items-center gap-2 shrink-0">
+            <div key={step} className="flex items-center gap-1.5 shrink-0">
               <span className="text-xs font-medium bg-muted px-2.5 py-1 rounded-full">
                 {step}
               </span>
               {i < arr.length - 1 && (
-                <span className="text-muted-foreground">→</span>
+                <span className="text-muted-foreground text-xs">→</span>
               )}
             </div>
           )
         )}
       </div>
 
-      {/* Agent List */}
-      <div className="rounded-lg border overflow-hidden">
-        {/* Header Row */}
-        <div className="flex items-center gap-4 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground border-b">
-          <div className="w-10"></div>
-          <div className="w-32">Agent</div>
-          <div className="flex-1">Description</div>
-          <div className="w-20 text-center hidden md:block">Tasks</div>
-          <div className="w-20 text-center hidden md:block">Avg. time</div>
-          <div className="w-28 hidden lg:block">Last active</div>
-          <div className="w-20"></div>
-        </div>
-
-        {agents.map((agent, idx) => (
+      {/* Agent Cards */}
+      <div className="grid grid-cols-4 gap-3 max-w-3xl">
+        {agents.map((agent) => (
           <div
             key={agent.id}
-            className={`flex items-center gap-4 px-4 py-3 hover:bg-accent/50 transition-colors ${
-              idx < agents.length - 1 ? "border-b" : ""
-            }`}
+            className="rounded-xl border bg-card overflow-hidden hover:shadow-md transition-shadow"
           >
-            {/* Avatar */}
-            <div
-              className={`flex items-center justify-center w-10 h-10 rounded-full text-lg shrink-0 ${
-                colorMap[agent.color] ?? "bg-muted"
-              }`}
-            >
-              {agent.avatar}
+            {/* Avatar Image */}
+            <div className={`${bgColorMap[agent.color] ?? "bg-muted"}`}>
+              <img
+                src={agent.imageSquare}
+                alt={agent.name}
+                className="w-full h-auto"
+              />
             </div>
 
-            {/* Name + Role */}
-            <div className="w-32 shrink-0">
-              <p className="text-sm font-medium">{agent.name}</p>
-              <p className="text-xs text-muted-foreground">{agent.role}</p>
-            </div>
+            {/* Info */}
+            <div className="p-2.5 space-y-1.5">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{agent.role}</p>
+                <p className="text-sm font-bold">{agent.name}</p>
+              </div>
 
-            {/* Description */}
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-muted-foreground truncate">
-                {agent.description}
-              </p>
-            </div>
-
-            {/* Stats */}
-            <div className="w-20 text-center hidden md:block">
-              <p className="text-sm font-semibold">{agent.stats.tasksCompleted}</p>
-            </div>
-            <div className="w-20 text-center hidden md:block">
-              <p className="text-xs text-muted-foreground">{agent.stats.avgDuration}</p>
-            </div>
-            <div className="w-28 hidden lg:block">
-              <p className="text-xs text-muted-foreground">{agent.stats.lastActive}</p>
-            </div>
-
-            {/* Actions */}
-            <div className="w-20 flex gap-1 shrink-0 justify-end">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <Activity className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <Settings className="h-3.5 w-3.5" />
-              </Button>
+              {/* Phase Badges */}
+              <div className="flex flex-wrap gap-1">
+                {agent.phases.map((phase) => (
+                  <Badge
+                    key={phase}
+                    variant="outline"
+                    className={`text-[10px] px-2 py-0.5 ${badgeColorMap[agent.color] ?? ""}`}
+                  >
+                    {phaseLabels[phase] ?? phase}
+                  </Badge>
+                ))}
+              </div>
             </div>
           </div>
         ))}
