@@ -1,6 +1,6 @@
 {
   "id": "topic-1",
-  "status": "proposed",
+  "status": "produced",
   "title": "Breathing Exercises for Workplace Stress: 4 Techniques You Can Do at Your Desk",
   "category": "breathing",
   "priority": 1,
@@ -23,5 +23,7 @@
   "competitorInsights": "Articles from CNBC, Nivati, and Health Assured list techniques but lack workplace-specific context. Gaps: No guidance for discreet practice in open offices, missing tips for integrating with video calls/meetings, limited focus on preventing stress vs reactive management, no employer/HR perspective for corporate wellness programs.",
   "suggestedAngle": "Focus on discreet, office-appropriate techniques with specific scenarios (before presentation, during conflict, mid-afternoon slump, after difficult call). Include visual guides for desk-friendly postures, timing recommendations for breaks, and downloadable workplace wellness toolkit for HR departments.",
   "estimatedSections": 6,
-  "reasoning": "Fills critical breathing category gap, directly builds on existing stress content with expanded keyword diversity, strong commercial intent for B2B partnerships, complements existing anxiety/breathing techniques articles, highest strategic value for brand differentiation"
+  "reasoning": "Fills critical breathing category gap, directly builds on existing stress content with expanded keyword diversity, strong commercial intent for B2B partnerships, complements existing anxiety/breathing techniques articles, highest strategic value for brand differentiation",
+  "approvedAt": "2026-02-12T11:32:03.754Z",
+  "articleId": "eaa54c1c-8c61-4143-9704-3340b47cb308"
 }

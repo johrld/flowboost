@@ -5,6 +5,7 @@ import { runStrategyPipeline } from "../../pipeline/strategy/run.js";
 import { runProductionPipeline } from "../../pipeline/production/run.js";
 import { runVideoPipeline } from "../../pipeline/video/run.js";
 import { runAudioPipeline } from "../../pipeline/audio/run.js";
+import { runEnrichPipeline } from "../../pipeline/enrich/run.js";
 
 const log = createLogger("api:pipeline");
 
@@ -246,6 +247,65 @@ export async function pipelineRoutes(app: FastifyInstance) {
     });
 
     return { message: "Audio pipeline started", runId: run.id };
+  });
+
+  // POST /customers/:customerId/projects/:projectId/pipeline/enrich
+  app.post<{
+    Params: { customerId: string; projectId: string };
+    Body: { topicId: string };
+  }>("/enrich", async (request, reply) => {
+    const { customerId, projectId } = request.params;
+    const { topicId } = (request.body ?? {}) as { topicId?: string };
+
+    if (!topicId) {
+      return reply.status(400).send({ error: "topicId is required" });
+    }
+
+    const project = app.ctx.projectsFor(customerId).get(projectId);
+    if (!project) {
+      return reply.status(404).send({ error: "Project not found" });
+    }
+
+    const topic = app.ctx.topicsFor(customerId, projectId).get(topicId);
+    if (!topic) {
+      return reply.status(404).send({ error: "Topic not found" });
+    }
+
+    const run = app.ctx.pipelineRunsFor(customerId, projectId).create({
+      customerId,
+      projectId,
+      type: "strategy",
+      status: "pending",
+      topicId,
+      phases: [
+        { name: "enrich", status: "pending", agentCalls: [] },
+      ],
+      totalCostUsd: 0,
+      totalTokens: { input: 0, output: 0 },
+      createdAt: new Date().toISOString(),
+    });
+
+    const ctx = new PipelineContext(
+      customerId,
+      project,
+      run,
+      {
+        customers: app.ctx.customers,
+        projects: app.ctx.projectsFor(customerId),
+        articles: app.ctx.articlesFor(customerId, projectId),
+        content: app.ctx.contentFor(customerId, projectId),
+        pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
+        topics: app.ctx.topicsFor(customerId, projectId),
+      },
+      app.ctx.dataDir,
+    );
+
+    // Fire and forget — client polls topic for enriched: true
+    runEnrichPipeline(ctx, topicId).catch((error) => {
+      log.error({ runId: run.id, err: error }, "enrich pipeline failed");
+    });
+
+    return { message: "Enrichment started", runId: run.id };
   });
 
   // GET /customers/:customerId/projects/:projectId/pipeline/runs

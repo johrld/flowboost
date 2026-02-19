@@ -1,4 +1,3 @@
-import path from "node:path";
 import { createLogger } from "../../utils/logger.js";
 import { runAgentTracked, type AgentConfig } from "../engine.js";
 import type { PipelineContext } from "../context.js";
@@ -7,6 +6,10 @@ import { buildAuditorPrompt } from "../prompts/auditor.js";
 import { buildResearcherPrompt } from "../prompts/researcher.js";
 import { buildStrategistPrompt } from "../prompts/strategist.js";
 import { extractJson } from "../extract-json.js";
+import { ContentIndexStore } from "../../models/content-index.js";
+import { SyncService } from "../../services/sync.js";
+import { createSiteConnector } from "../../connectors/site/factory.js";
+import { parseFrontmatter } from "../../utils/frontmatter.js";
 
 const log = createLogger("strategy");
 
@@ -20,14 +23,17 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
 
   ctx.updateRun({ status: "running", startedAt: new Date().toISOString() });
 
-  // Clone/prepare repo for reading
-  const repoDir = await ctx.prepareRepo();
-
-  // Resolve the content directory from the connector config
-  const contentDir = project.connector.github?.contentPath
-    ?? project.connector.git?.contentPath
-    ?? "src/content/posts";
-  const repoContentDir = path.join(repoDir, contentDir);
+  // Sync Content Index via GitHub API (no repo clone needed)
+  try {
+    const indexStore = new ContentIndexStore(ctx.dataDir);
+    const syncService = new SyncService(indexStore, parseFrontmatter);
+    const connector = createSiteConnector(project);
+    const reader = connector.createReader();
+    const syncResult = await syncService.fullSync(ctx.customerId, project.id, reader);
+    log.info(syncResult, "content index synced before audit");
+  } catch (err) {
+    log.warn({ err }, "content index sync failed — audit will use stale data");
+  }
 
   // ── Phase 1: Audit ─────────────────────────────────────────────
   log.info("starting audit phase");
@@ -48,10 +54,13 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
       model,
       maxTurns: 10,
       useMcpTools: true,
-      tools: ["Read", "Glob", "mcp__flowboost__flowboost_read_project_data"],
+      tools: [
+        "mcp__flowboost__flowboost_read_project_data",
+        "mcp__flowboost__flowboost_read_content_index",
+      ],
     };
 
-    const prompt = buildAuditorPrompt(project, repoContentDir);
+    const prompt = buildAuditorPrompt(project);
     const result = await runAgentTracked(ctx, "audit", prompt, auditorConfig);
     auditResult = extractJson(result.text);
     ctx.completePhase("audit");
@@ -167,7 +176,6 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
   }
 
   // ── Done ───────────────────────────────────────────────────────
-  ctx.cleanupRepo();
   ctx.updateRun({ status: "completed", completedAt: new Date().toISOString() });
   log.info({ runId: ctx.run.id, cost: ctx.run.totalCostUsd }, "strategy pipeline completed");
 

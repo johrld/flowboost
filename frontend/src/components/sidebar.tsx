@@ -4,11 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  Compass,
   CalendarDays,
-  PenSquare,
+  FileText,
+  Share2,
   Activity,
+  Users,
+  Cable,
   Settings,
   ChevronDown,
 } from "lucide-react";
@@ -20,40 +21,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState, useEffect } from "react";
-import { getCustomers, getProjects } from "@/lib/api";
-import type { Project } from "@/lib/types";
+import { useProject } from "@/lib/project-context";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/research", label: "Research", icon: Compass },
-  { href: "/plan", label: "Plan", icon: CalendarDays },
-  { href: "/create", label: "Create", icon: PenSquare },
+  { href: "/dashboard", label: "Plan", icon: CalendarDays },
+  { href: "/content", label: "Articles", icon: FileText },
+  { href: "/social", label: "Social Posts", icon: Share2 },
   { href: "/monitor", label: "Monitor", icon: Activity },
+  { href: "/team", label: "Team", icon: Users },
 ];
 
 const settingsItems = [
+  { href: "/connectors", label: "Connectors", icon: Cable },
   { href: "/settings", label: "Project", icon: Settings },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [activeProject, setActiveProject] = useState<Project | null>(null);
-  const [customerId, setCustomerId] = useState<string>("");
-
-  useEffect(() => {
-    getCustomers().then((customers) => {
-      if (customers.length > 0) {
-        const cid = customers[0].id;
-        setCustomerId(cid);
-        getProjects(cid).then((p) => {
-          setProjects(p);
-          if (p.length > 0) setActiveProject(p[0]);
-        });
-      }
-    }).catch(() => { /* API not available */ });
-  }, []);
+  const { project, projects, setActiveProject } = useProject();
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
@@ -71,18 +56,18 @@ export function Sidebar() {
               variant="ghost"
               className="w-full justify-between font-medium"
             >
-              {activeProject?.name ?? "Loading..."}
+              {project?.name ?? "Loading..."}
               <ChevronDown className="h-4 w-4 opacity-50" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            {projects.map((project) => (
+            {projects.map((p) => (
               <DropdownMenuItem
-                key={project.id}
-                onClick={() => setActiveProject(project)}
+                key={p.id}
+                onClick={() => setActiveProject(p)}
               >
-                {project.name}
-                {project.id === activeProject?.id && (
+                {p.name}
+                {p.id === project?.id && (
                   <span className="ml-auto text-xs text-muted-foreground">Active</span>
                 )}
               </DropdownMenuItem>
@@ -122,7 +107,7 @@ export function Sidebar() {
         </div>
 
         {settingsItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
               key={item.href}

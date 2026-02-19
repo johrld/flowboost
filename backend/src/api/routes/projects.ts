@@ -1,4 +1,8 @@
 import type { FastifyInstance } from "fastify";
+import { getFileContent } from "../../services/github.js";
+import { createLogger } from "../../utils/logger.js";
+
+const syncLog = createLogger("connector-sync");
 
 export async function projectRoutes(app: FastifyInstance) {
   // GET /customers/:customerId/projects
@@ -91,6 +95,66 @@ export async function projectRoutes(app: FastifyInstance) {
       const { content } = request.body as { content: string };
       store.saveProjectBrief(projectId, content);
       return { message: "Project brief updated" };
+    },
+  );
+
+  // POST /customers/:customerId/projects/:projectId/sync — Sync data from connector
+  app.post<{ Params: { customerId: string; projectId: string } }>(
+    "/:projectId/sync",
+    async (request, reply) => {
+      const { customerId, projectId } = request.params;
+      const store = app.ctx.projectsFor(customerId);
+      const project = store.get(projectId);
+      if (!project) {
+        return reply.status(404).send({ error: "Project not found" });
+      }
+
+      const gh = (project as unknown as Record<string, unknown>).connector as {
+        type: string;
+        github?: {
+          installationId: number;
+          owner: string;
+          repo: string;
+          branch: string;
+          categoriesPath?: string;
+          authorsPath?: string;
+        };
+      };
+
+      if (gh?.type !== "github" || !gh.github?.installationId || !gh.github.owner || !gh.github.repo) {
+        return reply.status(400).send({ error: "No GitHub connector configured" });
+      }
+
+      const { installationId, owner, repo, branch, categoriesPath, authorsPath } = gh.github;
+      const result: { categories?: unknown[]; authors?: unknown[]; errors: string[] } = { errors: [] };
+
+      // Sync categories
+      if (categoriesPath) {
+        try {
+          const raw = await getFileContent(installationId, owner, repo, categoriesPath, branch);
+          result.categories = JSON.parse(raw);
+          syncLog.info({ projectId, path: categoriesPath, count: result.categories!.length }, "categories synced");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          result.errors.push(`categories: ${msg}`);
+          syncLog.warn({ projectId, path: categoriesPath, error: msg }, "categories sync failed");
+        }
+      }
+
+      // Sync authors
+      if (authorsPath) {
+        try {
+          const raw = await getFileContent(installationId, owner, repo, authorsPath, branch);
+          result.authors = JSON.parse(raw);
+          syncLog.info({ projectId, path: authorsPath, count: result.authors!.length }, "authors synced");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          result.errors.push(`authors: ${msg}`);
+          syncLog.warn({ projectId, path: authorsPath, error: msg }, "authors sync failed");
+        }
+      }
+
+      return result;
     },
   );
 }

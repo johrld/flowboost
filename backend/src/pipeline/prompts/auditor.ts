@@ -1,6 +1,6 @@
 import type { Project } from "../../models/types.js";
 
-export function buildAuditorPrompt(project: Project, contentDir: string): string {
+export function buildAuditorPrompt(project: Project): string {
   const categories = project.categories.map((c) => c.id).join(", ");
   const languages = project.languages.filter((l) => l.enabled).map((l) => l.code).join(", ");
 
@@ -20,19 +20,17 @@ Analyze existing content and identify gaps. Output a structured JSON audit.
 
 ## Instructions
 
-1. Use the flowboost_read_project_data tool to read the project's categories, languages, and keywords:
-   - projectId: "${project.id}"
-   - resource: "categories", "languages", "keywords"
+1. Use flowboost_read_content_index to load all existing content entries:
+   - status: "live", channel: "website"
 
-2. Read ALL existing markdown files in: ${contentDir}
-   Use the Read tool to scan the directory and read each .md file's frontmatter.
-   Extract: title, category, lang, translationKey, keywords, pubDate
+2. Use flowboost_read_project_data to read the project's categories, languages, and keywords:
+   - resource: "project"
 
-3. Analyze:
+3. Analyze the content index:
    - Total articles per category (target: balanced across ${categories})
    - Total articles per language (target: same count across ${languages})
-   - Missing translations (articles that exist in one language but not others)
-   - Category gaps (categories with 0 or fewer articles)
+   - Missing translations (entries where not all languages have a version)
+   - Category gaps (categories with fewer articles)
    - Keyword coverage gaps
 
 4. Output a JSON object with this exact structure:
@@ -47,7 +45,7 @@ Analyze existing content and identify gaps. Output a structured JSON audit.
       "title": "...",
       "slug": "...",
       "category": "...",
-      "lang": "...",
+      "languages": ["de", "en"],
       "translationKey": "...",
       "keywords": ["..."]
     }

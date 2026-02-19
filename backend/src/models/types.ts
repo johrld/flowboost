@@ -154,8 +154,16 @@ export interface Topic {
   estimatedSections: number;
   reasoning: string;
 
+  // Origin tracking
+  source?: "pipeline" | "user";
+  enriched?: boolean;
+  userNotes?: string;
+
   createdAt?: string;
   runId?: string;
+
+  // Scheduling
+  scheduledDate?: string; // ISO: "2025-02-14T09:00" or "2025-02-14" (legacy)
 
   // Set after production
   articleId?: string;
@@ -269,6 +277,8 @@ export interface ContentVersion {
 
   createdAt: string;
   createdBy: "pipeline" | "user" | "sync";
+  createdByName?: string;
+  publishedAt?: string;
 }
 
 export interface LanguageVariant {
