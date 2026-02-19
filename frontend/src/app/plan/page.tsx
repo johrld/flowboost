@@ -393,13 +393,7 @@ function DetailDialog({
               <span className="font-medium capitalize">{topic.searchIntent}</span>
             </div>
           )}
-          {topic?.priority != null && (
-            <div className="flex items-center justify-between py-2">
-              <span className="text-muted-foreground">Priority</span>
-              <span className="font-medium">P{topic.priority}</span>
-            </div>
-          )}
-          {topic?.estimatedSections && (
+{topic?.estimatedSections && (
             <div className="flex items-center justify-between py-2">
               <span className="text-muted-foreground">Sections</span>
               <span className="font-medium">~{topic.estimatedSections}</span>
@@ -515,6 +509,14 @@ function DetailDialog({
             <Link href={`/content/${item.id}`} className="flex-1">
               <Button className="w-full gap-1.5">
                 Open in Editor
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          )}
+          {item.type === "topic" && (
+            <Link href={`/content/topics/${item.topicId}`} className="flex-1">
+              <Button variant="outline" className="w-full gap-1.5">
+                View Details
                 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </Link>

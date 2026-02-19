@@ -76,7 +76,6 @@ import type {
   TopicStatus,
   PipelineRun,
 } from "@/lib/types";
-import { agents as agentRoster } from "@/lib/agents";
 import Link from "next/link";
 
 // ── Types ───────────────────────────────────────────────────────
@@ -291,9 +290,7 @@ function DraggableCard({
                 <GripVertical className="h-3 w-3 text-muted-foreground" />
               </div>
             )}
-            <span className="text-[11px] text-muted-foreground capitalize">
-              {item.type === "content" ? "article" : "topic"}
-            </span>
+            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
           </div>
           {time && (
             <span className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
@@ -306,21 +303,14 @@ function DraggableCard({
         {topic?.suggestedAngle && (
           <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{topic.suggestedAngle}</p>
         )}
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-1.5 min-w-0">
-            {topic?.keywords?.primary && (
-              <span className="inline-flex items-center rounded-md bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium truncate">
-                {topic.keywords.primary}
-              </span>
-            )}
-            {catLabel && (
-              <span className="text-[10px] text-muted-foreground truncate">{catLabel}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {item.contentStatus && <ContentStatusBadge status={item.contentStatus} />}
-            {item.topicStatus && <TopicStatusBadge status={item.topicStatus} />}
-          </div>
+        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+          {item.contentStatus && <ContentStatusBadge status={item.contentStatus} />}
+          {item.topicStatus && <TopicStatusBadge status={item.topicStatus} />}
+          {catLabel && (
+            <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              {catLabel}
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -419,13 +409,7 @@ function DetailDialog({
               <span className="font-medium capitalize">{topic.searchIntent}</span>
             </div>
           )}
-          {topic?.priority != null && (
-            <div className="flex items-center justify-between py-2">
-              <span className="text-muted-foreground">Priority</span>
-              <span className="font-medium">P{topic.priority}</span>
-            </div>
-          )}
-          {topic?.estimatedSections && (
+{topic?.estimatedSections && (
             <div className="flex items-center justify-between py-2">
               <span className="text-muted-foreground">Sections</span>
               <span className="font-medium">~{topic.estimatedSections}</span>
@@ -536,6 +520,14 @@ function DetailDialog({
             <Link href={`/content/${item.id}`} className="flex-1">
               <Button className="w-full gap-1.5">
                 Open in Editor
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          )}
+          {item.type === "topic" && (
+            <Link href={`/content/topics/${item.topicId}`} className="flex-1">
+              <Button variant="outline" className="w-full gap-1.5">
+                View Details
                 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </Link>
@@ -1235,24 +1227,7 @@ export default function DashboardPage() {
         </Badge>
       </div>
 
-      {/* AI Team */}
-      <div className="flex items-center gap-5">
-        <Link href="/team" className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0 hover:text-foreground transition-colors">
-          Your Team
-        </Link>
-        <div className="flex items-center gap-3">
-          {agentRoster.map((agent) => (
-            <div key={agent.id} className="flex items-center gap-1.5">
-              <div className="h-7 w-7 rounded-full overflow-hidden">
-                <img src={agent.image} alt={agent.name} className="h-full w-full object-cover" />
-              </div>
-              <span className="text-[11px] text-muted-foreground hidden lg:block">{agent.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Calendar */}
+{/* Calendar */}
       <DndContext
         sensors={sensors}
         onDragStart={handleDragStart}

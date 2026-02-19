@@ -112,6 +112,27 @@ export function createTopic(
   });
 }
 
+export async function getTopic(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+): Promise<Topic | null> {
+  const topics = await getTopics(customerId, projectId);
+  return topics.find((t) => t.id === topicId) ?? null;
+}
+
+export function updateTopicNotes(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  userNotes: string,
+): Promise<{ message: string; topic: Topic }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ userNotes }),
+  });
+}
+
 export function enrichTopic(
   customerId: string,
   projectId: string,

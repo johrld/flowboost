@@ -711,7 +711,13 @@ function TopicList({
                   {isEnriching && (
                     <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
                   )}
-                  <p className="text-sm font-semibold truncate">{topic.title}</p>
+                  <Link
+                    href={`/content/topics/${topic.id}`}
+                    className="text-sm font-semibold truncate hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {topic.title}
+                  </Link>
                   {isNew && !isEnriching && (
                     <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium shrink-0">
                       New
@@ -809,6 +815,12 @@ function TopicList({
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 pt-1">
+                  <Link href={`/content/topics/${topic.id}`} onClick={(e) => e.stopPropagation()}>
+                    <Button size="sm" variant="outline" className="h-7">
+                      <Eye className="mr-1 h-3 w-3" />
+                      Open
+                    </Button>
+                  </Link>
                   {topic.source === "user" && !topic.enriched && !isEnriching && (
                     <Button
                       size="sm"
@@ -1142,6 +1154,11 @@ function TopicBoardCard({
 
           {/* Actions */}
           <div className="flex items-center gap-1.5 pt-0.5">
+            <Link href={`/content/topics/${topic.id}`} onClick={(e) => e.stopPropagation()}>
+              <Button size="sm" variant="outline" className="h-6 text-[11px] px-2">
+                <Eye className="mr-1 h-3 w-3" />Details
+              </Button>
+            </Link>
             {topic.source === "user" && !topic.enriched && !isEnriching && (
               <Button size="sm" variant="outline" className="h-6 text-[11px] px-2"
                 onClick={(e) => { e.stopPropagation(); handleEnrich(topic.id); }}>
