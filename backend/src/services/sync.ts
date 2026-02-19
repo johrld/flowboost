@@ -63,24 +63,30 @@ export class SyncService {
     // Group files by translation key
     const grouped = this.groupByTranslationKey(files);
 
-    for (const [translationKey, langFiles] of grouped) {
+    for (const [translationKey, { langFiles, rawContent }] of grouped) {
       seenTranslationKeys.add(translationKey);
 
       const existing = this.indexStore.getByTranslationKey(index, translationKey);
 
       if (!existing) {
         // New content (external)
-        const entry = this.createEntry(translationKey, langFiles, "external", "live");
+        const entry = this.createEntry(translationKey, langFiles, rawContent, "external", "live");
         index = this.indexStore.upsertEntry(index, entry);
         result.added.push(translationKey);
         log.info({ translationKey }, "new external content detected");
       } else {
         // Check if any language version changed
         const changed = this.hasChanges(existing, langFiles);
-        if (changed) {
-          const updatedEntry = this.updateEntryLanguages(existing, langFiles);
+        // Always update metadata (category/tags/keywords) — may have been missing from older syncs
+        const metadataChanged = this.updateEntryMetadata(existing, rawContent);
+        if (changed || metadataChanged) {
+          const updatedEntry = this.updateEntryLanguages(
+            metadataChanged ? metadataChanged : existing,
+            langFiles,
+          );
           index = this.indexStore.upsertEntry(index, updatedEntry);
-          result.updated.push(translationKey);
+          if (changed) result.updated.push(translationKey);
+          else result.unchanged++;
         } else {
           result.unchanged++;
         }
@@ -166,11 +172,11 @@ export class SyncService {
 
     const grouped = this.groupByTranslationKey(files);
 
-    for (const [translationKey, langFiles] of grouped) {
+    for (const [translationKey, { langFiles, rawContent }] of grouped) {
       const existing = this.indexStore.getByTranslationKey(index, translationKey);
 
       if (!existing) {
-        const entry = this.createEntry(translationKey, langFiles, "external", "live");
+        const entry = this.createEntry(translationKey, langFiles, rawContent, "external", "live");
         index = this.indexStore.upsertEntry(index, entry);
         result.added.push(translationKey);
       } else {
@@ -227,8 +233,8 @@ export class SyncService {
 
   private groupByTranslationKey(
     files: Map<string, { content: string; sha: string }>,
-  ): Map<string, SiteContentLangMeta[]> {
-    const grouped = new Map<string, SiteContentLangMeta[]>();
+  ): Map<string, { langFiles: SiteContentLangMeta[]; rawContent: string }> {
+    const grouped = new Map<string, { langFiles: SiteContentLangMeta[]; rawContent: string }>();
 
     for (const [filePath, { content, sha }] of files) {
       try {
@@ -239,9 +245,9 @@ export class SyncService {
         const translationKey = this.extractTranslationKey(content) ?? langMeta.slug;
 
         if (!grouped.has(translationKey)) {
-          grouped.set(translationKey, []);
+          grouped.set(translationKey, { langFiles: [], rawContent: content });
         }
-        grouped.get(translationKey)!.push(langMeta);
+        grouped.get(translationKey)!.langFiles.push(langMeta);
       } catch (err) {
         log.warn({ filePath, err }, "failed to parse frontmatter");
       }
@@ -259,11 +265,13 @@ export class SyncService {
   private createEntry(
     translationKey: string,
     langFiles: SiteContentLangMeta[],
+    rawContent: string,
     source: "flowboost" | "external",
     status: "planned" | "producing" | "review" | "delivered" | "live" | "archived",
   ): ContentIndexEntry {
-    const firstLang = langFiles[0];
-    const category = this.extractFrontmatterField(translationKey, "category");
+    const category = this.extractFrontmatterField(rawContent, "category");
+    const tagsRaw = this.extractFrontmatterList(rawContent, "tags");
+    const keywordsRaw = this.extractFrontmatterList(rawContent, "keywords");
 
     return {
       id: crypto.randomUUID(),
@@ -275,6 +283,8 @@ export class SyncService {
         translationKey,
         languages: langFiles,
         category: category ?? undefined,
+        tags: tagsRaw.length > 0 ? tagsRaw : undefined,
+        keywords: keywordsRaw.length > 0 ? keywordsRaw : undefined,
       },
       createdAt: new Date().toISOString(),
       lastSyncedAt: new Date().toISOString(),
@@ -309,6 +319,34 @@ export class SyncService {
     };
   }
 
+  /** Returns updated entry if metadata was missing/changed, null otherwise. */
+  private updateEntryMetadata(
+    existing: ContentIndexEntry,
+    rawContent: string,
+  ): ContentIndexEntry | null {
+    if (!existing.site) return null;
+
+    const category = this.extractFrontmatterField(rawContent, "category");
+    const tags = this.extractFrontmatterList(rawContent, "tags");
+    const keywords = this.extractFrontmatterList(rawContent, "keywords");
+
+    const catChanged = (category ?? undefined) !== existing.site.category;
+    const tagsChanged = JSON.stringify(tags) !== JSON.stringify(existing.site.tags ?? []);
+    const kwChanged = JSON.stringify(keywords) !== JSON.stringify(existing.site.keywords ?? []);
+
+    if (!catChanged && !tagsChanged && !kwChanged) return null;
+
+    return {
+      ...existing,
+      site: {
+        ...existing.site,
+        category: category ?? undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        keywords: keywords.length > 0 ? keywords : undefined,
+      },
+    };
+  }
+
   private hasChanges(
     existing: ContentIndexEntry,
     langFiles: SiteContentLangMeta[],
@@ -331,5 +369,18 @@ export class SyncService {
     const match = content.match(new RegExp(`^${field}:\\s*(.+)$`, "m"));
     if (!match) return null;
     return match[1].trim().replace(/^["']|["']$/g, "");
+  }
+
+  /** Extract a YAML list field (e.g. tags, keywords) from frontmatter. */
+  private extractFrontmatterList(content: string, field: string): string[] {
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!fmMatch) return [];
+    const fm = fmMatch[1];
+    const listMatch = fm.match(new RegExp(`^${field}:\\s*\\n((?:\\s+-\\s+.+\\n?)*)`, "m"));
+    if (!listMatch) return [];
+    return listMatch[1]
+      .split("\n")
+      .map((line) => line.replace(/^\s+-\s+/, "").trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
   }
 }

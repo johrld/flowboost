@@ -1,9 +1,102 @@
 // FlowBoost Dashboard Types (mirrors backend models)
 
-// ── Article Status (2 dimensions) ───────────────────────────────
+// ── Content V3 ──────────────────────────────────────────────────
 
-export type ArticleStage = "draft" | "producing" | "ready" | "live" | "archived";
-export type ArticleCondition = "ok" | "needs_review" | "editing";
+export type ContentType = "article" | "guide" | "landing_page" | "video" | "audio" | "social_post";
+
+export type ContentItemStatus =
+  | "planned"
+  | "producing"
+  | "draft"
+  | "review"
+  | "approved"
+  | "delivered"
+  | "published"
+  | "updating"
+  | "archived";
+
+export interface ContentItem {
+  id: string;
+  customerId: string;
+  projectId: string;
+  type: ContentType;
+  status: ContentItemStatus;
+  title: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
+  keywords?: string[];
+  topicId?: string;
+  translationKey?: string;
+  parentId?: string;
+  currentVersionId?: string;
+  lastPublishedVersionId?: string;
+  deliveryRef?: string;
+  deliveryUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  approvedAt?: string;
+  deliveredAt?: string;
+  publishedAt?: string;
+  archivedAt?: string;
+  // Populated by GET /content/:id
+  versions?: ContentVersion[];
+}
+
+export interface ContentVersion {
+  id: string;
+  contentId: string;
+  versionNumber: number;
+  languages: LanguageVariant[];
+  assets: MediaAssetRef[];
+  text?: TextVersionMeta;
+  video?: VideoVersionMeta;
+  audio?: AudioVersionMeta;
+  pipelineRunId?: string;
+  seoScore?: number;
+  qualityScore?: number;
+  createdAt: string;
+  createdBy: "pipeline" | "user" | "sync";
+  createdByName?: string;
+  publishedAt?: string;
+}
+
+export interface LanguageVariant {
+  lang: string;
+  slug: string;
+  title: string;
+  description: string;
+  contentPath: string;
+  wordCount?: number;
+}
+
+export interface MediaAssetRef {
+  assetId: string;
+  role: "hero" | "thumbnail" | "inline" | "attachment" | "social_media";
+  lang?: string;
+}
+
+export interface TextVersionMeta {
+  wordCount: number;
+  headingCount: number;
+  hasFaq: boolean;
+  hasAnswerCapsule: boolean;
+  readabilityScore?: number;
+}
+
+export interface VideoVersionMeta {
+  durationSeconds: number;
+  resolution: string;
+  format: string;
+  hasSubtitles: boolean;
+}
+
+export interface AudioVersionMeta {
+  durationSeconds: number;
+  format: string;
+  sampleRate: number;
+  hasTranscript: boolean;
+}
 
 // ── Topic Status ────────────────────────────────────────────────
 
@@ -50,8 +143,11 @@ export interface ConnectorConfig {
     owner: string;
     repo: string;
     branch: string;
+    framework?: string;
     contentPath: string;
     assetsPath: string;
+    categoriesPath?: string;
+    authorsPath?: string;
   };
   filesystem?: {
     outputDir: string;
@@ -102,6 +198,9 @@ export interface Topic {
   suggestedAngle: string;
   estimatedSections: number;
   reasoning: string;
+  source?: "pipeline" | "user";
+  enriched?: boolean;
+  userNotes?: string;
   createdAt?: string;
   runId?: string;
   scheduledDate?: string;
@@ -111,37 +210,12 @@ export interface Topic {
   rejectionReason?: string;
 }
 
-export interface Article {
-  id: string;
-  projectId: string;
-  topicId: string;
-  title: string;
-  slug: string;
-  category: string;
-  author: string;
-  stage: ArticleStage;
-  condition: ArticleCondition;
-  lang: string;
-  createdAt: string;
-  scheduledDate?: string;
-  publishedAt?: string;
-  lastEditedAt?: string;
-  versions: ArticleVersion[];
-}
-
-export interface ArticleVersion {
-  id: string;
-  lang: string;
-  content: string; // markdown
-  frontmatter: Record<string, unknown>;
-  createdAt: string;
-}
 
 export interface PipelineRun {
   id: string;
   customerId: string;
   projectId: string;
-  type: "strategy" | "production";
+  type: "strategy" | "production" | "video_production" | "audio_production" | "social_production" | "update" | "translation";
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
   topicId?: string;
   phases: PipelinePhase[];
@@ -194,6 +268,53 @@ export interface Category {
   labels: Record<string, string>; // lang -> label
 }
 
+// ── Content Index ────────────────────────────────────────────────
+
+export type ContentStatus = "planned" | "producing" | "review" | "delivered" | "live" | "archived";
+
+export interface SiteContentLangMeta {
+  lang: string;
+  slug: string;
+  title: string;
+  description: string;
+  wordCount: number;
+  filePath: string;
+  sha: string;
+}
+
+export interface SiteContentMeta {
+  type: "blog" | "landing" | "guide" | "page";
+  translationKey: string;
+  languages: SiteContentLangMeta[];
+  category?: string;
+  tags?: string[];
+  keywords?: string[];
+  canonicalUrl?: string;
+}
+
+export interface ContentIndexEntry {
+  id: string;
+  channel: "website" | "social";
+  source: "flowboost" | "external";
+  status: ContentStatus;
+  site?: SiteContentMeta;
+  parentId?: string;
+  articleId?: string;
+  topicId?: string;
+  createdAt: string;
+  firstPublishedAt?: string;
+  lastUpdatedAt?: string;
+  lastSyncedAt: string;
+  publications: { platform: string; status: string; url?: string; publishedAt?: string }[];
+}
+
+export interface ContentIndex {
+  projectId: string;
+  lastSyncedAt: string;
+  total: number;
+  entries: ContentIndexEntry[];
+}
+
 // ── Brief ─────────────────────────────────────────────────────────
 
 export interface Brief {
@@ -215,13 +336,3 @@ export interface Brief {
   competitors: { domain: string; position: number; wordCount: number; score: number }[];
 }
 
-// ── Dashboard Actions ─────────────────────────────────────────────
-
-export type ActionType = "opportunity" | "review" | "completed";
-
-export interface DashboardAction {
-  type: ActionType;
-  message: string;
-  count?: number;
-  link: string;
-}
