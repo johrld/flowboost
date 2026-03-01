@@ -59,6 +59,7 @@ import { useProject } from "@/lib/project-context";
 import { getTopics, getContent, scheduleTopic, approveTopic, startProduction } from "@/lib/api";
 import type { Topic, ContentItem, ContentItemStatus, TopicStatus } from "@/lib/types";
 import Link from "next/link";
+import { NewContentWizard } from "@/components/new-content-wizard";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -725,6 +726,7 @@ export default function PlanPage() {
   // Dialog state
   const [selectedItem, setSelectedItem] = useState<CalendarItem | null>(null);
   const [assignDate, setAssignDate] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   useEffect(() => {
     if (!customerId || !projectId) return;
@@ -1131,13 +1133,17 @@ export default function PlanPage() {
           <h1 className="text-2xl font-bold">Plan</h1>
           <p className="text-muted-foreground">Editorial calendar</p>
         </div>
-        <Link href="/content/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Content
-          </Button>
-        </Link>
+        <Button onClick={() => setWizardOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Content
+        </Button>
       </div>
+
+      <NewContentWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onTopicCreated={(topic) => setTopicData((prev) => [topic, ...prev])}
+      />
 
       {/* Calendar */}
       <DndContext

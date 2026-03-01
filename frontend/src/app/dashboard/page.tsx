@@ -77,6 +77,7 @@ import type {
   PipelineRun,
 } from "@/lib/types";
 import Link from "next/link";
+import { NewContentWizard } from "@/components/new-content-wizard";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -743,9 +744,9 @@ function AssignDialog({
                       <Link href="/content">View Articles</Link>
                     </Button>
                     <Button size="sm" asChild>
-                      <Link href="/content/new">
+                      <Link href="/content">
                         <Plus className="mr-1.5 h-3.5 w-3.5" />
-                        New Topic
+                        New Content
                       </Link>
                     </Button>
                   </div>
@@ -792,6 +793,7 @@ export default function DashboardPage() {
 
   const [selectedItem, setSelectedItem] = useState<CalendarItem | null>(null);
   const [assignDate, setAssignDate] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   useEffect(() => {
     if (!customerId || !projectId) return;
@@ -1183,13 +1185,17 @@ export default function DashboardPage() {
             {project?.name ?? "FlowBoost"} · {format(today, "EEEE, d. MMMM yyyy", { locale: de })}
           </p>
         </div>
-        <Link href="/content/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Content
-          </Button>
-        </Link>
+        <Button onClick={() => setWizardOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Content
+        </Button>
       </div>
+
+      <NewContentWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onTopicCreated={(topic) => setTopicData((prev) => [topic, ...prev])}
+      />
 
       {/* Compact Stats */}
       <div className="flex items-center gap-3 flex-wrap">

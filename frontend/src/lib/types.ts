@@ -1,3 +1,11 @@
+// ── Chat ─────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  ts: string;
+}
+
 // FlowBoost Dashboard Types (mirrors backend models)
 
 // ── Content V3 ──────────────────────────────────────────────────
@@ -198,6 +206,7 @@ export interface Topic {
   suggestedAngle: string;
   estimatedSections: number;
   reasoning: string;
+  format?: "article" | "guide" | "landing_page" | "social_post";
   source?: "pipeline" | "user";
   enriched?: boolean;
   userNotes?: string;

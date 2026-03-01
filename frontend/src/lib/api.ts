@@ -1,4 +1,4 @@
-import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex } from "./types";
+import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
 
@@ -88,10 +88,7 @@ export function approveTopic(customerId: string, projectId: string, topicId: str
 }
 
 export function scheduleTopic(customerId: string, projectId: string, topicId: string, scheduledDate: string | null): Promise<{ message: string; topic: Topic }> {
-  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ scheduledDate }),
-  });
+  return updateTopic(customerId, projectId, topicId, { scheduledDate } as Partial<Topic>);
 }
 
 export function rejectTopic(customerId: string, projectId: string, topicId: string, reason?: string): Promise<{ message: string; topic: Topic }> {
@@ -101,10 +98,14 @@ export function rejectTopic(customerId: string, projectId: string, topicId: stri
   });
 }
 
+export function restoreTopic(customerId: string, projectId: string, topicId: string): Promise<{ message: string; topic: Topic }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/restore`, { method: "POST" });
+}
+
 export function createTopic(
   customerId: string,
   projectId: string,
-  data: { title: string; category?: string; userNotes?: string },
+  data: { title: string; category?: string; userNotes?: string; format?: string },
 ): Promise<Topic> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics`, {
     method: "POST",
@@ -117,8 +118,23 @@ export async function getTopic(
   projectId: string,
   topicId: string,
 ): Promise<Topic | null> {
-  const topics = await getTopics(customerId, projectId);
-  return topics.find((t) => t.id === topicId) ?? null;
+  try {
+    return await fetchJson<Topic>(`/customers/${customerId}/projects/${projectId}/topics/${topicId}`);
+  } catch {
+    return null;
+  }
+}
+
+export function updateTopic(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  data: Partial<Topic>,
+): Promise<{ message: string; topic: Topic }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 }
 
 export function updateTopicNotes(
@@ -127,10 +143,7 @@ export function updateTopicNotes(
   topicId: string,
   userNotes: string,
 ): Promise<{ message: string; topic: Topic }> {
-  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ userNotes }),
-  });
+  return updateTopic(customerId, projectId, topicId, { userNotes });
 }
 
 export function enrichTopic(
@@ -141,6 +154,40 @@ export function enrichTopic(
   return fetchJson(`/customers/${customerId}/projects/${projectId}/pipeline/enrich`, {
     method: "POST",
     body: JSON.stringify({ topicId }),
+  });
+}
+
+// ── Topic Chat ───────────────────────────────────────────────────
+
+export function getTopicChat(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+): Promise<ChatMessage[]> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/chat`);
+}
+
+export function sendTopicChat(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  message: string,
+): Promise<{ reply: string; topic: Topic; suggestedUpdates?: Partial<Topic> }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/chat`, {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
+}
+
+export function applyTopicChatUpdates(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  updates: Partial<Topic>,
+): Promise<{ message: string; topic: Topic }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/chat/apply`, {
+    method: "POST",
+    body: JSON.stringify({ updates }),
   });
 }
 

@@ -10,15 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TopicStatusBadge, ContentStatusBadge, ContentTypeBadge } from "@/components/status-badge";
 import { useProject } from "@/lib/project-context";
@@ -27,9 +18,8 @@ import {
   getContent,
   approveTopic,
   rejectTopic,
-  startStrategy,
+  restoreTopic,
   startProduction,
-  createTopic,
   enrichTopic,
 } from "@/lib/api";
 import type { Topic, ContentItem, ContentItemStatus } from "@/lib/types";
@@ -44,18 +34,18 @@ import {
   Loader2,
   Check,
   Plus,
-  Lightbulb,
-  Wand2,
   FileText,
   Calendar,
   List,
   LayoutGrid,
+  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
+import { NewContentWizard } from "@/components/new-content-wizard";
 
 // ── Tab configuration ──────────────────────────────────────────
 
-type TabKey = "ideas" | "in_production" | "review" | "published" | "archived" | "all";
+type TabKey = "ideas" | "rejected" | "in_production" | "review" | "published" | "archived" | "all";
 
 const IDEA_TOPIC_STATUSES = ["proposed", "approved"] as const;
 
@@ -91,16 +81,10 @@ export default function ContentPage() {
   // Topic interaction (from Research)
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [researchLoading, setResearchLoading] = useState(false);
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
 
-  // New Topic dialog (from Research)
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<"choose" | "manual">("choose");
-  const [newTopicTitle, setNewTopicTitle] = useState("");
-  const [newTopicCategory, setNewTopicCategory] = useState("");
-  const [newTopicNotes, setNewTopicNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  // New Content wizard
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   // ── Data loading ─────────────────────────────────────────────
 
@@ -160,6 +144,18 @@ export default function ContentPage() {
     }
   };
 
+  const handleRestore = async (topicId: string) => {
+    setActionLoading(topicId);
+    try {
+      await restoreTopic(customerId, projectId, topicId);
+      setTopics((prev) => prev.map((t) => t.id === topicId ? { ...t, status: "proposed" as const } : t));
+    } catch (err) {
+      console.error("Failed to restore topic:", err);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleProduce = async (topicId: string) => {
     setActionLoading(topicId);
     try {
@@ -171,18 +167,6 @@ export default function ContentPage() {
       console.error("Failed to start production:", err);
     } finally {
       setActionLoading(null);
-    }
-  };
-
-  const handleNewResearch = async () => {
-    setResearchLoading(true);
-    setDialogOpen(false);
-    try {
-      await startStrategy(customerId, projectId);
-      router.push("/monitor");
-    } catch (err) {
-      console.error("Failed to start research:", err);
-      setResearchLoading(false);
     }
   };
 
@@ -220,34 +204,9 @@ export default function ContentPage() {
     }, 120_000);
   };
 
-  const handleSubmitTopic = async () => {
-    if (!newTopicTitle.trim() || !customerId || !projectId) return;
-    setSubmitting(true);
-    try {
-      const topic = await createTopic(customerId, projectId, {
-        title: newTopicTitle.trim(),
-        category: newTopicCategory || undefined,
-        userNotes: newTopicNotes.trim() || undefined,
-      });
-      setTopics((prev) => [topic, ...prev]);
-      setNewTopicTitle("");
-      setNewTopicCategory("");
-      setNewTopicNotes("");
-      setDialogOpen(false);
-      setDialogMode("choose");
-
-      // Auto-enrich
-      try {
-        await enrichTopic(customerId, projectId, topic.id);
-        startEnrichmentPolling(topic.id);
-      } catch {
-        // Enrichment failed silently — user can retry via expand
-      }
-    } catch (err) {
-      console.error("Failed to create topic:", err);
-    } finally {
-      setSubmitting(false);
-    }
+  const handleTopicCreated = (topic: Topic) => {
+    setTopics((prev) => [topic, ...prev]);
+    startEnrichmentPolling(topic.id);
   };
 
   const handleEnrich = async (topicId: string) => {
@@ -260,24 +219,19 @@ export default function ContentPage() {
     }
   };
 
-  const openDialog = () => {
-    setDialogMode("choose");
-    setNewTopicTitle("");
-    setNewTopicCategory("");
-    setNewTopicNotes("");
-    setDialogOpen(true);
-  };
-
   // ── Derived data ─────────────────────────────────────────────
 
   const ideaTopics = topics.filter(
     (t) => (IDEA_TOPIC_STATUSES as readonly string[]).includes(t.status),
   );
 
+  const rejectedTopics = topics.filter((t) => t.status === "rejected");
+
   const topicById = new Map(topics.map((t) => [t.id, t]));
 
   const tabCounts: Record<TabKey, number> = {
     ideas: ideaTopics.length,
+    rejected: rejectedTopics.length,
     in_production: items.filter((i) => CONTENT_TAB_MAP[i.status] === "in_production").length,
     review: items.filter((i) => CONTENT_TAB_MAP[i.status] === "review").length,
     published: items.filter((i) => CONTENT_TAB_MAP[i.status] === "published").length,
@@ -370,115 +324,18 @@ export default function ContentPage() {
               <LayoutGrid className="h-4 w-4" />
             </Button>
           </div>
-          <Button onClick={openDialog} disabled={researchLoading}>
-            {researchLoading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="mr-2 h-4 w-4" />
-            )}
-            New Topic
+          <Button onClick={() => setWizardOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Content
           </Button>
         </div>
       </div>
 
-      {/* New Topic Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {dialogMode === "choose" ? "New Topic" : "Suggest a Topic"}
-            </DialogTitle>
-          </DialogHeader>
-
-          {dialogMode === "choose" ? (
-            <div className="grid gap-3 py-2">
-              <button
-                onClick={handleNewResearch}
-                disabled={researchLoading}
-                className="flex items-start gap-4 rounded-lg border p-4 text-left hover:bg-muted/50 transition-colors"
-              >
-                <div className="rounded-full bg-primary/10 p-2.5 shrink-0">
-                  <Wand2 className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium text-sm">AI Discovery</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Let the AI research your market and find content opportunities automatically
-                  </p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setDialogMode("manual")}
-                className="flex items-start gap-4 rounded-lg border p-4 text-left hover:bg-muted/50 transition-colors"
-              >
-                <div className="rounded-full bg-amber-500/10 p-2.5 shrink-0">
-                  <Lightbulb className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <p className="font-medium text-sm">Own Idea</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Submit your own topic idea — AI will research keywords and competitors for you
-                  </p>
-                </div>
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4 py-2">
-              <div className="space-y-2">
-                <Label htmlFor="topic-title">Title</Label>
-                <Input
-                  id="topic-title"
-                  value={newTopicTitle}
-                  onChange={(e) => setNewTopicTitle(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) handleSubmitTopic(); }}
-                  placeholder="e.g. How to start meditating as a beginner"
-                  autoFocus
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="topic-category">Category (optional)</Label>
-                <Select value={newTopicCategory} onValueChange={setNewTopicCategory}>
-                  <SelectTrigger id="topic-category">
-                    <SelectValue placeholder="Choose a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value=" ">No preference</SelectItem>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.labels.de ?? cat.labels.en ?? cat.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="topic-notes">Notes (optional)</Label>
-                <Textarea
-                  id="topic-notes"
-                  value={newTopicNotes}
-                  onChange={(e) => setNewTopicNotes(e.target.value)}
-                  placeholder="Any context, angle, or audience you have in mind..."
-                  rows={3}
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setDialogMode("choose")} disabled={submitting}>
-                  Back
-                </Button>
-                <Button onClick={handleSubmitTopic} disabled={submitting || !newTopicTitle.trim()}>
-                  {submitting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="mr-2 h-4 w-4" />
-                  )}
-                  Submit & Analyze
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <NewContentWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onTopicCreated={handleTopicCreated}
+      />
 
       {/* Board View */}
       {viewMode === "board" && (
@@ -507,6 +364,12 @@ export default function ContentPage() {
             Ideas
             {tabCounts.ideas > 0 && <span className="ml-1.5 text-xs text-muted-foreground">({tabCounts.ideas})</span>}
           </TabsTrigger>
+          {rejectedTopics.length > 0 && (
+            <TabsTrigger value="rejected">
+              Rejected
+              <span className="ml-1.5 text-xs text-muted-foreground">({tabCounts.rejected})</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="in_production">
             In Production
             {tabCounts.in_production > 0 && <span className="ml-1.5 text-xs text-muted-foreground">({tabCounts.in_production})</span>}
@@ -548,9 +411,26 @@ export default function ContentPage() {
               icon={<Sparkles className="mb-3 h-8 w-8 text-muted-foreground" />}
               title="No content ideas yet"
               description="Discover new topics or submit your own"
-              action={<Button className="mt-4" onClick={openDialog}><Plus className="mr-2 h-4 w-4" />New Topic</Button>}
+              action={<Button className="mt-4" onClick={() => setWizardOpen(true)}><Plus className="mr-2 h-4 w-4" />New Content</Button>}
             />
           )}
+        </TabsContent>
+
+        {/* Rejected Tab */}
+        <TabsContent value="rejected" className="mt-4">
+          <TopicList
+            topics={rejectedTopics.filter((t) => filterCategory === "all" || t.category === filterCategory)}
+            categories={categories}
+            expandedTopics={expandedTopics}
+            enrichingIds={enrichingIds}
+            actionLoading={actionLoading}
+            toggleExpanded={toggleExpanded}
+            handleApprove={handleApprove}
+            handleReject={handleReject}
+            handleProduce={handleProduce}
+            handleEnrich={handleEnrich}
+            handleRestore={handleRestore}
+          />
         </TabsContent>
 
         {/* In Production Tab */}
@@ -631,7 +511,7 @@ export default function ContentPage() {
               icon={<FileText className="mb-3 h-8 w-8 text-muted-foreground" />}
               title="No content yet"
               description="Start by discovering topics or creating content manually"
-              action={<Button className="mt-4" onClick={openDialog}><Plus className="mr-2 h-4 w-4" />New Topic</Button>}
+              action={<Button className="mt-4" onClick={() => setWizardOpen(true)}><Plus className="mr-2 h-4 w-4" />New Content</Button>}
             />
           )}
         </TabsContent>
@@ -675,6 +555,7 @@ function TopicList({
   handleReject,
   handleProduce,
   handleEnrich,
+  handleRestore,
 }: {
   topics: Topic[];
   categories: { id: string; labels: Record<string, string> }[];
@@ -686,6 +567,7 @@ function TopicList({
   handleReject: (id: string) => void;
   handleProduce: (id: string) => void;
   handleEnrich: (id: string) => void;
+  handleRestore?: (id: string) => void;
 }) {
   return (
     <div className="space-y-2">
@@ -799,12 +681,12 @@ function TopicList({
                       <span className="inline-flex items-center rounded-md bg-primary/10 text-primary px-1.5 py-0.5 text-[11px] font-medium">
                         {topic.keywords.primary}
                       </span>
-                      {topic.keywords.secondary.map((kw) => (
+                      {topic.keywords.secondary?.map((kw) => (
                         <span key={kw} className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                           {kw}
                         </span>
                       ))}
-                      {topic.keywords.longTail.map((kw) => (
+                      {topic.keywords.longTail?.map((kw) => (
                         <span key={kw} className="inline-flex items-center rounded-md bg-muted/60 px-1.5 py-0.5 text-[11px] text-muted-foreground/70">
                           {kw}
                         </span>
@@ -872,6 +754,22 @@ function TopicList({
                         <Play className="mr-1 h-3 w-3" />
                       )}
                       Produce
+                    </Button>
+                  )}
+                  {topic.status === "rejected" && handleRestore && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7"
+                      onClick={(e) => { e.stopPropagation(); handleRestore(topic.id); }}
+                      disabled={isActionLoading}
+                    >
+                      {isActionLoading ? (
+                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                      ) : (
+                        <RotateCcw className="mr-1 h-3 w-3" />
+                      )}
+                      Restore
                     </Button>
                   )}
                 </div>

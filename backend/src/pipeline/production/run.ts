@@ -137,7 +137,7 @@ export async function runProductionPipeline(ctx: PipelineContext): Promise<Artic
   const contentItem = ctx.stores.content.create({
     customerId: ctx.customerId,
     projectId: project.id,
-    type: "article",
+    type: topic.format ?? "article",
     status: contentStatus,
     title: topic.title,
     description: typeof metaFm.description === "string" ? metaFm.description : undefined,

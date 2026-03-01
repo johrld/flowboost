@@ -1,32 +1,29 @@
 {
   "projectId": "550e8400-e29b-41d4-a716-446655440000",
-  "createdAt": "2026-02-10T14:06:16.477Z",
-  "updatedAt": "2026-02-10T14:07:33.829Z",
-  "runId": "30f5e25d-ba62-4399-a340-8b614a4c63f1",
+  "createdAt": "2026-03-01T08:48:26.238Z",
+  "updatedAt": "2026-03-01T08:52:33.394Z",
+  "runId": "ac7c63e5-620c-43a0-b5a7-1bbeb475ce74",
   "audit": {
-    "totalArticles": 4,
+    "totalArticles": 10,
     "byCategory": {
-      "stress": 4
+      "meditation": 2,
+      "breathing": 3,
+      "mindfulness": 3,
+      "sleep": 1,
+      "stress": 1
     },
     "byLanguage": {
-      "de": 2,
-      "en": 1,
-      "es": 1
+      "de": 10,
+      "en": 10,
+      "es": 10
     },
     "categoryGaps": [
-      "meditation",
-      "breathing",
-      "mindfulness",
-      "sleep"
+      "sleep",
+      "stress",
+      "meditation"
     ],
     "recommendations": [
-      "Create content for meditation category (0 articles)",
-      "Create content for breathing category (0 articles)",
-      "Create content for mindfulness category (0 articles)",
-      "Create content for sleep category (0 articles)",
-      "All stress articles use the same translationKey - consider diversifying topics within stress category",
-      "Balance language distribution is achieved for existing translationKey",
-      "Expand keyword diversity beyond anxiety/breathing techniques"
+      "...10 recommendations..."
     ]
   }
 }

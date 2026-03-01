@@ -1,3 +1,11 @@
+// ─── Chat ────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  ts: string;
+}
+
 // ─── Core Entities ───────────────────────────────────────────────
 
 export interface Customer {
@@ -153,6 +161,9 @@ export interface Topic {
   suggestedAngle: string;
   estimatedSections: number;
   reasoning: string;
+
+  // Content format
+  format?: "article" | "guide" | "landing_page" | "social_post";
 
   // Origin tracking
   source?: "pipeline" | "user";

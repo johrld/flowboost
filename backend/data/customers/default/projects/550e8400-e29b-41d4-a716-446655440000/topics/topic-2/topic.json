@@ -1,7 +1,7 @@
 {
   "id": "topic-2",
   "status": "proposed",
-  "title": "Body Scan Meditation for Sleep: A Complete Beginner's Guide",
+  "title": "Progressive Muskelentspannung: Schritt-für-Schritt-Anleitung zum Einschlafen",
   "category": "sleep",
   "priority": 2,
   "keywords": {
@@ -24,5 +24,8 @@
   "suggestedAngle": "Create a complete step-by-step guide with multiple script lengths (5-min, 10-min, 20-min), include scientific research on effectiveness for insomnia, provide troubleshooting tips for common issues, and compare body scan with other sleep meditation techniques. Include audio timestamps and visual body diagrams.",
   "estimatedSections": 7,
   "reasoning": "Fills critical sleep category gap, high search demand for sleep solutions with strong beginner intent, naturally integrates with Breathe app's meditation features, opportunity to create comprehensive cornerstone content that outranks competitors",
-  "scheduledDate": "2026-02-01T09:00"
+  "scheduledDate": "2026-02-06T11:02",
+  "rejectedAt": "2026-02-23T17:12:13.560Z",
+  "createdAt": "2026-03-01T08:52:33.392Z",
+  "runId": "ac7c63e5-620c-43a0-b5a7-1bbeb475ce74"
 }
