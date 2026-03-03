@@ -244,6 +244,7 @@ export interface ContentItem {
   category?: string;
   tags?: string[];
   keywords?: string[];
+  author?: string;
 
   // Links
   topicId?: string;
@@ -257,6 +258,9 @@ export interface ContentItem {
   // Delivery tracking
   deliveryRef?: string;
   deliveryUrl?: string;
+
+  // Hero image
+  heroImageId?: string;
 
   // Timestamps
   createdAt: string;
@@ -371,6 +375,27 @@ export interface MediaAssetRef {
   assetId: string;
   role: "hero" | "thumbnail" | "inline" | "attachment" | "social_media";
   lang?: string;
+}
+
+// ─── Content Media (per-content-item) ────────────────────────────
+
+export interface ContentMediaAsset {
+  id: string;
+  contentId: string;
+  type: MediaType;
+  source: MediaSource;
+  role: "hero" | "inline";
+  mimeType: string;
+  fileName: string;         // on disk: "{uuid}.png"
+  seoFilename: string;      // for delivery: "{slug}-hero"
+  altText?: string;
+  fileSize: number;
+  width?: number;
+  height?: number;
+  generationPrompt?: string;
+  generationModel?: string;
+  generationCostUsd?: number;
+  createdAt: string;
 }
 
 // ─── Pipeline Runs ──────────────────────────────────────────────

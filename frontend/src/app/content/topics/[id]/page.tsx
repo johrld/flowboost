@@ -2,7 +2,6 @@
 
 import { use, useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TopicStatusBadge } from "@/components/status-badge";
+import { ContentDetailLayout } from "@/components/content-detail-layout";
 import { useProject } from "@/lib/project-context";
 import {
   getTopic,
@@ -38,7 +38,6 @@ import {
   CalendarIcon,
   Sparkles,
   FileText,
-  MessageSquare,
   RotateCcw,
 } from "lucide-react";
 
@@ -48,14 +47,12 @@ export default function TopicDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: topicId } = use(params);
-  const router = useRouter();
   const { customerId, projectId, categories } = useProject();
 
   const [topic, setTopic] = useState<Topic | null>(null);
   const [linkedContent, setLinkedContent] = useState<ContentItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
 
   // Editable fields
   const [editTitle, setEditTitle] = useState("");
@@ -82,7 +79,6 @@ export default function TopicDetailPage({
         setEditAngle(t.suggestedAngle ?? "");
         setNotes(t.userNotes ?? "");
         if (t.scheduledDate) {
-          // datetime-local expects "YYYY-MM-DDTHH:mm"
           setSchedValue(t.scheduledDate.includes("T") ? t.scheduledDate : `${t.scheduledDate}T09:00`);
         }
       }
@@ -268,7 +264,6 @@ export default function TopicDetailPage({
   const handleScheduleChange = async (value: string) => {
     setSchedValue(value);
     if (!topic) return;
-    // Send YYYY-MM-DDTHH:mm or null to clear
     const dateStr = value || null;
     setSaving("scheduledDate");
     try {
@@ -279,10 +274,12 @@ export default function TopicDetailPage({
     }
   };
 
-  const catLabel = topic?.category
-    ? categories.find((c) => c.id === topic.category)?.labels?.de ??
-      topic.category
-    : null;
+  const handleTopicUpdated = (updated: Topic) => {
+    setTopic(updated);
+    setEditTitle(updated.title);
+    setEditAngle(updated.suggestedAngle ?? "");
+    setNotes(updated.userNotes ?? "");
+  };
 
   if (loading) {
     return (
@@ -304,204 +301,218 @@ export default function TopicDetailPage({
   }
 
   return (
-    <div className="p-8 max-w-5xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/content">
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <TopicStatusBadge status={topic.status} />
-        </div>
-        <div className="flex items-center gap-2">
-          {topic.source === "user" && !topic.enriched && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleEnrich}
-              disabled={actionLoading}
-            >
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              Analyze
-            </Button>
-          )}
-          {topic.status === "proposed" && (
-            <>
+    <ContentDetailLayout
+      header={
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/content">
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <TopicStatusBadge status={topic.status} />
+          </div>
+          <div className="flex items-center gap-2">
+            {topic.source === "user" && !topic.enriched && (
               <Button
                 size="sm"
                 variant="outline"
-                onClick={handleReject}
+                onClick={handleEnrich}
                 disabled={actionLoading}
               >
-                <X className="mr-1.5 h-3.5 w-3.5" />
-                Reject
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                Analyze
               </Button>
+            )}
+            {topic.status === "proposed" && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleReject}
+                  disabled={actionLoading}
+                >
+                  <X className="mr-1.5 h-3.5 w-3.5" />
+                  Reject
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleApprove}
+                  disabled={actionLoading}
+                >
+                  <Check className="mr-1.5 h-3.5 w-3.5" />
+                  Approve
+                </Button>
+              </>
+            )}
+            {topic.status === "approved" && (
               <Button
                 size="sm"
-                onClick={handleApprove}
+                onClick={handleProduce}
                 disabled={actionLoading}
               >
-                <Check className="mr-1.5 h-3.5 w-3.5" />
-                Approve
+                {actionLoading ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Play className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Produce
               </Button>
-            </>
-          )}
-          {topic.status === "approved" && (
-            <Button
-              size="sm"
-              onClick={handleProduce}
-              disabled={actionLoading}
-            >
-              {actionLoading ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Play className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              Produce
-            </Button>
-          )}
-          {topic.status === "rejected" && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleRestore}
-              disabled={actionLoading}
-            >
-              {actionLoading ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              Restore
-            </Button>
-          )}
-          {linkedContent && (
-            <Link href={`/content/${linkedContent.id}`}>
-              <Button size="sm" variant="outline">
-                <FileText className="mr-1.5 h-3.5 w-3.5" />
-                Open in Editor
-              </Button>
-            </Link>
-          )}
-          <Button
-            size="sm"
-            variant={chatOpen ? "default" : "outline"}
-            onClick={() => setChatOpen(!chatOpen)}
-          >
-            <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
-            AI Chat
-          </Button>
-        </div>
-      </div>
-
-      {/* Editable Title + Angle */}
-      <div className="rounded-xl bg-muted/40 px-5 py-4 space-y-1">
-        <div className="relative">
-          <input
-            ref={titleRef}
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            onBlur={handleTitleBlur}
-            onKeyDown={handleTitleKeyDown}
-            className="w-full text-2xl font-bold bg-transparent border-none outline-none rounded px-1 -mx-1 hover:bg-muted/50 focus:bg-muted/50 transition-colors"
-          />
-          {saving === "title" && (
-            <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-          )}
-        </div>
-        <div className="relative">
-          <input
-            value={editAngle}
-            onChange={(e) => setEditAngle(e.target.value)}
-            onBlur={handleAngleBlur}
-            placeholder="Add a suggested angle..."
-            className="w-full text-sm text-muted-foreground bg-transparent border-none outline-none rounded px-1 -mx-1 hover:bg-muted/50 focus:bg-muted/50 transition-colors"
-          />
-          {saving === "suggestedAngle" && (
-            <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
-          )}
-        </div>
-      </div>
-
-      {/* Metadata row */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm rounded-xl bg-muted/40 px-5 py-3">
-        {/* Category */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Category</span>
-          {categories.length > 0 ? (
-            <>
-              <Select
-                value={topic.category || ""}
-                onValueChange={(v) => saveField("category", v)}
+            )}
+            {topic.status === "rejected" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleRestore}
+                disabled={actionLoading}
               >
-                <SelectTrigger size="sm" className="h-7 text-xs border-dashed">
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.labels?.de ?? c.id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {saving === "category" && (
-                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                {actionLoading ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Restore
+              </Button>
+            )}
+            {linkedContent && (
+              <Link href={`/content/${linkedContent.id}`}>
+                <Button size="sm" variant="outline">
+                  <FileText className="mr-1.5 h-3.5 w-3.5" />
+                  Open in Editor
+                </Button>
+              </Link>
+            )}
+          </div>
+        </div>
+      }
+      metadataPanel={
+        <>
+          {/* Category */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Category</p>
+            {categories.length > 0 ? (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={topic.category || ""}
+                  onValueChange={(v) => saveField("category", v)}
+                >
+                  <SelectTrigger size="sm" className="h-8 text-xs">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.labels?.de ?? c.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {saving === "category" && (
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                )}
+              </div>
+            ) : (
+              <p className="text-sm">
+                {categories.find((c) => c.id === topic.category)?.labels?.de ?? topic.category ?? "—"}
+              </p>
+            )}
+          </div>
+
+          {/* Scheduling */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Scheduled</p>
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <Input
+                type="datetime-local"
+                value={schedValue}
+                onChange={(e) => handleScheduleChange(e.target.value)}
+                className="h-8 text-xs w-full"
+              />
+              {saving === "scheduledDate" && (
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
               )}
-            </>
-          ) : (
-            <span className="font-medium">{catLabel ?? "—"}</span>
+            </div>
+          </div>
+
+          {/* Format / Search Intent */}
+          {topic.searchIntent && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Search Intent</p>
+              <p className="text-sm">{topic.searchIntent}</p>
+            </div>
           )}
-        </div>
 
-        <span className="text-border">|</span>
-
-        {/* Scheduling */}
-        <div className="flex items-center gap-1.5">
-          <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            type="datetime-local"
-            value={schedValue}
-            onChange={(e) => handleScheduleChange(e.target.value)}
-            className="h-7 text-xs border-dashed w-auto"
-          />
-          {saving === "scheduledDate" && (
-            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+          {/* Created */}
+          {topic.createdAt && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Created</p>
+              <p className="text-sm">
+                {new Date(topic.createdAt).toLocaleDateString("de-DE", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </p>
+            </div>
           )}
-        </div>
 
-        <span className="text-border">|</span>
-
-        {/* Created */}
-        {topic.createdAt && (
-          <span className="text-xs text-muted-foreground">
-            Created {new Date(topic.createdAt).toLocaleDateString("de-DE", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
-          </span>
-        )}
-
-        {/* Linked Article */}
-        {linkedContent && (
-          <>
-            <span className="text-border">|</span>
-            <Link
-              href={`/content/${linkedContent.id}`}
-              className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-            >
-              <FileText className="h-3.5 w-3.5" />
-              {linkedContent.title || "Untitled"}
-            </Link>
-          </>
-        )}
-      </div>
-
-      {/* Content — single column */}
+          {/* Linked Article */}
+          {linkedContent && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Linked Article</p>
+              <Link
+                href={`/content/${linkedContent.id}`}
+                className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                {linkedContent.title || "Untitled"}
+              </Link>
+            </div>
+          )}
+        </>
+      }
+      chatPanel={
+        <TopicChat
+          customerId={customerId}
+          projectId={projectId}
+          topicId={topicId}
+          onTopicUpdated={handleTopicUpdated}
+        />
+      }
+      defaultSidebarTab="metadata"
+    >
+      {/* ── Main Content ── */}
       <div className="space-y-6">
+        {/* Editable Title + Angle */}
+        <div className="rounded-xl bg-muted/40 px-5 py-4 space-y-1">
+          <div className="relative">
+            <input
+              ref={titleRef}
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              onKeyDown={handleTitleKeyDown}
+              className="w-full text-2xl font-bold bg-transparent border-none outline-none rounded px-1 -mx-1 hover:bg-muted/50 focus:bg-muted/50 transition-colors"
+            />
+            {saving === "title" && (
+              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          <div className="relative">
+            <input
+              value={editAngle}
+              onChange={(e) => setEditAngle(e.target.value)}
+              onBlur={handleAngleBlur}
+              placeholder="Add a suggested angle..."
+              className="w-full text-sm text-muted-foreground bg-transparent border-none outline-none rounded px-1 -mx-1 hover:bg-muted/50 focus:bg-muted/50 transition-colors"
+            />
+            {saving === "suggestedAngle" && (
+              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            )}
+          </div>
+        </div>
+
         {/* Keywords */}
         {topic.keywords && (
           <div className="rounded-xl bg-muted/40 px-5 py-4 space-y-3">
@@ -625,21 +636,6 @@ export default function TopicDetailPage({
           />
         </div>
       </div>
-
-      {/* AI Chat Sidebar */}
-      <TopicChat
-        customerId={customerId}
-        projectId={projectId}
-        topicId={topicId}
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
-        onTopicUpdated={(updated) => {
-          setTopic(updated);
-          setEditTitle(updated.title);
-          setEditAngle(updated.suggestedAngle ?? "");
-          setNotes(updated.userNotes ?? "");
-        }}
-      />
-    </div>
+    </ContentDetailLayout>
   );
 }

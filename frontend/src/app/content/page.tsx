@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -16,29 +15,19 @@ import { useProject } from "@/lib/project-context";
 import {
   getTopics,
   getContent,
-  approveTopic,
-  rejectTopic,
-  restoreTopic,
-  startProduction,
-  enrichTopic,
 } from "@/lib/api";
 import type { Topic, ContentItem, ContentItemStatus } from "@/lib/types";
 import { format } from "date-fns";
 import {
-  Play,
   Sparkles,
-  X,
-  ChevronDown,
   ChevronRight,
   Eye,
   Loader2,
-  Check,
   Plus,
   FileText,
   Calendar,
   List,
   LayoutGrid,
-  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
 import { NewContentWizard } from "@/components/new-content-wizard";
@@ -64,7 +53,6 @@ const CONTENT_TAB_MAP: Record<ContentItemStatus, TabKey> = {
 // ── Page ───────────────────────────────────────────────────────
 
 export default function ContentPage() {
-  const router = useRouter();
   const { customerId, projectId, categories, loading: projectLoading } = useProject();
 
   // Data
@@ -78,9 +66,7 @@ export default function ContentPage() {
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"list" | "board">("board");
 
-  // Topic interaction (from Research)
-  const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  // Topic interaction
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
 
   // New Content wizard
@@ -109,66 +95,7 @@ export default function ContentPage() {
     loadData().finally(() => setLoading(false));
   }, [customerId, projectId]);
 
-  // ── Topic handlers (from Research, verbatim) ─────────────────
-
-  const toggleExpanded = (id: string) => {
-    setExpandedTopics((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleApprove = async (topicId: string) => {
-    setActionLoading(topicId);
-    try {
-      await approveTopic(customerId, projectId, topicId);
-      setTopics((prev) => prev.map((t) => t.id === topicId ? { ...t, status: "approved" as const } : t));
-    } catch (err) {
-      console.error("Failed to approve topic:", err);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleReject = async (topicId: string) => {
-    setActionLoading(topicId);
-    try {
-      await rejectTopic(customerId, projectId, topicId);
-      setTopics((prev) => prev.map((t) => t.id === topicId ? { ...t, status: "rejected" as const } : t));
-    } catch (err) {
-      console.error("Failed to reject topic:", err);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleRestore = async (topicId: string) => {
-    setActionLoading(topicId);
-    try {
-      await restoreTopic(customerId, projectId, topicId);
-      setTopics((prev) => prev.map((t) => t.id === topicId ? { ...t, status: "proposed" as const } : t));
-    } catch (err) {
-      console.error("Failed to restore topic:", err);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleProduce = async (topicId: string) => {
-    setActionLoading(topicId);
-    try {
-      await startProduction(customerId, projectId, topicId);
-      // Refresh both datasets so the item appears in In Production tab
-      await loadData();
-      setActiveTab("in_production");
-    } catch (err) {
-      console.error("Failed to start production:", err);
-    } finally {
-      setActionLoading(null);
-    }
-  };
+  // ── Topic handlers ──────────────────────────────────────────
 
   const startEnrichmentPolling = (topicId: string) => {
     setEnrichingIds((prev) => new Set(prev).add(topicId));
@@ -207,16 +134,6 @@ export default function ContentPage() {
   const handleTopicCreated = (topic: Topic) => {
     setTopics((prev) => [topic, ...prev]);
     startEnrichmentPolling(topic.id);
-  };
-
-  const handleEnrich = async (topicId: string) => {
-    if (!customerId || !projectId) return;
-    try {
-      await enrichTopic(customerId, projectId, topicId);
-      startEnrichmentPolling(topicId);
-    } catch {
-      // silent
-    }
   };
 
   // ── Derived data ─────────────────────────────────────────────
@@ -344,14 +261,7 @@ export default function ContentPage() {
           items={items.filter((i) => filterCategory === "all" || i.category === filterCategory)}
           categories={categories}
           topicById={topicById}
-          expandedTopics={expandedTopics}
           enrichingIds={enrichingIds}
-          actionLoading={actionLoading}
-          toggleExpanded={toggleExpanded}
-          handleApprove={handleApprove}
-          handleReject={handleReject}
-          handleProduce={handleProduce}
-          handleEnrich={handleEnrich}
           fmt={fmt}
         />
       )}
@@ -397,14 +307,7 @@ export default function ContentPage() {
           <TopicList
             topics={visibleTopics}
             categories={categories}
-            expandedTopics={expandedTopics}
             enrichingIds={enrichingIds}
-            actionLoading={actionLoading}
-            toggleExpanded={toggleExpanded}
-            handleApprove={handleApprove}
-            handleReject={handleReject}
-            handleProduce={handleProduce}
-            handleEnrich={handleEnrich}
           />
           {visibleTopics.length === 0 && (
             <EmptyState
@@ -421,15 +324,7 @@ export default function ContentPage() {
           <TopicList
             topics={rejectedTopics.filter((t) => filterCategory === "all" || t.category === filterCategory)}
             categories={categories}
-            expandedTopics={expandedTopics}
             enrichingIds={enrichingIds}
-            actionLoading={actionLoading}
-            toggleExpanded={toggleExpanded}
-            handleApprove={handleApprove}
-            handleReject={handleReject}
-            handleProduce={handleProduce}
-            handleEnrich={handleEnrich}
-            handleRestore={handleRestore}
           />
         </TabsContent>
 
@@ -489,14 +384,7 @@ export default function ContentPage() {
               <TopicList
                 topics={visibleTopics}
                 categories={categories}
-                expandedTopics={expandedTopics}
                 enrichingIds={enrichingIds}
-                actionLoading={actionLoading}
-                toggleExpanded={toggleExpanded}
-                handleApprove={handleApprove}
-                handleReject={handleReject}
-                handleProduce={handleProduce}
-                handleEnrich={handleEnrich}
               />
             </div>
           )}
@@ -547,235 +435,65 @@ function EmptyState({
 function TopicList({
   topics,
   categories,
-  expandedTopics,
   enrichingIds,
-  actionLoading,
-  toggleExpanded,
-  handleApprove,
-  handleReject,
-  handleProduce,
-  handleEnrich,
-  handleRestore,
 }: {
   topics: Topic[];
   categories: { id: string; labels: Record<string, string> }[];
-  expandedTopics: Set<string>;
   enrichingIds: Set<string>;
-  actionLoading: string | null;
-  toggleExpanded: (id: string) => void;
-  handleApprove: (id: string) => void;
-  handleReject: (id: string) => void;
-  handleProduce: (id: string) => void;
-  handleEnrich: (id: string) => void;
-  handleRestore?: (id: string) => void;
 }) {
   return (
     <div className="space-y-2">
       {topics.map((topic) => {
-        const isExpanded = expandedTopics.has(topic.id);
         const isEnriching = enrichingIds.has(topic.id);
-        const isActionLoading = actionLoading === topic.id;
         const categoryLabel = categories.find((c) => c.id === topic.category)?.labels.de ?? topic.category;
         const isNew = topic.createdAt && (Date.now() - new Date(topic.createdAt).getTime()) < 86400000;
 
         return (
-          <div
+          <Link
             key={topic.id}
-            className="rounded-lg border overflow-hidden hover:border-primary/30 transition-colors"
+            href={`/content/topics/${topic.id}`}
+            className="flex items-center gap-4 px-4 py-3 rounded-lg border hover:border-primary/30 transition-colors"
           >
-            {/* Main Row */}
-            <div
-              className="flex items-center gap-4 px-4 py-3 cursor-pointer"
-              onClick={() => toggleExpanded(topic.id)}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  {isEnriching && (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
-                  )}
-                  <Link
-                    href={`/content/topics/${topic.id}`}
-                    className="text-sm font-semibold truncate hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {topic.title}
-                  </Link>
-                  {isNew && !isEnriching && (
-                    <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium shrink-0">
-                      New
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  {categoryLabel && (
-                    <span className="text-xs text-muted-foreground">{categoryLabel}</span>
-                  )}
-                  {topic.keywords?.primary && (
-                    <>
-                      <span className="text-xs text-muted-foreground">&middot;</span>
-                      <span className="text-xs text-muted-foreground/70">{topic.keywords.primary}</span>
-                    </>
-                  )}
-                  {topic.createdAt && (
-                    <>
-                      <span className="text-xs text-muted-foreground">&middot;</span>
-                      <span className="text-xs text-muted-foreground">
-                        {format(new Date(topic.createdAt), "dd.MM.yyyy")}
-                      </span>
-                    </>
-                  )}
-                </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                {isEnriching && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+                )}
+                <span className="text-sm font-semibold truncate">
+                  {topic.title}
+                </span>
+                {isNew && !isEnriching && (
+                  <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium shrink-0">
+                    New
+                  </span>
+                )}
               </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <TopicStatusBadge status={topic.status} />
-                {isExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-2 mt-0.5">
+                {categoryLabel && (
+                  <span className="text-xs text-muted-foreground">{categoryLabel}</span>
+                )}
+                {topic.keywords?.primary && (
+                  <>
+                    <span className="text-xs text-muted-foreground">&middot;</span>
+                    <span className="text-xs text-muted-foreground/70">{topic.keywords.primary}</span>
+                  </>
+                )}
+                {topic.createdAt && (
+                  <>
+                    <span className="text-xs text-muted-foreground">&middot;</span>
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(topic.createdAt), "dd.MM.yyyy")}
+                    </span>
+                  </>
                 )}
               </div>
             </div>
 
-            {/* Expanded Details */}
-            {isExpanded && (
-              <div className="border-t bg-muted/20 px-4 py-3 space-y-3">
-                {topic.userNotes && (
-                  <div className="rounded-md bg-background border p-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Notes</p>
-                    <p className="text-sm text-foreground/80 leading-relaxed">{topic.userNotes}</p>
-                  </div>
-                )}
-
-                {topic.suggestedAngle && (
-                  <div className="rounded-md bg-background border p-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Angle</p>
-                    <p className="text-sm text-foreground/80 leading-relaxed">{topic.suggestedAngle}</p>
-                  </div>
-                )}
-
-                {topic.reasoning && (
-                  <div className="rounded-md bg-background border p-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                      <Sparkles className="h-3 w-3" />
-                      Analysis
-                    </p>
-                    <p className="text-sm text-foreground/80 leading-relaxed">{topic.reasoning}</p>
-                  </div>
-                )}
-
-                {topic.competitorInsights && (
-                  <div className="rounded-md bg-background border p-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                      <Eye className="h-3 w-3" />
-                      Competition
-                    </p>
-                    <p className="text-sm text-foreground/80 leading-relaxed">{topic.competitorInsights}</p>
-                  </div>
-                )}
-
-                {topic.keywords?.primary && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Keywords</p>
-                    <div className="flex flex-wrap gap-1">
-                      <span className="inline-flex items-center rounded-md bg-primary/10 text-primary px-1.5 py-0.5 text-[11px] font-medium">
-                        {topic.keywords.primary}
-                      </span>
-                      {topic.keywords.secondary?.map((kw) => (
-                        <span key={kw} className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                          {kw}
-                        </span>
-                      ))}
-                      {topic.keywords.longTail?.map((kw) => (
-                        <span key={kw} className="inline-flex items-center rounded-md bg-muted/60 px-1.5 py-0.5 text-[11px] text-muted-foreground/70">
-                          {kw}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 pt-1">
-                  <Link href={`/content/topics/${topic.id}`} onClick={(e) => e.stopPropagation()}>
-                    <Button size="sm" variant="outline" className="h-7">
-                      <Eye className="mr-1 h-3 w-3" />
-                      Open
-                    </Button>
-                  </Link>
-                  {topic.source === "user" && !topic.enriched && !isEnriching && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7"
-                      onClick={(e) => { e.stopPropagation(); handleEnrich(topic.id); }}
-                    >
-                      <Sparkles className="mr-1 h-3 w-3" />
-                      Analyze
-                    </Button>
-                  )}
-                  {topic.status === "proposed" && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-muted-foreground hover:text-red-600"
-                        onClick={(e) => { e.stopPropagation(); handleReject(topic.id); }}
-                        disabled={isActionLoading}
-                      >
-                        <X className="mr-1 h-3 w-3" />
-                        Reject
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="h-7"
-                        onClick={(e) => { e.stopPropagation(); handleApprove(topic.id); }}
-                        disabled={isActionLoading}
-                      >
-                        {isActionLoading ? (
-                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                        ) : (
-                          <Check className="mr-1 h-3 w-3" />
-                        )}
-                        Approve
-                      </Button>
-                    </>
-                  )}
-                  {topic.status === "approved" && (
-                    <Button
-                      size="sm"
-                      className="h-7"
-                      onClick={(e) => { e.stopPropagation(); handleProduce(topic.id); }}
-                      disabled={isActionLoading}
-                    >
-                      {isActionLoading ? (
-                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                      ) : (
-                        <Play className="mr-1 h-3 w-3" />
-                      )}
-                      Produce
-                    </Button>
-                  )}
-                  {topic.status === "rejected" && handleRestore && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7"
-                      onClick={(e) => { e.stopPropagation(); handleRestore(topic.id); }}
-                      disabled={isActionLoading}
-                    >
-                      {isActionLoading ? (
-                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                      ) : (
-                        <RotateCcw className="mr-1 h-3 w-3" />
-                      )}
-                      Restore
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <TopicStatusBadge status={topic.status} />
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </Link>
         );
       })}
     </div>
@@ -885,28 +603,14 @@ function BoardView({
   items,
   categories,
   topicById,
-  expandedTopics,
   enrichingIds,
-  actionLoading,
-  toggleExpanded,
-  handleApprove,
-  handleReject,
-  handleProduce,
-  handleEnrich,
   fmt,
 }: {
   topics: Topic[];
   items: ContentItem[];
   categories: { id: string; labels: Record<string, string> }[];
   topicById: Map<string, Topic>;
-  expandedTopics: Set<string>;
   enrichingIds: Set<string>;
-  actionLoading: string | null;
-  toggleExpanded: (id: string) => void;
-  handleApprove: (id: string) => void;
-  handleReject: (id: string) => void;
-  handleProduce: (id: string) => void;
-  handleEnrich: (id: string) => void;
   fmt: (iso: string) => string;
 }) {
   const inProduction = items.filter((i) => i.status === "planned" || i.status === "producing" || i.status === "draft");
@@ -941,14 +645,7 @@ function BoardView({
                   key={topic.id}
                   topic={topic}
                   categories={categories}
-                  isExpanded={expandedTopics.has(topic.id)}
                   isEnriching={enrichingIds.has(topic.id)}
-                  isActionLoading={actionLoading === topic.id}
-                  toggleExpanded={toggleExpanded}
-                  handleApprove={handleApprove}
-                  handleReject={handleReject}
-                  handleProduce={handleProduce}
-                  handleEnrich={handleEnrich}
                 />
               ))}
               {col.items?.map((item) => (
@@ -976,35 +673,20 @@ function BoardView({
 function TopicBoardCard({
   topic,
   categories,
-  isExpanded,
   isEnriching,
-  isActionLoading,
-  toggleExpanded,
-  handleApprove,
-  handleReject,
-  handleProduce,
-  handleEnrich,
 }: {
   topic: Topic;
   categories: { id: string; labels: Record<string, string> }[];
-  isExpanded: boolean;
   isEnriching: boolean;
-  isActionLoading: boolean;
-  toggleExpanded: (id: string) => void;
-  handleApprove: (id: string) => void;
-  handleReject: (id: string) => void;
-  handleProduce: (id: string) => void;
-  handleEnrich: (id: string) => void;
 }) {
   const categoryLabel = categories.find((c) => c.id === topic.category)?.labels.de ?? topic.category;
 
   return (
-    <div className="rounded-lg border bg-card overflow-hidden hover:border-primary/30 transition-colors">
-      {/* Collapsed Row */}
-      <div
-        className="flex items-start gap-2 p-3 cursor-pointer"
-        onClick={() => toggleExpanded(topic.id)}
-      >
+    <Link
+      href={`/content/topics/${topic.id}`}
+      className="block rounded-lg border bg-card p-3 hover:border-primary/30 transition-colors"
+    >
+      <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             {isEnriching && <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />}
@@ -1020,73 +702,9 @@ function TopicBoardCard({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0 pt-0.5">
-          <TopicStatusBadge status={topic.status} />
-          {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
-        </div>
+        <TopicStatusBadge status={topic.status} />
       </div>
-
-      {/* Expanded Content */}
-      {isExpanded && (
-        <div className="border-t bg-muted/20 px-3 py-2.5 space-y-2">
-          {topic.suggestedAngle && (
-            <p className="text-xs text-foreground/80 leading-relaxed">{topic.suggestedAngle}</p>
-          )}
-
-          {topic.keywords?.primary && (
-            <div className="flex flex-wrap gap-1">
-              <span className="inline-flex items-center rounded-md bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium">
-                {topic.keywords.primary}
-              </span>
-              {topic.keywords.secondary.slice(0, 3).map((kw) => (
-                <span key={kw} className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {kw}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex items-center gap-1.5 pt-0.5">
-            <Link href={`/content/topics/${topic.id}`} onClick={(e) => e.stopPropagation()}>
-              <Button size="sm" variant="outline" className="h-6 text-[11px] px-2">
-                <Eye className="mr-1 h-3 w-3" />Details
-              </Button>
-            </Link>
-            {topic.source === "user" && !topic.enriched && !isEnriching && (
-              <Button size="sm" variant="outline" className="h-6 text-[11px] px-2"
-                onClick={(e) => { e.stopPropagation(); handleEnrich(topic.id); }}>
-                <Sparkles className="mr-1 h-3 w-3" />Analyze
-              </Button>
-            )}
-            {topic.status === "proposed" && (
-              <>
-                <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-red-600"
-                  onClick={(e) => { e.stopPropagation(); handleReject(topic.id); }} disabled={isActionLoading}>
-                  <X className="mr-1 h-3 w-3" />Reject
-                </Button>
-                <Button size="sm" className="h-6 text-[11px] px-2"
-                  onClick={(e) => { e.stopPropagation(); handleApprove(topic.id); }} disabled={isActionLoading}>
-                  {isActionLoading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
-                  Approve
-                </Button>
-              </>
-            )}
-            {topic.status === "approved" && (
-              <Button size="sm" className="h-6 text-[11px] px-2"
-                onClick={(e) => { e.stopPropagation(); handleProduce(topic.id); }} disabled={isActionLoading}>
-                {isActionLoading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Play className="mr-1 h-3 w-3" />}
-                Produce
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+    </Link>
   );
 }
 

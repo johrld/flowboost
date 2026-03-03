@@ -1,4 +1,4 @@
-import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage } from "./types";
+import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage, ContentMediaAsset } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
 
@@ -250,7 +250,7 @@ export function updateContent(
   customerId: string,
   projectId: string,
   contentId: string,
-  data: Partial<Pick<ContentItem, "title" | "description" | "category" | "tags" | "keywords" | "translationKey">>,
+  data: Partial<Pick<ContentItem, "title" | "description" | "category" | "tags" | "keywords" | "author" | "translationKey" | "heroImageId">>,
 ): Promise<ContentItem> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}`, {
     method: "PUT",
@@ -337,6 +337,95 @@ export function archiveContent(customerId: string, projectId: string, contentId:
 
 export function restoreContent(customerId: string, projectId: string, contentId: string): Promise<{ message: string }> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/restore`, { method: "POST" });
+}
+
+// ── Content Media ────────────────────────────────────────────────
+
+export function getContentMedia(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+): Promise<{ total: number; assets: ContentMediaAsset[] }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/media`);
+}
+
+export function getContentMediaUrl(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  assetId: string,
+): string {
+  return `${API_URL}/customers/${customerId}/projects/${projectId}/content/${contentId}/media/${assetId}/file`;
+}
+
+export function generateHeroImage(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  prompt: string,
+  aspectRatio?: "16:9" | "1:1" | "9:16" | "4:3" | "3:4",
+): Promise<ContentMediaAsset> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/media/generate`, {
+    method: "POST",
+    body: JSON.stringify({ prompt, aspectRatio }),
+  });
+}
+
+export function generateContentImage(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  prompt: string,
+  options?: { aspectRatio?: "16:9" | "1:1" | "9:16" | "4:3" | "3:4"; role?: "hero" | "inline" },
+): Promise<ContentMediaAsset> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/media/generate`, {
+    method: "POST",
+    body: JSON.stringify({ prompt, aspectRatio: options?.aspectRatio, role: options?.role ?? "hero" }),
+  });
+}
+
+export async function uploadContentMedia(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  file: File,
+  role: "hero" | "inline" = "hero",
+): Promise<ContentMediaAsset> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("role", role);
+  const res = await fetch(
+    `${API_URL}/customers/${customerId}/projects/${projectId}/content/${contentId}/media/upload`,
+    { method: "POST", body: formData },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `Upload failed: ${res.status}`);
+  }
+  return res.json() as Promise<ContentMediaAsset>;
+}
+
+export function setHeroImage(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  assetId: string | null,
+): Promise<{ contentId: string; heroImageId: string | null }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/hero`, {
+    method: "PUT",
+    body: JSON.stringify({ assetId }),
+  });
+}
+
+export function deleteContentMedia(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  assetId: string,
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/media/${assetId}`, {
+    method: "DELETE",
+  });
 }
 
 // ── Content Index ────────────────────────────────────────────────

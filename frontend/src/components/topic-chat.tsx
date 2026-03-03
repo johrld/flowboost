@@ -5,19 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getTopicChat, sendTopicChat, applyTopicChatUpdates } from "@/lib/api";
 import type { ChatMessage, Topic } from "@/lib/types";
-import { Loader2, Send, Check, X, MessageSquare } from "lucide-react";
+import { Loader2, Send, Check, X } from "lucide-react";
 import Markdown from "react-markdown";
 
 interface TopicChatProps {
   customerId: string;
   projectId: string;
   topicId: string;
-  open: boolean;
-  onClose: () => void;
   onTopicUpdated?: (topic: Topic) => void;
 }
 
-export function TopicChat({ customerId, projectId, topicId, open, onClose, onTopicUpdated }: TopicChatProps) {
+export function TopicChat({ customerId, projectId, topicId, onTopicUpdated }: TopicChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -34,7 +32,6 @@ export function TopicChat({ customerId, projectId, topicId, open, onClose, onTop
   }, []);
 
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
     async function load() {
       try {
@@ -49,17 +46,11 @@ export function TopicChat({ customerId, projectId, topicId, open, onClose, onTop
     }
     load();
     return () => { cancelled = true; };
-  }, [customerId, projectId, topicId, open]);
+  }, [customerId, projectId, topicId]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
-
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 200);
-    }
-  }, [open]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -130,133 +121,107 @@ export function TopicChat({ customerId, projectId, topicId, open, onClose, onTop
   };
 
   return (
-    <>
-      {/* Backdrop */}
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/20 z-40 transition-opacity"
-          onClick={onClose}
-        />
-      )}
-
-      {/* Panel */}
+    <div className="flex flex-col h-full">
+      {/* Messages */}
       <div
-        className={`fixed top-0 right-0 h-full w-[420px] max-w-[90vw] bg-background border-l shadow-xl z-50 flex flex-col transition-transform duration-200 ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto space-y-3 p-4"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">AI Chat</h3>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Messages */}
-        <div
-          ref={scrollRef}
-          className="flex-1 overflow-y-auto space-y-3 p-4"
-        >
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            </div>
-          ) : messages.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-12">
-              Refine this topic with AI — ask for better keywords, angles, or titles.
-            </p>
-          ) : (
-            messages.map((msg, i) => (
+        ) : messages.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-12">
+            Refine this topic with AI — ask for better keywords, angles, or titles.
+          </p>
+        ) : (
+          messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            >
               <div
-                key={i}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`rounded-lg px-3 py-2 text-sm max-w-[85%] ${
+                  msg.role === "user"
+                    ? "bg-primary text-primary-foreground whitespace-pre-wrap"
+                    : "bg-muted/50 border prose prose-sm prose-neutral dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                }`}
               >
-                <div
-                  className={`rounded-lg px-3 py-2 text-sm max-w-[85%] ${
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground whitespace-pre-wrap"
-                      : "bg-muted/50 border prose prose-sm prose-neutral dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                  }`}
-                >
-                  {msg.role === "assistant" ? (
-                    <Markdown>{msg.content}</Markdown>
-                  ) : (
-                    msg.content
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-          {sending && (
-            <div className="flex justify-start">
-              <div className="rounded-lg px-3 py-3 bg-muted/50 border flex items-center gap-1.5">
-                <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
-                <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
-                <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+                {msg.role === "assistant" ? (
+                  <Markdown>{msg.content}</Markdown>
+                ) : (
+                  msg.content
+                )}
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Suggested Updates */}
-        {suggestedUpdates && (
-          <div className="mx-4 mb-2 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2 shrink-0">
-            <p className="text-xs font-medium">
-              AI suggests updating: {formatUpdateKeys(suggestedUpdates)}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handleApplyUpdates}
-                disabled={applying}
-              >
-                {applying ? (
-                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                ) : (
-                  <Check className="mr-1 h-3 w-3" />
-                )}
-                Apply
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 text-xs"
-                onClick={() => setSuggestedUpdates(null)}
-              >
-                <X className="mr-1 h-3 w-3" />
-                Dismiss
-              </Button>
+          ))
+        )}
+        {sending && (
+          <div className="flex justify-start">
+            <div className="rounded-lg px-3 py-3 bg-muted/50 border flex items-center gap-1.5">
+              <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+              <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+              <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
             </div>
           </div>
         )}
-
-        {/* Input */}
-        <div className="flex gap-2 p-4 border-t shrink-0">
-          <Textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask AI..."
-            className="min-h-[40px] max-h-[120px] resize-none text-sm"
-            rows={1}
-            disabled={sending}
-          />
-          <Button
-            size="icon"
-            className="h-10 w-10 shrink-0"
-            onClick={handleSend}
-            disabled={!input.trim() || sending}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
-    </>
+
+      {/* Suggested Updates */}
+      {suggestedUpdates && (
+        <div className="mx-4 mb-2 rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2 shrink-0">
+          <p className="text-xs font-medium">
+            AI suggests updating: {formatUpdateKeys(suggestedUpdates)}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              onClick={handleApplyUpdates}
+              disabled={applying}
+            >
+              {applying ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <Check className="mr-1 h-3 w-3" />
+              )}
+              Apply
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs"
+              onClick={() => setSuggestedUpdates(null)}
+            >
+              <X className="mr-1 h-3 w-3" />
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="flex gap-2 p-4 border-t shrink-0">
+        <Textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Ask AI..."
+          className="min-h-[40px] max-h-[120px] resize-none text-sm"
+          rows={1}
+          disabled={sending}
+        />
+        <Button
+          size="icon"
+          className="h-10 w-10 shrink-0"
+          onClick={handleSend}
+          disabled={!input.trim() || sending}
+        >
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
   );
 }

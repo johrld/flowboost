@@ -7,6 +7,7 @@ import { CustomerStore } from "../models/customer.js";
 import { ProjectStore } from "../models/project.js";
 import { ArticleStore } from "../models/article.js";
 import { ContentStore, MediaAssetStore } from "../models/content.js";
+import { ContentMediaStore } from "../models/content-media.js";
 import { PipelineRunStore } from "../models/pipeline-run.js";
 import { TopicStore } from "../models/topic.js";
 import { healthRoutes } from "./routes/health.js";
@@ -30,6 +31,7 @@ export interface AppContext {
   projectsFor(customerId: string): ProjectStore;
   articlesFor(customerId: string, projectId: string): ArticleStore;
   contentFor(customerId: string, projectId: string): ContentStore;
+  contentMediaFor(customerId: string, projectId: string, contentId: string): ContentMediaStore;
   mediaFor(customerId: string, projectId: string): MediaAssetStore;
   pipelineRunsFor(customerId: string, projectId: string): PipelineRunStore;
   topicsFor(customerId: string, projectId: string): TopicStore;
@@ -59,6 +61,11 @@ export async function buildServer(dataDir: string) {
     },
     contentFor(customerId: string, projectId: string) {
       return new ContentStore(path.join(dataDir, "customers", customerId, "projects", projectId, "content"));
+    },
+    contentMediaFor(customerId: string, projectId: string, contentId: string) {
+      return new ContentMediaStore(
+        path.join(dataDir, "customers", customerId, "projects", projectId, "content", contentId),
+      );
     },
     mediaFor(customerId: string, projectId: string) {
       return new MediaAssetStore(path.join(dataDir, "customers", customerId, "projects", projectId, "media"));

@@ -1,0 +1,24 @@
+{
+  "id": "62e508ac-7e92-47b6-a2d4-f3bfb7402199",
+  "versionNumber": 5,
+  "contentId": "960d81b2-0b19-4f35-8fce-40a91bcdf610",
+  "languages": [
+    {
+      "lang": "de",
+      "slug": "atemtechniken-gegen-angst-vergleich",
+      "title": "Atemtechniken gegen Angst: 4-7-8 vs. Box Breathing im Vergleich",
+      "description": "4-7-8 Atmung oder Box Breathing bei Angst? Wissenschaftlich fundierter Vergleich mit Entscheidungsmatrix. Finde die richtige Atemtechnik für dich.",
+      "contentPath": "content/de/atemtechniken-gegen-angst-vergleich.md",
+      "wordCount": 2151
+    }
+  ],
+  "assets": [],
+  "text": {
+    "wordCount": 2151,
+    "headingCount": 6,
+    "hasFaq": true,
+    "hasAnswerCapsule": false
+  },
+  "createdAt": "2026-03-02T16:28:44.016Z",
+  "createdBy": "user"
+}

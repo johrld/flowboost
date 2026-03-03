@@ -92,43 +92,23 @@ server.tool(
     aspectRatio: z.enum(["16:9", "1:1", "9:16", "4:3", "3:4"]).default("16:9").describe("Image aspect ratio"),
   },
   async (args) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "GEMINI_API_KEY not set" }) }] };
+    try {
+      const { generateImageBuffer } = await import("../services/imagen.js");
+      const buffer = await generateImageBuffer(args.prompt, { aspectRatio: args.aspectRatio });
+
+      fs.mkdirSync(path.dirname(args.outputPath), { recursive: true });
+      fs.writeFileSync(args.outputPath, buffer);
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({ success: true, path: args.outputPath, sizeKb: Math.round(buffer.length / 1024) }),
+        }],
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: msg }) }] };
     }
-
-    const model = process.env.IMAGEN_MODEL ?? "imagen-4.0-fast-generate-001";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        instances: [{ prompt: args.prompt }],
-        parameters: { sampleCount: 1, aspectRatio: args.aspectRatio, personGeneration: "allow_adult" },
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return { content: [{ type: "text" as const, text: JSON.stringify({ error: `Imagen API error: ${response.status}`, details: errorText }) }] };
-    }
-
-    const data = (await response.json()) as { predictions?: Array<{ bytesBase64Encoded: string }> };
-    if (!data.predictions?.[0]?.bytesBase64Encoded) {
-      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "No image data in response" }) }] };
-    }
-
-    fs.mkdirSync(path.dirname(args.outputPath), { recursive: true });
-    const buffer = Buffer.from(data.predictions[0].bytesBase64Encoded, "base64");
-    fs.writeFileSync(args.outputPath, buffer);
-
-    return {
-      content: [{
-        type: "text" as const,
-        text: JSON.stringify({ success: true, path: args.outputPath, sizeKb: Math.round(buffer.length / 1024) }),
-      }],
-    };
   },
 );
 
