@@ -232,6 +232,16 @@ export function TiptapEditor({
   const [selectedContainer, setSelectedContainer] = useState<HTMLElement | null>(null);
   const [toolbarPos, setToolbarPos] = useState<{ top: number; left: number } | null>(null);
 
+  const updateToolbarPosition = useCallback((container: HTMLElement) => {
+    if (!wrapperRef.current) return;
+    const containerRect = container.getBoundingClientRect();
+    const wrapperRect = wrapperRef.current.getBoundingClientRect();
+    setToolbarPos({
+      top: containerRect.top - wrapperRect.top - 44, // toolbar height + gap
+      left: containerRect.left - wrapperRect.left + containerRect.width / 2,
+    });
+  }, []);
+
   // Detect clicks on images in the editor
   useEffect(() => {
     if (!editor || !editable) return;
@@ -262,17 +272,7 @@ export function TiptapEditor({
       document.removeEventListener("click", handleClick);
       window.removeEventListener("scroll", handleScroll, true);
     };
-  }, [editor, editable, selectedContainer]);
-
-  const updateToolbarPosition = useCallback((container: HTMLElement) => {
-    if (!wrapperRef.current) return;
-    const containerRect = container.getBoundingClientRect();
-    const wrapperRect = wrapperRef.current.getBoundingClientRect();
-    setToolbarPos({
-      top: containerRect.top - wrapperRect.top - 44, // toolbar height + gap
-      left: containerRect.left - wrapperRect.left + containerRect.width / 2,
-    });
-  }, []);
+  }, [editor, editable, selectedContainer, updateToolbarPosition]);
 
   const updateImageAttr = useCallback((key: string, value: string | null) => {
     if (!editor || !selectedContainer) return;

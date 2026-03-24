@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -74,7 +74,7 @@ export default function ContentPage() {
 
   // ── Data loading ─────────────────────────────────────────────
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!customerId || !projectId) return;
     try {
       const [t, res] = await Promise.all([
@@ -86,14 +86,14 @@ export default function ContentPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     }
-  };
+  }, [customerId, projectId]);
 
   useEffect(() => {
     if (!customerId || !projectId) return;
     setLoading(true);
     setError(null);
     loadData().finally(() => setLoading(false));
-  }, [customerId, projectId]);
+  }, [customerId, projectId, loadData]);
 
   // ── Topic handlers ──────────────────────────────────────────
 

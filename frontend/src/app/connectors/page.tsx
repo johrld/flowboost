@@ -146,12 +146,31 @@ function ConnectorsPageContent() {
   const [detailView, setDetailView] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
 
+  const loadGhRepos = useCallback(async (installationId: number) => {
+    setGhLoadingRepos(true);
+    try {
+      const repos = await getGitHubRepos(installationId);
+      setGhRepos(repos);
+    } catch (err) {
+      console.error("Failed to load GitHub repos:", err);
+      setGhRepos([]);
+    }
+    setGhLoadingRepos(false);
+  }, []);
+
+  const loadGhBranches = useCallback(async (owner: string, repo: string) => {
+    if (!ghInstallationId) return;
+    setGhLoadingBranches(true);
+    try { setGhBranches(await getGitHubBranches(ghInstallationId, owner, repo)); } catch { /* ignore */ }
+    setGhLoadingBranches(false);
+  }, [ghInstallationId]);
+
   // Load repos when entering Git detail view
   useEffect(() => {
     if (detailView === "git" && ghInstallationId && ghRepos.length === 0) {
       loadGhRepos(ghInstallationId);
     }
-  }, [detailView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [detailView, ghInstallationId, ghRepos.length, loadGhRepos]);
 
   // Populate state from project data
   useEffect(() => {
@@ -187,40 +206,21 @@ function ConnectorsPageContent() {
       loadGhRepos(id);
       window.history.replaceState({}, "", "/connectors?tab=connections");
     }
-  }, [customerId, projectId, initialized]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [customerId, projectId, initialized, loadGhRepos]);
 
   // Load repos when GitHub connected
   useEffect(() => {
     if (connectorType === "github" && ghInstallationId && ghRepos.length === 0 && initialized) {
       loadGhRepos(ghInstallationId);
     }
-  }, [connectorType, ghInstallationId, initialized]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [connectorType, ghInstallationId, initialized, loadGhRepos, ghRepos.length]);
 
   // Load branches when repo selected
   useEffect(() => {
     if (connectorType === "github" && ghInstallationId && ghOwner && ghRepo) {
       loadGhBranches(ghOwner, ghRepo);
     }
-  }, [ghOwner, ghRepo, ghInstallationId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadGhRepos = useCallback(async (installationId: number) => {
-    setGhLoadingRepos(true);
-    try {
-      const repos = await getGitHubRepos(installationId);
-      setGhRepos(repos);
-    } catch (err) {
-      console.error("Failed to load GitHub repos:", err);
-      setGhRepos([]);
-    }
-    setGhLoadingRepos(false);
-  }, []);
-
-  const loadGhBranches = async (owner: string, repo: string) => {
-    if (!ghInstallationId) return;
-    setGhLoadingBranches(true);
-    try { setGhBranches(await getGitHubBranches(ghInstallationId, owner, repo)); } catch { /* ignore */ }
-    setGhLoadingBranches(false);
-  };
+  }, [ghOwner, ghRepo, ghInstallationId, connectorType, loadGhBranches]);
 
   const selectGhRepo = (fullName: string) => {
     const repo = ghRepos.find((r) => r.fullName === fullName);

@@ -795,22 +795,25 @@ export default function DashboardPage() {
   const [assignDate, setAssignDate] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
 
-  useEffect(() => {
+  const loadDashboardData = useCallback(async () => {
     if (!customerId || !projectId) return;
     setLoading(true);
-    Promise.all([
-      getTopics(customerId, projectId),
-      getContent(customerId, projectId).then((r) => r.items),
-      getPipelineRuns(customerId, projectId),
-    ])
-      .then(([t, c, r]) => {
-        setTopicData(t);
-        setContentData(c);
-        setRuns(r);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    try {
+      const [t, c, r] = await Promise.all([
+        getTopics(customerId, projectId),
+        getContent(customerId, projectId).then((res) => res.items),
+        getPipelineRuns(customerId, projectId),
+      ]);
+      setTopicData(t);
+      setContentData(c);
+      setRuns(r);
+    } catch { /* ignore */ }
+    setLoading(false);
   }, [customerId, projectId]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   const today = new Date();
   const greeting = today.getHours() < 12 ? "Good morning" : today.getHours() < 18 ? "Good afternoon" : "Good evening";
