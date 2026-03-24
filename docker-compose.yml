@@ -14,7 +14,7 @@ services:
     env_file: .env
     environment:
       - DATA_DIR=/app/data
-      - FRONTEND_URL=https://flowboost.ixr.dev
+      - FRONTEND_URL=https://appflowboost.ixr.dev
     restart: unless-stopped
 
   dashboard:
