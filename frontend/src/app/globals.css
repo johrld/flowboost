@@ -137,3 +137,101 @@
 }
 .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
 .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Tiptap image resize */
+[data-resize-container] {
+  position: relative;
+  display: inline-block !important;
+  max-width: 100%;
+  line-height: 0;
+}
+
+[data-resize-container] img {
+  display: block;
+  max-width: 100%;
+  cursor: default;
+}
+
+[data-resize-wrapper] {
+  position: relative;
+  display: inline-block;
+}
+
+[data-resize-handle] {
+  width: 14px;
+  height: 14px;
+  background: #3b82f6;
+  border: 2px solid white;
+  border-radius: 3px;
+  cursor: nwse-resize;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.15s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-resize-container]:hover [data-resize-handle],
+[data-resize-container][data-resize-state="true"] [data-resize-handle] {
+  opacity: 1;
+}
+
+/* Selected image outline */
+.ProseMirror-selectednode[data-resize-container],
+[data-resize-container]:has(.ProseMirror-selectednode) {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── In-editor image styling (via data attributes on img) ────── */
+
+/* Alignment — WordPress-style: center = block centered, left/right = float with text wrap.
+   Base rule has display:inline-block!important — override with block for center, float for L/R. */
+.ProseMirror [data-resize-container]:has(img[data-align="center"]) { display: block !important; width: fit-content; margin-inline: auto; }
+.ProseMirror [data-resize-container]:has(img[data-align="left"]) { float: left; margin: 0 1rem 0.75rem 0; }
+.ProseMirror [data-resize-container]:has(img[data-align="right"]) { float: right; margin: 0 0 0.75rem 1rem; }
+
+/* Rounded corners */
+.ProseMirror img[data-rounded="sm"] { border-radius: 4px; }
+.ProseMirror img[data-rounded="md"] { border-radius: 8px; }
+.ProseMirror img[data-rounded="lg"] { border-radius: 16px; }
+
+/* Border */
+.ProseMirror img[data-border="thin"] { border: 1px solid var(--border); }
+.ProseMirror img[data-border="thick"] { border: 2px solid var(--border); }
+
+/* Shadow */
+.ProseMirror img[data-shadow="sm"] { box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.ProseMirror img[data-shadow="md"] { box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.ProseMirror img[data-shadow="lg"] { box-shadow: 0 8px 24px rgba(0,0,0,.16); }
+
+/* Caption (shown via ::after on resize container, attribute mirrored by JS) */
+.ProseMirror [data-resize-container][data-caption]::after {
+  content: attr(data-caption);
+  display: block;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+  margin-top: 0.5rem;
+}
+
+/* ── Serialized output figure styling (for rendered HTML) ────── */
+figure.image-figure { margin: 1rem 0; padding: 0; }
+figure.image-figure[data-align="left"] { float: left; margin: 0 1rem 0.75rem 0; }
+figure.image-figure[data-align="center"] { text-align: center; }
+figure.image-figure[data-align="center"] img { margin-inline: auto; display: block; }
+figure.image-figure[data-align="right"] { float: right; margin: 0 0 0.75rem 1rem; }
+figure.image-figure[data-rounded="sm"] img { border-radius: 4px; }
+figure.image-figure[data-rounded="md"] img { border-radius: 8px; }
+figure.image-figure[data-rounded="lg"] img { border-radius: 16px; }
+figure.image-figure[data-border="thin"] img { border: 1px solid var(--border); }
+figure.image-figure[data-border="thick"] img { border: 2px solid var(--border); }
+figure.image-figure[data-shadow="sm"] img { box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+figure.image-figure[data-shadow="md"] img { box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+figure.image-figure[data-shadow="lg"] img { box-shadow: 0 8px 24px rgba(0,0,0,.16); }
+figure.image-figure figcaption {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+  margin-top: 0.5rem;
+}

@@ -1,8 +1,8 @@
 {
   "id": "topic-3",
   "status": "proposed",
-  "title": "5-Minute Morning Meditation Routine: How to Start Your Day Mindfully",
-  "category": "mindfulness",
+  "title": "MBSR für Einsteiger: Stressbewältigung durch Achtsamkeit – ohne Kurs",
+  "category": "stress",
   "priority": 3,
   "keywords": {
     "primary": "morning meditation routine",
@@ -24,5 +24,7 @@
   "suggestedAngle": "Focus specifically on realistic 5-minute routines for busy people with 3 variations (energizing, calming, focused). Include habit-stacking techniques, chronotype considerations (early birds vs night owls), troubleshooting for common barriers (snoozing, kids, no private space), and 30-day challenge framework.",
   "estimatedSections": 6,
   "reasoning": "Fills mindfulness category gap, trending topic in 2026 wellness, strong practical intent from busy professionals, supports Breathe app's quick session features, creates internal linking opportunities with breathing and meditation content",
-  "scheduledDate": "2026-02-18T09:00"
+  "scheduledDate": "2026-02-18T09:00",
+  "createdAt": "2026-03-01T08:52:33.392Z",
+  "runId": "ac7c63e5-620c-43a0-b5a7-1bbeb475ce74"
 }

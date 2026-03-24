@@ -13,6 +13,7 @@
     "migrate": "tsx scripts/migrate-to-nested.ts"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.63",
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.4.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
@@ -29,7 +30,7 @@
     "@types/sharp": "^0.31.1",
     "pino-pretty": "^13.0.0",
     "tsx": "^4.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=18"

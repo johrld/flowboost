@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import sharp from "sharp";
 import { createLogger } from "../../utils/logger.js";
 import type { PipelineContext } from "../context.js";
-import type { Article, ArticleVersion, ContentItemStatus, LanguageVariant } from "../../models/types.js";
+import type { Article, ArticleVersion, ContentItemStatus, ContentMediaAsset, LanguageVariant } from "../../models/types.js";
+import { ContentMediaStore } from "../../models/content-media.js";
 import { runOutlinePhase } from "./outline.js";
 import { runWritingPhase } from "./writing.js";
 import { runAssemblyPhase } from "./assembly.js";
@@ -137,7 +139,7 @@ export async function runProductionPipeline(ctx: PipelineContext): Promise<Artic
   const contentItem = ctx.stores.content.create({
     customerId: ctx.customerId,
     projectId: project.id,
-    type: "article",
+    type: topic.format ?? "article",
     status: contentStatus,
     title: topic.title,
     description: typeof metaFm.description === "string" ? metaFm.description : undefined,
@@ -182,6 +184,42 @@ export async function runProductionPipeline(ctx: PipelineContext): Promise<Artic
   ctx.stores.content.update(contentItem.id, {
     currentVersionId: contentVersion.id,
   });
+
+  // ── Track hero image in media store ──────────────────────────
+  if (imagePath && fs.existsSync(imagePath)) {
+    try {
+      const imgBuffer = fs.readFileSync(imagePath);
+      const imgMeta = await sharp(imgBuffer).metadata();
+      const assetId = crypto.randomUUID();
+      const fileName = `${assetId}.png`;
+      const seoFilename = `${version.slug}-hero`;
+
+      const asset: ContentMediaAsset = {
+        id: assetId,
+        contentId: contentItem.id,
+        type: "image",
+        source: "generated",
+        role: "hero",
+        mimeType: "image/png",
+        fileName,
+        seoFilename,
+        fileSize: imgBuffer.length,
+        width: imgMeta.width,
+        height: imgMeta.height,
+        generationModel: project.pipeline.imagenModel ?? "imagen-4.0-fast-generate-001",
+        createdAt: now,
+      };
+
+      const contentDir = ctx.stores.content.entityDir(contentItem.id);
+      const mediaStore = new ContentMediaStore(contentDir);
+      mediaStore.add(asset, imgBuffer);
+
+      ctx.stores.content.update(contentItem.id, { heroImageId: assetId });
+      log.info({ contentId: contentItem.id, assetId }, "hero image tracked in media store");
+    } catch (err) {
+      log.warn({ err }, "failed to track hero image in media store — non-fatal");
+    }
+  }
 
   // Update topic status in TopicStore
   ctx.stores.topics.update(topic.id, {

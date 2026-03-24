@@ -1,8 +1,8 @@
 {
   "id": "topic-1",
-  "status": "produced",
-  "title": "Breathing Exercises for Workplace Stress: 4 Techniques You Can Do at Your Desk",
-  "category": "breathing",
+  "status": "proposed",
+  "title": "Cortisol senken: Wie Atemübungen und Meditation das Stresshormon regulieren",
+  "category": "stress",
   "priority": 1,
   "keywords": {
     "primary": "breathing exercises for workplace stress",
@@ -25,5 +25,8 @@
   "estimatedSections": 6,
   "reasoning": "Fills critical breathing category gap, directly builds on existing stress content with expanded keyword diversity, strong commercial intent for B2B partnerships, complements existing anxiety/breathing techniques articles, highest strategic value for brand differentiation",
   "approvedAt": "2026-02-12T11:32:03.754Z",
-  "articleId": "eaa54c1c-8c61-4143-9704-3340b47cb308"
+  "articleId": "eaa54c1c-8c61-4143-9704-3340b47cb308",
+  "createdAt": "2026-03-01T08:52:33.392Z",
+  "runId": "ac7c63e5-620c-43a0-b5a7-1bbeb475ce74",
+  "scheduledDate": "2026-03-13T09:00"
 }

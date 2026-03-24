@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../breathejourney.com"
+		}
+	],
+	"settings": {
+		"imageUploader.clearClipboardAfterUpload": true,
+		"imageUploader.retentionDays": 2,
+		"imageUploader.keybinding": "ctrl+alt+v"
+	}
+}

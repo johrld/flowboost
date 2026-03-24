@@ -1,0 +1,27 @@
+{
+  "id": "0c9d6d9b-93c3-4a78-aef0-336b1e5efcd9",
+  "status": "proposed",
+  "title": "Richtig atmen in der Meditation – Ein Leitfaden für Einsteiger",
+  "category": "meditation",
+  "priority": 0,
+  "keywords": {
+    "primary": "Atemtechniken für Anfänger",
+    "secondary": [
+      "Meditation Anfänger",
+      "richtig atmen",
+      "Atemübungen",
+      "Zwerchfellatmung",
+      "bewusstes Atmen"
+    ]
+  },
+  "searchIntent": "informational",
+  "competitorInsights": "",
+  "suggestedAngle": "Breathing Techniques for Beginners in Meditation",
+  "estimatedSections": 0,
+  "reasoning": "",
+  "format": "article",
+  "source": "user",
+  "enriched": false,
+  "createdAt": "2026-02-23T12:29:34.050Z",
+  "scheduledDate": "2026-03-11T09:00"
+}

@@ -1,6 +1,6 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { createLogger } from "../utils/logger.js";
 import type { PipelineContext } from "./context.js";
 import type { AgentCall, AgentEvent } from "../models/types.js";
@@ -60,9 +60,38 @@ function summarizeToolInput(name: string, input: Record<string, unknown>): strin
 }
 
 /**
- * Run a single agent via Claude Code CLI.
- * Uses `claude -p` (print mode) with --output-format stream-json for live events.
- * MCP tools are provided via a dynamic config file.
+ * Extract tool call events from an SDK assistant message.
+ */
+function extractToolEvents(
+  message: SDKMessage,
+  events: AgentEvent[],
+  onEvent?: (event: AgentEvent) => void,
+): void {
+  if (message.type !== "assistant") return;
+  const content = message.message?.content;
+  if (!Array.isArray(content)) return;
+
+  for (const block of content) {
+    if (block.type === "tool_use") {
+      const event: AgentEvent = {
+        type: "tool_call",
+        timestamp: new Date().toISOString(),
+        tool: String(block.name ?? "unknown"),
+        input: summarizeToolInput(
+          String(block.name ?? ""),
+          (block.input as Record<string, unknown>) ?? {},
+        ),
+      };
+      events.push(event);
+      onEvent?.(event);
+    }
+  }
+}
+
+/**
+ * Run a single agent via Claude Agent SDK.
+ * Uses the `query()` function with native TypeScript async generator.
+ * MCP tools are provided via stdio server config.
  */
 export async function runAgent(
   ctx: PipelineContext,
@@ -71,200 +100,159 @@ export async function runAgent(
   onEvent?: (event: AgentEvent) => void,
 ): Promise<AgentRunResult> {
   const startTime = Date.now();
-  log.info({ agent: config.name, model: config.model ?? "sonnet" }, "starting agent");
+  const model = config.model ?? "sonnet";
+  log.info({ agent: config.name, model }, "starting agent");
 
-  // Create MCP config file if custom tools are needed
-  let mcpConfigPath: string | undefined;
-  if (config.useMcpTools !== false) {
-    fs.mkdirSync(ctx.scratchpadDir, { recursive: true });
-    mcpConfigPath = path.join(ctx.scratchpadDir, `mcp-${config.name}-${Date.now()}.json`);
-    fs.writeFileSync(mcpConfigPath, JSON.stringify({
-      mcpServers: {
-        flowboost: {
-          command: "node",
-          args: [getMcpServerPath()],
-          env: {
-            FLOWBOOST_DATA_DIR: ctx.dataDir,
-            FLOWBOOST_CUSTOMER_DIR: ctx.customerDir,
-            FLOWBOOST_PROJECT_DIR: ctx.projectDir,
-            GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
-          },
-        },
+  // Build MCP server config (same stdio server, passed directly — no temp files)
+  const mcpServers = config.useMcpTools !== false ? {
+    flowboost: {
+      command: "node",
+      args: [getMcpServerPath()],
+      env: {
+        FLOWBOOST_DATA_DIR: ctx.dataDir,
+        FLOWBOOST_CUSTOMER_DIR: ctx.customerDir,
+        FLOWBOOST_PROJECT_DIR: ctx.projectDir,
+        GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
       },
-    }));
-  }
+    },
+  } : undefined;
 
-  // Build CLI arguments
-  const args = [
-    "-p",                                    // print mode
-    "--verbose",                             // required for stream-json
-    "--output-format", "stream-json",       // streaming JSON events
-    "--model", config.model ?? "sonnet",
-  ];
+  const events: AgentEvent[] = [];
+  let resultText = "";
+  let assistantText = "";
+  let costUsd = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let sessionId = "";
 
-  if (config.maxTurns) {
-    args.push("--max-turns", String(config.maxTurns));
-  }
-
-  if (config.tools?.length) {
-    args.push("--allowedTools", config.tools.join(","));
-  }
-
-  if (mcpConfigPath) {
-    args.push("--mcp-config", mcpConfigPath);
-  }
-
-  log.debug({ agent: config.name, args: args.join(" ") }, "spawning claude CLI");
+  log.debug({ agent: config.name, model, maxTurns: config.maxTurns }, "running SDK query");
 
   try {
-    const result = await spawnClaude(args, prompt, onEvent);
+    for await (const message of query({
+      prompt,
+      options: {
+        model,
+        maxTurns: config.maxTurns,
+        allowedTools: config.tools,
+        mcpServers,
+        permissionMode: "acceptEdits",
+      },
+    })) {
+      // Extract tool calls from assistant messages
+      extractToolEvents(message, events, onEvent);
+
+      // Collect text from assistant messages as fallback
+      if (message.type === "assistant") {
+        const content = message.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === "text" && typeof block.text === "string") {
+              assistantText += block.text;
+            }
+          }
+        }
+      }
+
+      // Capture final result with cost/tokens
+      if (message.type === "result") {
+        if (message.subtype === "success") {
+          resultText = message.result ?? "";
+        }
+        costUsd = message.total_cost_usd ?? 0;
+        inputTokens = message.usage?.input_tokens ?? 0;
+        outputTokens = message.usage?.output_tokens ?? 0;
+        sessionId = message.session_id ?? "";
+      }
+    }
+
+    const finalText = resultText || assistantText;
     const durationMs = Date.now() - startTime;
 
-    log.info({ agent: config.name, durationMs }, "agent completed");
-    return { ...result, durationMs };
+    log.info({ agent: config.name, durationMs, costUsd }, "agent completed");
+
+    return {
+      text: finalText,
+      costUsd,
+      tokens: { input: inputTokens, output: outputTokens },
+      durationMs,
+      sessionId,
+      events: events.slice(-MAX_EVENTS),
+    };
   } catch (error) {
     const durationMs = Date.now() - startTime;
     log.error({ agent: config.name, err: error, durationMs }, "agent failed");
     throw error;
-  } finally {
-    if (mcpConfigPath && fs.existsSync(mcpConfigPath)) {
-      fs.unlinkSync(mcpConfigPath);
-    }
   }
 }
 
 /**
- * Spawn claude CLI process, parse stream-json events, collect result.
+ * Run a lightweight agent via Claude Agent SDK without MCP tools or pipeline tracking.
+ * Suitable for chat, enrichment, and other simple prompt→response tasks.
  */
-function spawnClaude(
-  args: string[],
+export async function runSimpleAgent(
   prompt: string,
-  onEvent?: (event: AgentEvent) => void,
+  options?: { model?: string; maxTurns?: number; systemPrompt?: string },
 ): Promise<AgentRunResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("claude", args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env },
-    });
+  const startTime = Date.now();
+  const model = options?.model ?? "haiku";
 
-    const events: AgentEvent[] = [];
+  log.info({ model }, "starting simple agent");
+
+  try {
     let resultText = "";
-    let assistantText = ""; // fallback: collect text from assistant messages
+    let assistantText = "";
     let costUsd = 0;
     let inputTokens = 0;
     let outputTokens = 0;
     let sessionId = "";
-    let stderr = "";
 
-    // Parse stream-json: each line is a JSON event
-    let buffer = "";
-    child.stdout.on("data", (chunk: Buffer) => {
-      buffer += chunk.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const msg = JSON.parse(line);
-          processStreamEvent(msg, events, onEvent);
-
-          // Collect text from assistant messages as fallback
-          if (msg.type === "assistant") {
-            const message = msg.message as { content?: Array<Record<string, unknown>> } | undefined;
-            for (const block of message?.content ?? []) {
-              if (block.type === "text" && typeof block.text === "string") {
-                assistantText += block.text;
-              }
+    for await (const message of query({
+      prompt,
+      options: {
+        model,
+        maxTurns: options?.maxTurns ?? 1,
+        systemPrompt: options?.systemPrompt,
+        permissionMode: "acceptEdits",
+      },
+    })) {
+      // Collect text from assistant messages as fallback
+      if (message.type === "assistant") {
+        const content = message.message?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === "text" && typeof block.text === "string") {
+              assistantText += block.text;
             }
           }
-
-          // Capture result
-          if (msg.type === "result") {
-            resultText = msg.result ?? resultText;
-            costUsd = msg.total_cost_usd ?? msg.cost_usd ?? 0;
-            const usage = msg.usage as Record<string, number> | undefined;
-            inputTokens = usage?.input_tokens ?? msg.input_tokens ?? 0;
-            outputTokens = usage?.output_tokens ?? msg.output_tokens ?? 0;
-            sessionId = (msg.session_id as string) ?? "";
-          }
-        } catch { /* ignore parse errors for incomplete lines */ }
-      }
-    });
-
-    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
-
-    child.stdin.write(prompt);
-    child.stdin.end();
-
-    child.on("error", (err) => {
-      reject(new Error(`Failed to spawn claude CLI: ${err.message}`));
-    });
-
-    child.on("close", (code) => {
-      // Process any remaining buffer
-      if (buffer.trim()) {
-        try {
-          const msg = JSON.parse(buffer);
-          processStreamEvent(msg, events, onEvent);
-          if (msg.type === "result") {
-            resultText = msg.result ?? resultText;
-            costUsd = msg.total_cost_usd ?? msg.cost_usd ?? 0;
-            const usage = msg.usage as Record<string, number> | undefined;
-            inputTokens = usage?.input_tokens ?? msg.input_tokens ?? 0;
-            outputTokens = usage?.output_tokens ?? msg.output_tokens ?? 0;
-            sessionId = (msg.session_id as string) ?? "";
-          }
-        } catch { /* ignore */ }
+        }
       }
 
-      // Use assistantText as fallback if result event had empty text
-      const finalText = resultText || assistantText;
-
-      if (code !== 0 && !finalText) {
-        reject(new Error(`Claude CLI exited with code ${code}: ${stderr.slice(0, 500)}`));
-        return;
-      }
-
-      log.debug({ hasResult: !!resultText, hasAssistant: !!assistantText, textLength: finalText.length }, "agent output collected");
-
-      resolve({
-        text: finalText,
-        costUsd,
-        tokens: { input: inputTokens, output: outputTokens },
-        sessionId,
-        durationMs: 0,
-        events: events.slice(-MAX_EVENTS),
-      });
-    });
-  });
-}
-
-/**
- * Process a single stream-json event, extract tool calls and text.
- */
-function processStreamEvent(
-  msg: Record<string, unknown>,
-  events: AgentEvent[],
-  onEvent?: (event: AgentEvent) => void,
-): void {
-  if (msg.type === "assistant") {
-    const message = msg.message as { content?: Array<Record<string, unknown>> } | undefined;
-    for (const block of message?.content ?? []) {
-      if (block.type === "tool_use") {
-        const event: AgentEvent = {
-          type: "tool_call",
-          timestamp: new Date().toISOString(),
-          tool: String(block.name ?? "unknown"),
-          input: summarizeToolInput(
-            String(block.name ?? ""),
-            (block.input as Record<string, unknown>) ?? {},
-          ),
-        };
-        events.push(event);
-        onEvent?.(event);
+      if (message.type === "result") {
+        if (message.subtype === "success") {
+          resultText = message.result ?? "";
+        }
+        costUsd = message.total_cost_usd ?? 0;
+        inputTokens = message.usage?.input_tokens ?? 0;
+        outputTokens = message.usage?.output_tokens ?? 0;
+        sessionId = message.session_id ?? "";
       }
     }
+
+    const finalText = resultText || assistantText;
+    const durationMs = Date.now() - startTime;
+    log.info({ model, durationMs }, "simple agent completed");
+
+    return {
+      text: finalText,
+      costUsd,
+      tokens: { input: inputTokens, output: outputTokens },
+      durationMs,
+      sessionId,
+      events: [],
+    };
+  } catch (error) {
+    log.error({ err: error }, "simple agent failed");
+    throw error;
   }
 }
 

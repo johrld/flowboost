@@ -1,166 +1,166 @@
 {
   "projectId": "550e8400-e29b-41d4-a716-446655440000",
-  "createdAt": "2026-02-16T19:41:06.383Z",
-  "updatedAt": "2026-02-16T19:41:06.383Z",
+  "createdAt": "2026-03-01T08:48:26.238Z",
+  "updatedAt": "2026-03-01T08:48:26.238Z",
   "audit": {
-    "totalArticles": 0,
+    "totalArticles": 10,
     "byCategory": {
-      "meditation": 0,
-      "breathing": 0,
-      "mindfulness": 0,
-      "sleep": 0,
-      "stress": 0
+      "meditation": 2,
+      "breathing": 3,
+      "mindfulness": 3,
+      "sleep": 1,
+      "stress": 1
     },
     "byLanguage": {
-      "de": 0,
-      "en": 0,
-      "es": 0
+      "de": 10,
+      "en": 10,
+      "es": 10
     },
-    "categoryGaps": [
-      "meditation",
-      "breathing",
-      "mindfulness",
-      "sleep",
-      "stress"
-    ],
+    "categoryGaps": ["sleep", "stress", "meditation"],
     "recommendations": [
-      "No existing content found. Start by creating foundational articles across all 5 categories (meditation, breathing, mindfulness, sleep, stress).",
-      "Prioritize creating content in the default language (de) first, then translate to en and es.",
-      "Aim for at least 3-5 articles per category to establish topical authority.",
-      "Ensure all new articles have corresponding translations in all 3 languages using consistent translationKey values.",
-      "Focus on high-value keywords for each category to maximize SEO impact from the start."
+      "Expand the 'sleep' category urgently — only 1 article exists; add topics such as sleep hygiene, power naps, evening wind-down routines, and sleep sounds/NSDR to match competitor coverage.",
+      "Expand the 'stress' category urgently — only 1 article targets stress/anxiety; add content on burnout prevention, workplace stress, progressive muscle relaxation, and chronic stress management.",
+      "Grow the 'meditation' category from 2 to at least 4 articles; high-value gap topics include meditation for beginners, focus/productivity meditation, and evening meditation routines.",
+      "Translation pipeline is fully healthy — all 10 articles are available in DE, EN, and ES with zero missing translations; maintain this parity as new articles are added.",
+      "Language coverage is perfectly balanced (10 articles per language); ensure every new article is immediately translated into all three languages to preserve this balance.",
+      "Breathing category is well-covered (3 articles) but skews advanced (Wim Hof) — add a beginner-friendly overview article (e.g., 'Atemübungen für Anfänger') to broaden top-of-funnel reach.",
+      "Mindfulness category has 3 articles but lacks a foundational 'What is Mindfulness?' pillar page — creating one would boost internal linking and SEO authority for the entire category.",
+      "No pillar/hub pages exist for any category; consider producing long-form category overview articles (1,500–2,500 words) for 'sleep' and 'stress' to capture high-volume head keywords.",
+      "Keyword coverage gaps detected in 'stress': missing common queries such as 'stressbewältigung techniken', 'burnout meditation', and 'atemübungen gegen stress'; prioritize these in upcoming articles.",
+      "Keyword coverage gaps detected in 'sleep': missing queries like 'einschlafprobleme was tun', 'power nap anleitung', and 'yoga nidra schlafen'; these represent high-intent traffic opportunities."
     ]
   },
   "topics": [
     {
       "id": "topic-1",
       "status": "proposed",
-      "title": "Box Breathing: Die 4-4-4-4 Atemtechnik der Navy SEALs",
-      "category": "breathing",
+      "title": "Cortisol senken: Wie Atemübungen und Meditation das Stresshormon regulieren",
+      "category": "stress",
       "priority": 1,
       "keywords": {
-        "primary": "box breathing",
+        "primary": "Cortisol senken",
         "secondary": [
-          "4-4-4-4 atemtechnik",
-          "atemübungen stress",
-          "atemtechnik entspannung",
-          "box breathing anleitung"
+          "Stresshormon senken",
+          "Cortisol Meditation",
+          "Cortisol natürlich senken",
+          "Atemübungen gegen Stress",
+          "Cortisolspiegel senken"
         ],
         "longTail": [
-          "box breathing navy seals technik",
-          "4-4-4-4 atmung anleitung",
-          "atemtechnik stress abbauen sofort"
+          "Wie kann ich meinen Cortisolspiegel schnell senken?",
+          "Welche Meditation senkt Cortisol am effektivsten?",
+          "Atemübungen gegen hohen Cortisolspiegel Anleitung"
         ]
       },
-      "searchIntent": "how-to",
-      "competitorInsights": "Competitors (flowlab.com, nicetomeetme.at, ousuca.com) mention Navy SEALs for credibility but provide generic breathing instructions. Most articles lack visual guides or practical integration tips. Gaps: missing common mistakes section, no troubleshooting for breath-holding difficulties, limited workplace application examples.",
-      "suggestedAngle": "Leverage Navy SEALs credibility but focus on practical workplace application. Include visual step-by-step guide, common beginner mistakes, and 3-minute desk-friendly routine. Evidence-based (parasympathetic activation) without esoteric language. Directly targets gestresste Berufstätige.",
+      "searchIntent": "informational",
+      "competitorInsights": "Top results from BARMER, Onmeda, Zentrum-der-Gesundheit, and WeightWatchers.de cover cortisol reduction through diet, sleep, and exercise, treating breathwork and meditation as a brief bullet point among many. No article focuses exclusively on the meditation-and-breathing-to-cortisol pathway. The Max Planck Institute study showing 25% cortisol reduction in hair after 6 months of meditation training is barely cited across competitors.",
+      "suggestedAngle": "Science-first explainer: define cortisol plainly ('das Stresshormon'), cite the Max Planck and Carnegie Mellon studies showing 25–30% cortisol reduction through meditation, then deliver 3 ready-to-use 5-minute breathing protocols with step-by-step instructions. Internal links to Box Breathing and 4-7-8 articles provide the practical exercises while this article owns the science hub.",
       "estimatedSections": 5,
-      "reasoning": "Priority 1: Fills 'breathing' category gap with unique military credibility + workplace angle. Perfectly aligns with brand mission (accessible, practical, evidence-based). Differentiates from wellness-focused competitors. Targets primary audience (stressed professionals). Core to Breathe app positioning (breath-focused)."
+      "reasoning": "Priority 1: Addresses the most urgent category gap (stress has only 1 article) while targeting the highest-volume keyword in the researched set. The science-first angle exploits a clear competitive gap — no competitor focuses exclusively on the breathing/meditation-to-cortisol pathway. Perfect brand fit: evidence-based, cites peer-reviewed studies, avoids all esoteric framing. Creates immediate internal linking to two existing breathing articles (Box Breathing, 4-7-8), strengthening the content cluster from day one. The Breathe brand voice — scientific yet accessible, practical, no Esoterik — is a natural match for the topic."
     },
     {
       "id": "topic-2",
       "status": "proposed",
-      "title": "Stress abbauen in 3 Minuten: 5 Sofort-Übungen für den Schreibtisch",
-      "category": "stress",
+      "title": "Progressive Muskelentspannung: Schritt-für-Schritt-Anleitung zum Einschlafen",
+      "category": "sleep",
       "priority": 2,
       "keywords": {
-        "primary": "stress abbauen",
+        "primary": "progressive Muskelentspannung",
         "secondary": [
-          "stress übungen",
-          "stress reduzieren schnell",
-          "atemübungen stress",
-          "stressbewältigung tipps"
+          "PMR Einschlafen",
+          "Jacobson Entspannung Anleitung",
+          "Tiefenentspannung Übungen",
+          "Muskelentspannung Schlaf"
         ],
         "longTail": [
-          "stress abbauen sofort übungen",
-          "stress reduzieren am arbeitsplatz",
-          "3 minuten entspannung büro"
+          "Progressive Muskelentspannung Schritt für Schritt Anleitung für Anfänger",
+          "Wie lange dauert progressive Muskelentspannung zum Einschlafen?",
+          "Progressive Muskelentspannung oder 4-7-8 Atemtechnik – was hilft besser beim Einschlafen?"
         ]
       },
       "searchIntent": "how-to",
-      "competitorInsights": "Top results (anti-stress-team.de, fisjo.de, tk.de, barmer.de) provide comprehensive stress management guides with breathing + PMR + exercise + sleep advice. Gaps: too comprehensive = overwhelming, missing ultra-short desk-friendly focus, unclear which technique for acute stress vs. prevention, no workplace discretion tips.",
-      "suggestedAngle": "Hyper-focused on desk-friendly, workplace-appropriate exercises doable in 3 minutes. Curate only 5 best techniques (1 breathing, 1 micro-movement, 1 mental, etc.). Emphasize discretion ('colleagues won't notice'). Scientific backing (cortisol reduction) with practical workplace scenarios ('before presentation', 'after difficult call').",
-      "estimatedSections": 5,
-      "reasoning": "Priority 2: Fills 'stress' gap with highest search demand keyword. Perfect brand fit (accessible 3-min format, workplace context, practical). Directly targets primary audience pain point. Complements Box Breathing article via internal linking. Differentiates by ultra-short duration + discretion angle."
+      "competitorInsights": "Mattress brands dominate (besserschlafen.de, betten.de, bett1.de, yakbett.de) with thin overviews or audio-download promotions. AOK provides a solid summary. No result offers a complete written muscle-group-by-muscle-group sequence with exact timing, troubleshooting for common problems (racing thoughts, inability to relax specific areas), or a comparison to other sleep techniques. The Jacobson origin story is repeated without scientific depth.",
+      "suggestedAngle": "The definitive written guide for non-audio learners: full muscle-group sequence table, 5-second tension / 10-second release timing, a troubleshooting section ('Was tun, wenn der Kopf nicht ruhig wird?'), and a quick-reference box. Frame as a body-first alternative for readers who struggle with breath-only approaches — cross-link to the existing 4-7-8 and Schlafmeditation articles.",
+      "estimatedSections": 6,
+      "reasoning": "Priority 2: Sleep is equally urgent to stress (both categories have only 1 article), and the how-to search intent of 'progressive Muskelentspannung' signals high conversion potential — readers want a specific, actionable technique. The comprehensive written guide gap is severe (commercial mattress brands dominate with thin content), giving Breathe a strong ranking opportunity. Immediate cross-links to existing 4-7-8 and Schlafmeditation articles reinforce the sleep cluster. The 100-year clinical track record and 2022 systematic review evidence align perfectly with Breathe's evidence-based brand voice, and the body-first framing introduces a distinct angle not yet covered in any existing article."
     },
     {
       "id": "topic-3",
       "status": "proposed",
-      "title": "5-Minuten-Meditation für Anfänger: Dein sanfter Einstieg",
-      "category": "meditation",
+      "title": "MBSR für Einsteiger: Stressbewältigung durch Achtsamkeit – ohne Kurs",
+      "category": "stress",
       "priority": 3,
       "keywords": {
-        "primary": "meditation für anfänger",
+        "primary": "MBSR",
         "secondary": [
-          "5 minuten meditation",
-          "meditieren lernen",
-          "meditation einstieg",
-          "meditation anfänger tipps"
+          "MBSR Übungen",
+          "Stressbewältigung durch Achtsamkeit",
+          "Mindfulness Based Stress Reduction Deutsch",
+          "Achtsamkeit gegen Stress Anleitung"
         ],
         "longTail": [
-          "wie meditieren anfänger",
-          "5 minuten meditation morgens",
-          "meditation lernen ohne vorkenntnisse"
+          "Was ist MBSR und wie funktioniert es für Anfänger?",
+          "Kann ich MBSR ohne Kurs selbst lernen?",
+          "MBSR Übungen für zu Hause kostenlos Anleitung"
         ]
       },
-      "searchIntent": "how-to",
-      "competitorInsights": "Top articles (entspannung-total.de, yoga-vidya.de, lotuscrafts.com) focus on comprehensive guides with 10+ meditation types, often overwhelming for beginners. Most recommend 10-20 minute sessions. Gaps: lack of quick-start approach, too much theory, missing practical 5-minute routines that busy professionals can implement immediately.",
-      "suggestedAngle": "Focus exclusively on 5-minute meditation as the entry point. No overwhelming choices—just one simple breath meditation technique with step-by-step instructions. Emphasize scientific evidence (Cortisol reduction) while avoiding esoteric language. Perfect for gestresste Berufstätige who need results fast.",
+      "searchIntent": "informational",
+      "competitorInsights": "Wikipedia ranks but is dry and academic. Course-selling institutes (Institut für Achtsamkeit, MBSR-Kurs-Köln, MentalPower.ch) dominate with conversion-focused pages. Karrierebibel and 7Mind offer partial overviews. Critical gap: no free, authoritative article delivers the three core MBSR practices (Body Scan, mindful breathing, mindful movement) as self-study exercises without requiring a paid 8-week program — a gap Breathe is uniquely positioned to fill.",
+      "suggestedAngle": "Practice-first demystification: briefly explain Jon Kabat-Zinn's origin, then give 3 standalone 10-minute exercises (Body Scan cross-link, mindful breathing, one mindful movement). Be transparent: the full 8-week course is the clinical gold standard, but these exercises deliver measurable stress relief immediately. Positions Breathe as a credible, non-commercial authority.",
       "estimatedSections": 5,
-      "reasoning": "Priority 3: Fills 'meditation' gap with high search volume. Strong brand alignment (accessible, no-pressure 5-min format, targets skeptics). Addresses primary audience (meditation newbies, busy professionals). Differentiates by radical simplification vs. overwhelming competitor guides. Foundation for future meditation cluster."
+      "reasoning": "Priority 3: Adds the second stress article using an internationally recognized framework that captures high search volume. The non-commercial, practice-first angle directly exploits the gap left by course-selling institutes and dry academic pages — perfectly matching Breathe's mission to make meditation accessible without barriers or costs. Natural hub linking to existing Body Scan Meditation and Meditation bei Angst articles strengthens both the stress and mindfulness categories simultaneously. The 'ohne Kurs' framing in the title directly addresses the primary audience barrier (cost, time commitment) and differentiates from every competing result."
     },
     {
       "id": "topic-4",
       "status": "proposed",
-      "title": "Besser einschlafen in 5 Minuten: Die 4-7-8 Atemtechnik",
+      "title": "Autogenes Training: Anleitung für Anfänger und besseren Schlaf",
       "category": "sleep",
       "priority": 4,
       "keywords": {
-        "primary": "besser einschlafen",
+        "primary": "autogenes Training Einschlafen",
         "secondary": [
-          "4-7-8 atmung",
-          "schnell einschlafen tipps",
-          "einschlafhilfe natürlich",
-          "atemtechnik einschlafen"
+          "autogenes Training Anleitung Anfänger",
+          "autogenes Training Schlaf",
+          "Selbstentspannung Übungen",
+          "autogenes Training Formeln"
         ],
         "longTail": [
-          "4-7-8 atemtechnik anleitung einschlafen",
-          "in 5 minuten einschlafen technik",
-          "schnell einschlafen ohne medikamente"
+          "Wie lange dauert es bis autogenes Training beim Einschlafen wirkt?",
+          "Autogenes Training oder progressive Muskelentspannung – was ist besser?",
+          "Autogenes Training Grundstufe Formeln kostenlos lernen"
         ]
       },
       "searchIntent": "how-to",
-      "competitorInsights": "Competitors (brisant.de, schlafzimmer.de, tempur.com) explain 4-7-8 technique but embed it within generic sleep hygiene lists (screen time, room temperature, etc.). Gaps: 4-7-8 gets diluted among 10+ tips, missing standalone deep-dive, no troubleshooting for breath-hold difficulties, unclear what to do when technique 'doesn't work'.",
-      "suggestedAngle": "Dedicated deep-dive on 4-7-8 breathing only—no dilution with generic sleep tips. Include Dr. Andrew Weil credentials, scientific mechanism (parasympathetic activation), step-by-step video/visual, beginner modifications (3-5-6 variation), and realistic expectations ('works after 4-8 weeks practice'). Cross-link to Box Breathing article.",
+      "competitorInsights": "Commercial mattress and sleep-product sites dominate (betten.de, yakbett.de, matratzenschutz24.net). AOK and Neurexan provide solid overviews. Critical gap: no result combines the complete 6-formula Grundstufe sequence with honest expectation-setting (technique takes 7–8 weeks to master) and a practical 'Quick Win' bridge for readers who need sleep help tonight. The comparison to PMR is completely absent across all top results.",
+      "suggestedAngle": "Honest, trust-building guide: lead with transparent expectation-setting ('Autogenes Training ist ein Investment — hier ist, was du in Woche 1, 4 und 8 erwarten kannst'), deliver the 6 Grundstufe formulas with pronunciation and usage tips, and include a sidebar cross-linking to PMR and 4-7-8 for readers needing faster results. Honesty about the learning curve differentiates from shallow commercial coverage and builds long-term trust.",
       "estimatedSections": 5,
-      "reasoning": "Priority 4: Fills 'sleep' gap targeting secondary audience (sleep issues). Strong search demand. Differentiates via deep-dive focus (competitors dilute topic). Reinforces breath-technique expertise. Natural internal linking to Box Breathing. Evidence-based angle (Dr. Weil) builds authority."
+      "reasoning": "Priority 4: Delivers the second sleep article and pairs with the PMR guide (topic-2) to form a two-article sleep cluster — giving readers a technique comparison ('PMR vs. Autogenes Training') that no competitor currently offers. The classically German technique carries strong domestic search demand and a distinct self-regulation mechanism (autosuggestion) not yet covered in existing content. Honest expectation-setting — a direct expression of Breathe's brand value of accessibility without false promises — is rare in competitive results and is a trust differentiator. Cross-links to topic-2 (PMR) and the existing 4-7-8 article consolidate the sleep cluster further."
     },
     {
       "id": "topic-5",
       "status": "proposed",
-      "title": "Achtsamkeit im Alltag: 10 Übungen für mehr Ruhe (ohne Meditation)",
-      "category": "mindfulness",
+      "title": "Metta-Meditation: Liebende-Güte-Übung gegen Stress und Selbstkritik",
+      "category": "meditation",
       "priority": 5,
       "keywords": {
-        "primary": "achtsamkeit im alltag",
+        "primary": "Metta-Meditation",
         "secondary": [
-          "achtsamkeitsübungen alltag",
-          "achtsamkeit lernen",
-          "achtsamkeit praktisch",
-          "achtsamkeit anfänger"
+          "liebende Güte Meditation",
+          "Selbstmitgefühl Übung",
+          "Mitgefühl Meditation Anleitung",
+          "Metta Anleitung Deutsch"
         ],
         "longTail": [
-          "achtsamkeit üben ohne meditation",
-          "achtsamkeit alltag 5 minuten",
-          "achtsam werden im beruf"
+          "Metta Meditation für Anfänger Schritt für Schritt Anleitung",
+          "Was bewirkt Metta Meditation wissenschaftlich?",
+          "Liebende Güte Meditation gegen innere Unruhe und Stress"
         ]
       },
       "searchIntent": "how-to",
-      "competitorInsights": "Top results (dfme-achtsamkeit.com, anti-stress-team.de, tk.de) provide 20-30+ exercises, overwhelming readers. Most focus on traditional mindfulness meditation. Gaps: too many choices, unclear which to start with, missing 'meditation-skeptic' positioning, no workplace-specific exercises.",
-      "suggestedAngle": "Explicitly position as 'without formal meditation' to attract skeptics. Curate only 10 most practical exercises ranked by ease. Focus on micro-moments (brushing teeth, coffee breaks, commute) that require zero extra time. Scientific backing (stress reduction) without esoteric framing.",
-      "estimatedSections": 6,
-      "reasoning": "Priority 5: Fills 'mindfulness' gap while differentiating from meditation content. Addresses meditation skeptics (expands audience). High search volume. Strong brand fit (practical, accessible, no esoteric language). Complements meditation article by offering non-meditation path. Balances category coverage."
+      "competitorInsights": "7mind.de, DickerBuddha, and Karrierebibel explain Metta through a spiritual/Buddhist lens with Pali terminology and abstract descriptions of 'unconditional love'. psychologie-des-gluecks.de cites Kristin Neff's self-compassion research but is text-dense. None frame Metta as a practical, secular anti-stress and anti-self-criticism tool for skeptical modern users with a short, structured session format.",
+      "suggestedAngle": "Secular, science-backed reframe: lead with Kristin Neff's self-compassion research and studies showing Metta reduces self-criticism and social anxiety. Strip the Buddhist framing entirely. Offer a 4-phase, 10-minute version with modern German affirmation phrases ('Möge ich in Ruhe sein', 'Möge ich gut mit mir umgehen') — no Pali, no spirituality. Positions it as a self-compassion workout, not a ritual.",
+      "estimatedSections": 5,
+      "reasoning": "Priority 5: Fills the meditation category gap (currently 2 articles, target is 4) with a modality not yet covered — emotional and relational focus vs. the body- and breath-based techniques in existing content. The secular, science-backed reframe is a direct competitive differentiator against Buddhist-framing competitors and aligns precisely with Breathe's strict no-esoteric brand voice. Serves the stress audience as a secondary benefit (self-criticism and social anxiety reduction), reinforcing cross-category relevance and enabling a natural internal link from topic-3 (MBSR). Ranked fifth because sleep and stress category gaps are more urgent, but this article rounds out the meditation cluster and broadens the audience to users seeking emotional self-regulation tools."
     }
   ]
 }
