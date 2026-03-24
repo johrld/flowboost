@@ -22,5 +22,6 @@
   "format": "article",
   "source": "user",
   "enriched": false,
-  "createdAt": "2026-02-23T12:29:34.050Z"
+  "createdAt": "2026-02-23T12:29:34.050Z",
+  "scheduledDate": "2026-03-11T09:00"
 }

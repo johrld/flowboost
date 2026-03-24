@@ -27,5 +27,6 @@
   "approvedAt": "2026-02-12T11:32:03.754Z",
   "articleId": "eaa54c1c-8c61-4143-9704-3340b47cb308",
   "createdAt": "2026-03-01T08:52:33.392Z",
-  "runId": "ac7c63e5-620c-43a0-b5a7-1bbeb475ce74"
+  "runId": "ac7c63e5-620c-43a0-b5a7-1bbeb475ce74",
+  "scheduledDate": "2026-03-13T09:00"
 }
