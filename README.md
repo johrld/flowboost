@@ -57,14 +57,10 @@ FlowBoost uses the [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents/
 git clone https://github.com/johrld/flowboost.git
 cd flowboost
 
-# 2. Configure environment
-cp .env.example .env
-# Edit .env and set ANTHROPIC_API_KEY
-
-# 3. Initialize seed data
+# 2. Run setup (creates .env, configures auth, seeds data)
 bash scripts/setup.sh
 
-# 4. Start services
+# 3. Start services
 docker compose up --build
 ```
 
@@ -73,37 +69,77 @@ The API runs at [http://localhost:6100](http://localhost:6100).
 
 ## Authentication
 
-The Claude Agent SDK runs Claude Code CLI as a subprocess. The CLI needs credentials to call the Anthropic API.
+The Claude Agent SDK spawns Claude Code CLI as a subprocess. The CLI picks up credentials from environment variables or its own credential store — no auth code needed in the application.
 
-### Option 1: API Key (recommended)
+```
+.env (ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN)
+  → docker-compose.yml (env_file: .env)
+    → Container process.env
+      → Agent SDK query() spawns CLI subprocess (inherits env)
+        → CLI authenticates with Anthropic API
+```
 
-Set `ANTHROPIC_API_KEY` in your `.env` file. This is the simplest setup.
+### Option 1: API Key (pay-per-use)
+
+Set `ANTHROPIC_API_KEY` in your `.env` file. Requires a [Console account](https://console.anthropic.com) with credits.
 
 ```bash
 # .env
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### Option 2: Claude CLI Credentials (Max subscription)
+### Option 2: OAuth Token (Max subscription)
 
-If you have a Claude Max subscription and are logged into the CLI (`claude login`), mount your credentials into the container:
+If you have a Claude Max subscription, paste your OAuth access token directly. No volume mounts needed.
+
+On **Linux**, extract the token from:
+```bash
+cat ~/.claude/.credentials.json | grep accessToken
+```
+
+On **macOS**, the CLI stores credentials in the Keychain, not as files. You can extract the token via Keychain Access or use Option 3 instead.
 
 ```bash
-# Copy the override template
+# .env
+ANTHROPIC_AUTH_TOKEN=sk-ant-oat01-...
+```
+
+> **Note:** The access token expires after a few months. When it does, you need to paste a fresh one. For automatic refresh, use Option 3.
+
+### Option 3: CLI Login (Max subscription, recommended)
+
+Authenticate the CLI inside the container using a persistent Docker volume. The CLI stores both access and refresh tokens, so credentials renew automatically.
+
+```bash
+# 1. Copy the override template
 cp docker-compose.override.example.yml docker-compose.override.yml
 ```
 
-Uncomment the volume mounts in `docker-compose.override.yml`:
+Uncomment the named volume in `docker-compose.override.yml`:
 
 ```yaml
 services:
   api:
     volumes:
-      - ~/.claude.json:/root/.claude.json:ro
-      - ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro
+      - claude-credentials:/root/.claude
+
+volumes:
+  claude-credentials:
 ```
 
-Leave `ANTHROPIC_API_KEY` empty in `.env` — the CLI will use its own credentials.
+```bash
+# 2. Start services
+docker compose up --build -d
+
+# 3. Authenticate once inside the container
+docker compose exec api claude login
+```
+
+Credentials persist in the Docker volume across container rebuilds. Leave `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` empty in `.env`.
+
+> **Why not mount `~/.claude/` from the host?** On macOS, the CLI stores credentials in the Keychain, not as files — there's nothing to mount. The named volume approach works on all operating systems.
+>
+> **Heads up:** `docker compose down -v` deletes all volumes, including credentials. You'll need to run `claude auth login` again afterwards.
 
 ## Project Structure
 

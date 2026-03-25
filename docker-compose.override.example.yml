@@ -5,8 +5,16 @@ services:
   api:
     volumes:
       # ── Claude CLI Credentials (Max subscription) ──────────
-      # Mount your local Claude CLI credentials into the container.
-      # Only needed if you DON'T set ANTHROPIC_API_KEY in .env.
+      # Only needed if you use Option 3 (CLI Login) from .env.example.
+      # Authenticate once inside the container:
+      #   docker compose exec api claude login
+      # Credentials persist in the volume across container rebuilds.
+      # The CLI refreshes expired tokens automatically.
+      #
+      # - claude-credentials:/root/.claude
+      #
+      # Alternative: Mount credential files directly (Linux only).
+      # On macOS, credentials are stored in Keychain — these files don't exist.
       # - ~/.claude.json:/root/.claude.json:ro
       # - ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro
     environment: {}
@@ -17,3 +25,7 @@ services:
     environment: {}
       # ── Custom API URL ─────────────────────────────────────
       # - NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+
+# Uncomment if using the named volume above.
+# volumes:
+#   claude-credentials:
