@@ -267,7 +267,7 @@ export function produceBriefingOutput(
   projectId: string,
   topicId: string,
   data: { type: string; platform?: string },
-): Promise<{ message: string; contentItemId: string; briefingId: string }> {
+): Promise<{ message: string; contentItemId: string; briefingId: string; runId: string; type: string; platform?: string }> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/produce`, {
     method: "POST",
     body: JSON.stringify(data),

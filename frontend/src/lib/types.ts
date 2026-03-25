@@ -63,6 +63,10 @@ export interface ContentVersion {
   text?: TextVersionMeta;
   video?: VideoVersionMeta;
   audio?: AudioVersionMeta;
+  social?: SocialVersionMeta;
+  newsletter?: NewsletterVersionMeta;
+  customFields?: Record<string, unknown>;
+  connectorSchemaId?: string;
   pipelineRunId?: string;
   seoScore?: number;
   qualityScore?: number;
@@ -107,6 +111,22 @@ export interface AudioVersionMeta {
   format: string;
   sampleRate: number;
   hasTranscript: boolean;
+}
+
+export interface SocialVersionMeta {
+  platform: "linkedin" | "instagram" | "x" | "tiktok";
+  characterCount: number;
+  hashtagCount: number;
+  hasMedia: boolean;
+  format?: "text" | "carousel" | "thread" | "reel" | "story" | "poll";
+  slideCount?: number;
+}
+
+export interface NewsletterVersionMeta {
+  subject: string;
+  previewText: string;
+  wordCount: number;
+  sectionCount: number;
 }
 
 // ── Content Media ───────────────────────────────────────────────
@@ -266,7 +286,7 @@ export interface PipelineRun {
   id: string;
   customerId: string;
   projectId: string;
-  type: "strategy" | "production" | "video_production" | "audio_production" | "social_production" | "update" | "translation";
+  type: "strategy" | "production" | "video_production" | "audio_production" | "social_production" | "email_production" | "update" | "translation";
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
   topicId?: string;
   phases: PipelinePhase[];

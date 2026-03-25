@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { runSimpleAgent } from "../../pipeline/engine.js";
 import { readChat, appendChat } from "../../models/chat.js";
 import { PipelineContext } from "../../pipeline/context.js";
+import { runProductionPipeline } from "../../pipeline/production/run.js";
 import { runSocialPipeline } from "../../pipeline/social/run.js";
 import { runEmailPipeline } from "../../pipeline/email/run.js";
 import type { ChatMessage, Topic, BriefingInputType } from "../../models/types.js";
@@ -401,9 +402,23 @@ export async function topicRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "No file uploaded" });
       }
 
-      const buffer = await file.toBuffer();
       const mimeType = file.mimetype;
       const fileName = file.filename;
+
+      // Validate MIME type (allowlist)
+      const ALLOWED_MIMES = [
+        "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
+        "audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/webm", "audio/x-m4a",
+        "application/pdf",
+        "text/plain", "text/markdown", "text/csv",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ];
+      if (!ALLOWED_MIMES.some((m) => mimeType === m || (m.endsWith("/*") && mimeType.startsWith(m.replace("/*", "/"))))) {
+        return reply.status(400).send({ error: `File type not allowed: ${mimeType}` });
+      }
+
+      const buffer = await file.toBuffer();
 
       // Determine input type from mime
       let inputType: BriefingInputType = "document";
@@ -476,6 +491,16 @@ export async function topicRoutes(app: FastifyInstance) {
 
       if (!type) {
         return reply.status(400).send({ error: "type is required (article, social_post, newsletter)" });
+      }
+
+      const validTypes = ["article", "guide", "social_post", "newsletter"] as const;
+      if (!validTypes.includes(type as typeof validTypes[number])) {
+        return reply.status(400).send({ error: `Invalid type. Must be one of: ${validTypes.join(", ")}` });
+      }
+
+      const validPlatforms = ["linkedin", "instagram", "x", "tiktok"] as const;
+      if (type === "social_post" && platform && !validPlatforms.includes(platform as typeof validPlatforms[number])) {
+        return reply.status(400).send({ error: `Invalid platform. Must be one of: ${validPlatforms.join(", ")}` });
       }
 
       const topics = app.ctx.topicsFor(customerId, projectId);
@@ -556,8 +581,16 @@ export async function topicRoutes(app: FastifyInstance) {
         topic,
       );
 
-      // Fire and forget
-      if (type === "social_post") {
+      // Fire and forget — start the appropriate pipeline
+      if (type === "article" || type === "guide") {
+        // Mark topic as in production (required by production pipeline)
+        if (topic.status === "approved") {
+          topics.update(topicId, { status: "in_production" });
+        }
+        runProductionPipeline(ctx).catch((err) => {
+          log.error({ runId: run.id, err }, "production pipeline failed");
+        });
+      } else if (type === "social_post") {
         runSocialPipeline(ctx, platform ?? "linkedin").catch((err) => {
           log.error({ runId: run.id, err }, "social pipeline failed");
         });
@@ -566,8 +599,6 @@ export async function topicRoutes(app: FastifyInstance) {
           log.error({ runId: run.id, err }, "email pipeline failed");
         });
       }
-      // For article: user should use existing POST /pipeline/produce endpoint
-      // (which handles the full article pipeline with outline, writing etc.)
 
       return reply.status(201).send({
         message: `${type} pipeline started`,

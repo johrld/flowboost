@@ -85,7 +85,11 @@ export class ContentTypeStore {
   }
 
   create(data: Omit<CustomContentType, "id" | "createdAt" | "updatedAt">): CustomContentType {
-    const id = data.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || crypto.randomUUID();
+    let id = data.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || crypto.randomUUID();
+    // Prevent ID collision — append suffix if file exists
+    if (fs.existsSync(path.join(this.basePath, `${id}.json`))) {
+      id = `${id}-${Date.now().toString(36)}`;
+    }
     const now = new Date().toISOString();
     const ct: CustomContentType = { id, ...data, createdAt: now, updatedAt: now };
     this.save(ct);

@@ -6,8 +6,35 @@
   "source": "builtin",
   "icon": "instagram",
   "fields": [
-    { "id": "caption", "label": "Caption", "type": "long-text", "required": true, "sortOrder": 0, "constraints": { "charLimit": 2200 } },
-    { "id": "image", "label": "Image", "type": "image", "required": true, "sortOrder": 1 },
-    { "id": "hashtags", "label": "Hashtags", "type": "list", "required": false, "sortOrder": 2, "constraints": { "maxItems": 30 } }
-  ]
+    {
+      "id": "caption",
+      "label": "Caption",
+      "type": "long-text",
+      "required": true,
+      "sortOrder": 0,
+      "constraints": {
+        "charLimit": 2200
+      }
+    },
+    {
+      "id": "image",
+      "label": "Image",
+      "type": "image",
+      "required": true,
+      "sortOrder": 1
+    },
+    {
+      "id": "hashtags",
+      "label": "Hashtags",
+      "type": "list",
+      "required": false,
+      "sortOrder": 2,
+      "constraints": {
+        "maxItems": 30
+      }
+    }
+  ],
+  "projectId": "",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
 }

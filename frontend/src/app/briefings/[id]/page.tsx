@@ -57,7 +57,9 @@ import {
   getBriefingInputFileUrl,
   produceBriefingOutput,
   getContent,
+  getContentTypes,
   enrichTopic,
+  type ContentTypeDefinition,
 } from "@/lib/api";
 import type { Topic, BriefingInput, ChatMessage, ContentItem } from "@/lib/types";
 import { format, formatDistanceToNow } from "date-fns";
@@ -102,7 +104,8 @@ const STATUS_BADGE: Record<string, { label: string; variant: "default" | "second
   archived: { label: "Archived", variant: "outline" },
 };
 
-const ADD_OUTPUT_OPTIONS = [
+// Fallback output options (used if content types API fails)
+const FALLBACK_OUTPUT_OPTIONS = [
   { type: "article", label: "Article", icon: <FileText className="h-3.5 w-3.5" /> },
   { type: "social_post", platform: "linkedin", label: "LinkedIn", icon: <Linkedin className="h-3.5 w-3.5" /> },
   { type: "social_post", platform: "instagram", label: "Instagram", icon: <Instagram className="h-3.5 w-3.5" /> },
@@ -110,6 +113,13 @@ const ADD_OUTPUT_OPTIONS = [
   { type: "newsletter", label: "Newsletter", icon: <Mail className="h-3.5 w-3.5" /> },
   { type: "social_post", platform: "tiktok", label: "TikTok", icon: <Video className="h-3.5 w-3.5" /> },
 ];
+
+const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+  site: <FileText className="h-3.5 w-3.5" />,
+  social: <MessageCircle className="h-3.5 w-3.5" />,
+  email: <Mail className="h-3.5 w-3.5" />,
+  media: <Video className="h-3.5 w-3.5" />,
+};
 
 // ── Page ──────────────────────────────────────────────────────
 
@@ -120,6 +130,7 @@ export default function BriefingDetailPage({ params }: { params: Promise<{ id: s
   const [topic, setTopic] = useState<Topic | null>(null);
   const [outputs, setOutputs] = useState<ContentItem[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [contentTypes, setContentTypes] = useState<ContentTypeDefinition[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState("input");
@@ -134,13 +145,15 @@ export default function BriefingDetailPage({ params }: { params: Promise<{ id: s
   const loadData = useCallback(async () => {
     if (!customerId || !projectId) return;
     try {
-      const [t, chat, contentRes] = await Promise.all([
+      const [t, chat, contentRes, types] = await Promise.all([
         getTopic(customerId, projectId, id),
         getTopicChat(customerId, projectId, id).catch(() => []),
         getContent(customerId, projectId).catch(() => ({ items: [] })),
+        getContentTypes(customerId, projectId).catch(() => []),
       ]);
       setTopic(t);
       setChatMessages(chat);
+      setContentTypes(types);
       // Filter content items linked to this briefing
       const linked = (contentRes.items ?? []).filter(
         (item: ContentItem) => item.briefingId === id || item.topicId === id,
@@ -331,11 +344,23 @@ export default function BriefingDetailPage({ params }: { params: Promise<{ id: s
                 <Button><Plus className="mr-2 h-4 w-4" />Create</Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                {ADD_OUTPUT_OPTIONS.map((opt) => (
+                {(contentTypes.length > 0 ? contentTypes.map((ct) => (
+                  <DropdownMenuItem
+                    key={ct.id}
+                    className="gap-2"
+                    onClick={() => handleProduce(
+                      ct.category === "social" ? "social_post" : ct.id === "newsletter" ? "newsletter" : "article",
+                      ct.category === "social" ? ct.id.replace("-post", "") : undefined,
+                    )}
+                  >
+                    {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                    {ct.label}
+                  </DropdownMenuItem>
+                )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
                   <DropdownMenuItem key={opt.platform ?? opt.type} className="gap-2" onClick={() => handleProduce(opt.type, opt.platform)}>
                     {opt.icon}{opt.label}
                   </DropdownMenuItem>
-                ))}
+                )))}
               </DropdownMenuContent>
             </DropdownMenu>
           )}

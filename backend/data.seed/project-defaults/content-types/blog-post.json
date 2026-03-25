@@ -6,14 +6,88 @@
   "source": "builtin",
   "icon": "file-text",
   "fields": [
-    { "id": "title", "label": "Title", "type": "short-text", "required": true, "sortOrder": 0, "constraints": { "charLimit": 70 }, "helpText": "50-70 characters, primary keyword at the start" },
-    { "id": "description", "label": "Meta Description", "type": "long-text", "required": true, "sortOrder": 1, "constraints": { "charLimit": 160 }, "helpText": "100-160 characters for search results" },
-    { "id": "body", "label": "Content", "type": "markdown", "required": true, "sortOrder": 2, "constraints": { "wordCount": { "min": 1200, "max": 2000 } } },
-    { "id": "hero-image", "label": "Hero Image", "type": "image", "required": false, "sortOrder": 3 },
-    { "id": "faq", "label": "FAQ", "type": "faq", "required": false, "sortOrder": 4, "constraints": { "maxItems": 5 } },
-    { "id": "category", "label": "Category", "type": "short-text", "required": true, "sortOrder": 5 },
-    { "id": "tags", "label": "Tags", "type": "list", "required": false, "sortOrder": 6 },
-    { "id": "keywords", "label": "Keywords", "type": "list", "required": true, "sortOrder": 7 },
-    { "id": "author", "label": "Author", "type": "short-text", "required": true, "sortOrder": 8 }
-  ]
+    {
+      "id": "title",
+      "label": "Title",
+      "type": "short-text",
+      "required": true,
+      "sortOrder": 0,
+      "constraints": {
+        "charLimit": 70
+      },
+      "helpText": "50-70 characters, primary keyword at the start"
+    },
+    {
+      "id": "description",
+      "label": "Meta Description",
+      "type": "long-text",
+      "required": true,
+      "sortOrder": 1,
+      "constraints": {
+        "charLimit": 160
+      },
+      "helpText": "100-160 characters for search results"
+    },
+    {
+      "id": "body",
+      "label": "Content",
+      "type": "markdown",
+      "required": true,
+      "sortOrder": 2,
+      "constraints": {
+        "wordCount": {
+          "min": 1200,
+          "max": 2000
+        }
+      }
+    },
+    {
+      "id": "hero-image",
+      "label": "Hero Image",
+      "type": "image",
+      "required": false,
+      "sortOrder": 3
+    },
+    {
+      "id": "faq",
+      "label": "FAQ",
+      "type": "faq",
+      "required": false,
+      "sortOrder": 4,
+      "constraints": {
+        "maxItems": 5
+      }
+    },
+    {
+      "id": "category",
+      "label": "Category",
+      "type": "short-text",
+      "required": true,
+      "sortOrder": 5
+    },
+    {
+      "id": "tags",
+      "label": "Tags",
+      "type": "list",
+      "required": false,
+      "sortOrder": 6
+    },
+    {
+      "id": "keywords",
+      "label": "Keywords",
+      "type": "list",
+      "required": true,
+      "sortOrder": 7
+    },
+    {
+      "id": "author",
+      "label": "Author",
+      "type": "short-text",
+      "required": true,
+      "sortOrder": 8
+    }
+  ],
+  "projectId": "",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
 }
