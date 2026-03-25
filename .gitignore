@@ -32,3 +32,4 @@ docker-compose.override.yml
 # IDE
 .vscode/
 .idea/
+*.code-workspace
