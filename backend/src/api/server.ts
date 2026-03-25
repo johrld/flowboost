@@ -22,6 +22,7 @@ import { webhookRoutes } from "./routes/webhooks.js";
 import { contentIndexRoutes } from "./routes/content-index.js";
 import { contentRoutes } from "./routes/content.js";
 import { mediaRoutes } from "./routes/media.js";
+import { contentTypeRoutes } from "./routes/content-types.js";
 
 const log = createLogger("server");
 
@@ -94,6 +95,7 @@ export async function buildServer(dataDir: string) {
   await app.register(contentRoutes, { prefix: "/customers/:customerId/projects/:projectId/content" });
   await app.register(mediaRoutes, { prefix: "/customers/:customerId/projects/:projectId/media" });
   await app.register(contentIndexRoutes, { prefix: "/customers/:customerId/projects/:projectId/content-index" });
+  await app.register(contentTypeRoutes, { prefix: "/customers/:customerId/projects/:projectId/content-types" });
 
   // Error handler
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {

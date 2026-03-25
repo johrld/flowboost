@@ -274,6 +274,74 @@ export function produceBriefingOutput(
   });
 }
 
+// ── Content Types ───────────────────────────────────────────────
+
+export interface ContentTypeDefinition {
+  id: string;
+  label: string;
+  description?: string;
+  category: "site" | "social" | "email" | "media";
+  source: "builtin" | "connector" | "custom";
+  icon?: string;
+  fields: Array<{
+    id: string;
+    label: string;
+    type: string;
+    required: boolean;
+    sortOrder: number;
+    constraints?: Record<string, unknown>;
+  }>;
+}
+
+export function getContentTypes(
+  customerId: string,
+  projectId: string,
+): Promise<ContentTypeDefinition[]> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content-types`);
+}
+
+export function createContentType(
+  customerId: string,
+  projectId: string,
+  data: { label: string; description?: string; category?: string; fields?: ContentTypeDefinition["fields"] },
+): Promise<ContentTypeDefinition> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content-types`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateContentType(
+  customerId: string,
+  projectId: string,
+  typeId: string,
+  data: Partial<ContentTypeDefinition>,
+): Promise<ContentTypeDefinition> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content-types/${typeId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteContentType(
+  customerId: string,
+  projectId: string,
+  typeId: string,
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content-types/${typeId}`, {
+    method: "DELETE",
+  });
+}
+
+export function importConnectorSchemas(
+  customerId: string,
+  projectId: string,
+): Promise<{ message: string; types: ContentTypeDefinition[] }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content-types/import`, {
+    method: "POST",
+  });
+}
+
 // ── Pipeline ──────────────────────────────────────────────────────
 
 export function getPipelineRuns(customerId: string, projectId: string): Promise<PipelineRun[]> {

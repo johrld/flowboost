@@ -1,0 +1,14 @@
+{
+  "id": "newsletter",
+  "label": "Newsletter",
+  "description": "Email newsletter",
+  "category": "email",
+  "source": "builtin",
+  "icon": "mail",
+  "fields": [
+    { "id": "subject", "label": "Subject Line", "type": "short-text", "required": true, "sortOrder": 0, "constraints": { "charLimit": 60 }, "helpText": "40-60 characters, compelling" },
+    { "id": "preview", "label": "Preview Text", "type": "short-text", "required": true, "sortOrder": 1, "constraints": { "charLimit": 120 } },
+    { "id": "body", "label": "Content", "type": "rich-text", "required": true, "sortOrder": 2, "constraints": { "wordCount": { "min": 300, "max": 1500 } } },
+    { "id": "cta", "label": "Call to Action", "type": "cta", "required": false, "sortOrder": 3 }
+  ]
+}

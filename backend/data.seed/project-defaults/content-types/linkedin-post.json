@@ -1,0 +1,13 @@
+{
+  "id": "linkedin-post",
+  "label": "LinkedIn Post",
+  "description": "Professional network post",
+  "category": "social",
+  "source": "builtin",
+  "icon": "linkedin",
+  "fields": [
+    { "id": "text", "label": "Post Text", "type": "long-text", "required": true, "sortOrder": 0, "constraints": { "charLimit": 3000 }, "helpText": "Optimal: 800-1500 characters" },
+    { "id": "image", "label": "Image", "type": "image", "required": false, "sortOrder": 1 },
+    { "id": "hashtags", "label": "Hashtags", "type": "list", "required": false, "sortOrder": 2, "constraints": { "maxItems": 5 } }
+  ]
+}
