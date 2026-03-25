@@ -2,6 +2,8 @@ import type { Project } from "../../models/types.js";
 import type { SiteConnector } from "./types.js";
 import { GitHubSiteConnector } from "./github.js";
 import { FilesystemSiteConnector } from "./filesystem.js";
+import { ShopwareSiteConnector } from "./shopware.js";
+import { WordPressSiteConnector } from "./wordpress.js";
 
 /**
  * Create the appropriate SiteConnector based on project config.
@@ -10,6 +12,8 @@ import { FilesystemSiteConnector } from "./filesystem.js";
  *   createReader() → for syncing
  *   write()        → deliver content
  *   publish()      → make content live (optional)
+ *   discoverSchemas() → discover platform content structures (optional)
+ *   writeStructured() → deliver slot-based content (optional)
  */
 export function createSiteConnector(project: Project): SiteConnector {
   const config = project.connector;
@@ -29,8 +33,6 @@ export function createSiteConnector(project: Project): SiteConnector {
     }
 
     case "git": {
-      // Git without GitHub App → use filesystem for now
-      // Future: GitSiteConnector with SSH keys
       const outputDir = config.filesystem?.outputDir ?? "/tmp/flowboost-output";
       return new FilesystemSiteConnector(outputDir);
     }
@@ -41,8 +43,27 @@ export function createSiteConnector(project: Project): SiteConnector {
       return new FilesystemSiteConnector(outputDir);
     }
 
+    case "shopware": {
+      const sw = config.shopware;
+      if (!sw) throw new Error("Shopware connector config missing");
+      return new ShopwareSiteConnector({
+        shopUrl: sw.shopUrl,
+        clientId: sw.clientId,
+        clientSecret: sw.clientSecret,
+      });
+    }
+
+    case "wordpress": {
+      const wp = config.wordpress;
+      if (!wp) throw new Error("WordPress connector config missing");
+      return new WordPressSiteConnector({
+        siteUrl: wp.siteUrl,
+        username: wp.username,
+        applicationPassword: wp.applicationPassword,
+      });
+    }
+
     // Future connectors:
-    // case "wordpress": return new WordPressSiteConnector(config.wordpress);
     // case "shopify":   return new ShopifySiteConnector(config.shopify);
     // case "webflow":   return new WebflowSiteConnector(config.webflow);
 

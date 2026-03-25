@@ -81,7 +81,7 @@ export interface Competitor {
 }
 
 export interface ConnectorConfig {
-  type: "git" | "github" | "filesystem" | "api";
+  type: "git" | "github" | "filesystem" | "shopware" | "wordpress" | "api";
   git?: {
     repoUrl: string;
     branch: string;
@@ -98,6 +98,16 @@ export interface ConnectorConfig {
   };
   filesystem?: {
     outputDir: string;
+  };
+  shopware?: {
+    shopUrl: string;
+    clientId: string;
+    clientSecret: string;
+  };
+  wordpress?: {
+    siteUrl: string;
+    username: string;
+    applicationPassword: string;
   };
 }
 
