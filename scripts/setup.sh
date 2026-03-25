@@ -20,6 +20,7 @@ if [ ! -d "$SEED_DIR" ]; then
   exit 1
 fi
 
-cp -r "$SEED_DIR" "$DATA_DIR"
+mkdir -p "$DATA_DIR"
+cp -r "$SEED_DIR/customers" "$DATA_DIR/customers"
 echo "Seed data copied to backend/data/"
 echo "Ready to start: docker compose up --build"

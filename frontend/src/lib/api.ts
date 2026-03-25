@@ -31,6 +31,22 @@ export function getProjects(customerId: string): Promise<Project[]> {
   return fetchJson(`/customers/${customerId}/projects`);
 }
 
+export function createProject(
+  customerId: string,
+  data: {
+    name: string;
+    description?: string;
+    defaultLanguage: string;
+    languages?: { code: string; name: string; enabled: boolean }[];
+    categories?: { id: string; labels: Record<string, string> }[];
+  },
+): Promise<Project> {
+  return fetchJson(`/customers/${customerId}/projects`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export function getProject(customerId: string, projectId: string): Promise<Project> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}`);
 }

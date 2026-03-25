@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -12,6 +13,7 @@ import {
   Cable,
   Settings,
   ChevronDown,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,9 +21,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useProject } from "@/lib/project-context";
+import { CreateProjectWizard } from "@/components/create-project-wizard";
 
 const navItems = [
   { href: "/dashboard", label: "Plan", icon: CalendarDays },
@@ -39,6 +43,7 @@ const settingsItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { project, projects, setActiveProject } = useProject();
+  const [showCreateWizard, setShowCreateWizard] = useState(false);
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
@@ -72,6 +77,11 @@ export function Sidebar() {
                 )}
               </DropdownMenuItem>
             ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setShowCreateWizard(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Project
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -128,8 +138,13 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="border-t px-4 py-3 text-xs text-muted-foreground">
-        flowboost v0.1.0
+        flowboost v0.2.0
       </div>
+
+      <CreateProjectWizard
+        open={showCreateWizard}
+        onOpenChange={setShowCreateWizard}
+      />
     </aside>
   );
 }

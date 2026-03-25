@@ -12,6 +12,8 @@ interface ProjectContextValue {
   categories: Category[];
   authors: Author[];
   setActiveProject: (project: Project) => void;
+  refreshProjects: () => Promise<void>;
+  needsOnboarding: boolean;
   loading: boolean;
 }
 
@@ -23,6 +25,8 @@ const ProjectContext = createContext<ProjectContextValue>({
   categories: [],
   authors: [],
   setActiveProject: () => {},
+  refreshProjects: async () => {},
+  needsOnboarding: false,
   loading: true,
 });
 
@@ -37,26 +41,37 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    getCustomers()
-      .then((customers) => {
-        if (customers.length > 0) {
-          setCustomer(customers[0]);
-          const cid = customers[0].id;
-          setCustomerId(cid);
-          return getProjects(cid).then((p) => {
-            setProjects(p);
-            if (p.length > 0) setProject(p[0]);
-          });
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const loadData = useCallback(async () => {
+    try {
+      const customers = await getCustomers();
+      if (customers.length > 0) {
+        setCustomer(customers[0]);
+        const cid = customers[0].id;
+        setCustomerId(cid);
+        const p = await getProjects(cid);
+        setProjects(p);
+        if (p.length > 0) setProject((prev) => prev && p.find((x) => x.id === prev.id) ? prev : p[0]);
+      }
+    } catch {
+      // API not available yet
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const setActiveProject = useCallback((p: Project) => {
     setProject(p);
   }, []);
+
+  const refreshProjects = useCallback(async () => {
+    await loadData();
+  }, [loadData]);
+
+  const needsOnboarding = !loading && projects.length === 0;
 
   return (
     <ProjectContext.Provider
@@ -68,6 +83,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         categories: project?.categories ?? [],
         authors: customer?.authors ?? [],
         setActiveProject,
+        refreshProjects,
+        needsOnboarding,
         loading,
       }}
     >
