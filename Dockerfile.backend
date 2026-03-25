@@ -5,13 +5,13 @@ WORKDIR /app
 # Git is needed for repo cloning (GitHub connector)
 RUN apk add --no-cache git
 
-# Install Claude Code CLI
-RUN npm install -g @anthropic-ai/claude-code
+# Install Claude Code CLI (must match Agent SDK version)
+RUN npm install -g @anthropic-ai/claude-code@latest
 
 # Skip interactive onboarding
 RUN echo '{"hasCompletedOnboarding":true}' > /root/.claude.json
 
-COPY package*.json ./
+COPY package*.json .npmrc ./
 RUN npm ci --production=false
 
 COPY . .

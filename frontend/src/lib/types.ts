@@ -1,3 +1,11 @@
+// ── Chat ─────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  ts: string;
+}
+
 // FlowBoost Dashboard Types (mirrors backend models)
 
 // ── Content V3 ──────────────────────────────────────────────────
@@ -26,6 +34,7 @@ export interface ContentItem {
   category?: string;
   tags?: string[];
   keywords?: string[];
+  author?: string;
   topicId?: string;
   translationKey?: string;
   parentId?: string;
@@ -33,6 +42,7 @@ export interface ContentItem {
   lastPublishedVersionId?: string;
   deliveryRef?: string;
   deliveryUrl?: string;
+  heroImageId?: string;
   createdAt: string;
   updatedAt: string;
   approvedAt?: string;
@@ -96,6 +106,30 @@ export interface AudioVersionMeta {
   format: string;
   sampleRate: number;
   hasTranscript: boolean;
+}
+
+// ── Content Media ───────────────────────────────────────────────
+
+export type MediaType = "image" | "video" | "audio" | "document";
+export type MediaSource = "generated" | "uploaded" | "extracted";
+
+export interface ContentMediaAsset {
+  id: string;
+  contentId: string;
+  type: MediaType;
+  source: MediaSource;
+  role: "hero" | "inline";
+  mimeType: string;
+  fileName: string;         // on disk: "{uuid}.png"
+  seoFilename: string;      // for delivery: "{slug}-hero"
+  altText?: string;
+  fileSize: number;
+  width?: number;
+  height?: number;
+  generationPrompt?: string;
+  generationModel?: string;
+  generationCostUsd?: number;
+  createdAt: string;
 }
 
 // ── Topic Status ────────────────────────────────────────────────
@@ -198,6 +232,7 @@ export interface Topic {
   suggestedAngle: string;
   estimatedSections: number;
   reasoning: string;
+  format?: "article" | "guide" | "landing_page" | "social_post";
   source?: "pipeline" | "user";
   enriched?: boolean;
   userNotes?: string;

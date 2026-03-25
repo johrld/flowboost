@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { getCustomers, getProjects } from "./api";
-import type { Project, Category, Author } from "./types";
+import type { Customer, Project, Category, Author } from "./types";
 
 interface ProjectContextValue {
   customerId: string;
@@ -31,6 +31,7 @@ export function useProject() {
 }
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
+  const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerId, setCustomerId] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
@@ -40,6 +41,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     getCustomers()
       .then((customers) => {
         if (customers.length > 0) {
+          setCustomer(customers[0]);
           const cid = customers[0].id;
           setCustomerId(cid);
           return getProjects(cid).then((p) => {
@@ -64,7 +66,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         project,
         projects,
         categories: project?.categories ?? [],
-        authors: [],
+        authors: customer?.authors ?? [],
         setActiveProject,
         loading,
       }}

@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useState, useEffect, useCallback, useRef } from "react";
+import { use, useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { marked } from "marked";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,6 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContentStatusBadge, ContentTypeBadge } from "@/components/status-badge";
+import { ContentDetailLayout } from "@/components/content-detail-layout";
 import { TiptapEditor } from "@/components/tiptap-editor";
 import { useProject } from "@/lib/project-context";
 import {
@@ -38,8 +40,14 @@ import {
   restoreContent,
   getTopics,
   scheduleTopic,
+  getContentMedia,
+  getContentMediaUrl,
+  generateHeroImage,
+  uploadContentMedia,
+  setHeroImage,
+  deleteContentMedia,
 } from "@/lib/api";
-import type { ContentItem, ContentVersion, Topic } from "@/lib/types";
+import type { ContentItem, ContentVersion, ContentMediaAsset, Topic } from "@/lib/types";
 import {
   DndContext,
   closestCenter,
@@ -74,75 +82,11 @@ import {
   Loader2,
   X,
   CalendarIcon,
-  Clock,
   GripVertical,
+  Sparkles,
+  Eye,
 } from "lucide-react";
 import Link from "next/link";
-
-/** Tag input with chips */
-function TagInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-}) {
-  const [input, setInput] = useState("");
-  const items = value
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  function addItem(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || items.includes(trimmed)) return;
-    onChange([...items, trimmed].join(", "));
-    setInput("");
-  }
-
-  function removeItem(index: number) {
-    onChange(items.filter((_, i) => i !== index).join(", "));
-  }
-
-  return (
-    <div className="flex flex-wrap gap-1.5 rounded-md border border-input bg-background px-2 py-2 focus-within:ring-1 focus-within:ring-ring">
-      {items.map((item, i) => (
-        <span
-          key={`${item}-${i}`}
-          className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"
-        >
-          {item}
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => removeItem(i)}
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </span>
-      ))}
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === ",") {
-            e.preventDefault();
-            addItem(input);
-          }
-          if (e.key === "Backspace" && !input && items.length > 0) {
-            removeItem(items.length - 1);
-          }
-        }}
-        onBlur={() => { if (input) addItem(input); }}
-        placeholder={items.length === 0 ? placeholder : ""}
-        className="flex-1 min-w-[80px] bg-transparent text-xs outline-none placeholder:text-muted-foreground/50"
-      />
-    </div>
-  );
-}
 
 /** Sortable FAQ item */
 function SortableFaqItem({
@@ -336,6 +280,7 @@ function parseFrontmatter(fm: string) {
     category: fm.match(/^category:\s*(.+)$/m)?.[1]?.trim() ?? "",
     tags: getList("tags").join(", "),
     keywords: getList("keywords").join(", "),
+    author: getField("author") || (fm.match(/^author:\s*(.+)$/m)?.[1]?.trim() ?? ""),
     faqs,
   };
 }
@@ -347,12 +292,13 @@ function stripFrontmatter(md: string): string {
 
 /** Rebuild YAML frontmatter from sidebar fields */
 function buildFrontmatter(
-  meta: { title: string; description: string; category: string; tags: string; keywords: string; faqs: { question: string; answer: string }[] },
+  meta: { title: string; description: string; category: string; tags: string; keywords: string; author: string; faqs: { question: string; answer: string }[] },
   lang: string,
 ): string {
   const lines: string[] = ["---"];
   lines.push(`title: "${meta.title}"`);
   if (meta.description) lines.push(`description: "${meta.description}"`);
+  if (meta.author) lines.push(`author: "${meta.author}"`);
   if (meta.category) lines.push(`category: ${meta.category}`);
   if (meta.tags) {
     const items = meta.tags.split(",").map((t) => t.trim()).filter(Boolean);
@@ -386,6 +332,7 @@ interface LangMeta {
   tags: string;
   keywords: string;
   category: string;
+  author: string;
   faqs: { question: string; answer: string }[];
 }
 
@@ -395,7 +342,7 @@ export default function ContentEditorPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { customerId, projectId, categories, loading: projectLoading } = useProject();
+  const { customerId, projectId, categories, authors, loading: projectLoading } = useProject();
 
   const [item, setItem] = useState<ContentItem | null>(null);
   const [versions, setVersions] = useState<ContentVersion[]>([]);
@@ -419,6 +366,12 @@ export default function ContentEditorPage({
   const [schedDate, setSchedDate] = useState("");
   const [schedTime, setSchedTime] = useState("");
 
+  // Hero image / media gallery
+  const [mediaAssets, setMediaAssets] = useState<ContentMediaAsset[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Track which languages the user actually edited (vs TiptapEditor roundtrip noise)
   const userEditedLangs = useRef<Set<string>>(new Set());
 
@@ -427,8 +380,7 @@ export default function ContentEditorPage({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
-  const [tags, setTags] = useState("");
-  const [keywords, setKeywords] = useState("");
+  const [author, setAuthor] = useState("");
   const faqs = langMeta?.faqs ?? [];
   const setFaqs = (items: { question: string; answer: string }[]) =>
     setMetaByLang((prev) => ({ ...prev, [activeLang]: { ...prev[activeLang], faqs: items } }));
@@ -439,8 +391,6 @@ export default function ContentEditorPage({
     setTitle(langMeta.title);
     setDescription(langMeta.description);
     setCategory(langMeta.category);
-    setTags(langMeta.tags);
-    setKeywords(langMeta.keywords);
   }, [activeLang, langMeta]);
 
   // Load content item
@@ -470,18 +420,24 @@ export default function ContentEditorPage({
         } catch { /* ignore */ }
       }
 
+      // Load media assets
+      try {
+        const media = await getContentMedia(customerId, projectId, id);
+        setMediaAssets(media.assets);
+      } catch { /* ignore */ }
+
       // Load editor content from latest version's markdown files
       if (data.versions && data.versions.length > 0) {
         const latest = data.versions[data.versions.length - 1];
         setActiveVersionId(latest.id);
         await loadVersionContent(latest, data);
+        setAuthor(data.author ?? "");
       } else {
         // No versions — use ContentItem-level metadata
         setTitle(data.title);
         setDescription(data.description ?? "");
         setCategory(data.category ?? "");
-        setTags(data.tags?.join(", ") ?? "");
-        setKeywords(data.keywords?.join(", ") ?? "");
+        setAuthor(data.author ?? "");
       }
     } catch {
       setItem(null);
@@ -513,7 +469,7 @@ export default function ContentEditorPage({
       if (fmMatch) {
         allMeta[lang.lang] = parseFrontmatter(fmMatch[1]);
       } else {
-        allMeta[lang.lang] = { title: lang.title, description: "", category: data.category ?? "", tags: "", keywords: "", faqs: [] };
+        allMeta[lang.lang] = { title: lang.title, description: "", category: data.category ?? "", tags: "", keywords: "", author: data.author ?? "", faqs: [] };
       }
       bodyContent[lang.lang] = stripFrontmatter(md) || `# ${lang.title}\n\n*No content*`;
     }
@@ -554,8 +510,7 @@ export default function ContentEditorPage({
         title,
         description: description || undefined,
         category: category || undefined,
-        tags: tags ? tags.split(",").map((t) => t.trim()).filter(Boolean) : undefined,
-        keywords: keywords ? keywords.split(",").map((k) => k.trim()).filter(Boolean) : undefined,
+        author: author || undefined,
       });
       setItem({ ...item, ...updated });
 
@@ -563,9 +518,9 @@ export default function ContentEditorPage({
       if (bodyDirty) {
         const files: Record<string, string> = {};
         for (const lang of Object.keys(editorContent)) {
-          const meta = metaByLang[lang] ?? { title, description, category, tags, keywords, faqs: [] };
+          const meta = metaByLang[lang] ?? { title, description, category, tags: "", keywords: "", faqs: [] };
           const fm = buildFrontmatter(
-            { title: lang === activeLang ? title : meta.title, description: lang === activeLang ? description : meta.description, category: lang === activeLang ? category : meta.category, tags: lang === activeLang ? tags : meta.tags, keywords: lang === activeLang ? keywords : meta.keywords, faqs: meta.faqs },
+            { title: lang === activeLang ? title : meta.title, description: lang === activeLang ? description : meta.description, category: lang === activeLang ? category : meta.category, tags: meta.tags, keywords: meta.keywords, author: lang === activeLang ? author : meta.author, faqs: meta.faqs },
             lang,
           );
           files[lang] = fm + editorContent[lang];
@@ -617,6 +572,257 @@ export default function ContentEditorPage({
     }
   };
 
+  // ── Unsaved changes warning ──────────────────────────────────────
+  const hasChangesRef = useRef(false);
+  const bodyDirtyForEffect = userEditedLangs.current.size > 0;
+  hasChangesRef.current = bodyDirtyForEffect || (item
+    ? title !== (item.title ?? "") || description !== (item.description ?? "") || category !== (item.category ?? "")
+    : false);
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasChangesRef.current) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  // ── Cmd+S / Ctrl+S shortcut ─────────────────────────────────────
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        if (hasChangesRef.current) {
+          handleSaveRef.current();
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // ── Preview in new tab ─────────────────────────────────────────
+  const handlePreview = useCallback(() => {
+    const md = editorContent[activeLang];
+    if (!md) return;
+    const meta = metaByLang[activeLang];
+    const title = meta?.title || item?.title || "Preview";
+    const description = meta?.description || item?.description || "";
+    const authorName = authors.find((a) => a.id === meta?.author)?.name ?? meta?.author ?? "";
+    const keywords = meta?.keywords ?? "";
+    const faqs = meta?.faqs ?? [];
+    const heroUrl = item?.heroImageId
+      ? getContentMediaUrl(customerId, projectId, item.id, item.heroImageId)
+      : "";
+    const version = versions.find((v) => v.id === activeVersionId) ?? versions[versions.length - 1];
+    const langs = version?.languages?.map((l) => l.lang) ?? [activeLang];
+    const datePublished = item?.createdAt ? new Date(item.createdAt).toISOString() : "";
+    const dateModified = item?.updatedAt ? new Date(item.updatedAt).toISOString() : "";
+    const langVariant = version?.languages?.find((v) => v.lang === activeLang);
+    const slug = langVariant?.slug ?? "";
+    const canonicalUrl = `/${activeLang}/${slug}`;
+    const wordCount = langVariant?.wordCount ?? 0;
+    const category = meta?.category ?? item?.category ?? "";
+
+    // Render body markdown → HTML, strip leading duplicate of title
+    let bodyHtml = (marked.parse(md) as string).trim();
+    const titleEsc = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    bodyHtml = bodyHtml.replace(new RegExp(`^\\s*<(p|h1)>${titleEsc}<\\/\\1>\\s*`), "");
+
+    // Escape helper for JSON-LD strings
+    const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+
+    // Build FAQ visible section
+    const faqLines: string[] = [];
+    if (faqs.length > 0) {
+      faqLines.push("");
+      faqLines.push("  <section class=\"faq\">");
+      faqLines.push("    <h2>Häufig gestellte Fragen</h2>");
+      for (const f of faqs) {
+        faqLines.push("");
+        faqLines.push("    <details>");
+        faqLines.push(`      <summary>${f.question}</summary>`);
+        faqLines.push(`      <p>${f.answer}</p>`);
+        faqLines.push("    </details>");
+      }
+      faqLines.push("  </section>");
+    }
+
+    // Build JSON-LD: FAQPage
+    const faqJsonLd: string[] = [];
+    if (faqs.length > 0) {
+      faqJsonLd.push("  <script type=\"application/ld+json\">");
+      faqJsonLd.push("  {");
+      faqJsonLd.push("    \"@context\": \"https://schema.org\",");
+      faqJsonLd.push("    \"@type\": \"FAQPage\",");
+      faqJsonLd.push("    \"mainEntity\": [");
+      faqs.forEach((f, i) => {
+        faqJsonLd.push("      {");
+        faqJsonLd.push("        \"@type\": \"Question\",");
+        faqJsonLd.push(`        "name": "${esc(f.question)}",`);
+        faqJsonLd.push("        \"acceptedAnswer\": {");
+        faqJsonLd.push("          \"@type\": \"Answer\",");
+        faqJsonLd.push(`          "text": "${esc(f.answer)}"`);
+        faqJsonLd.push("        }");
+        faqJsonLd.push(`      }${i < faqs.length - 1 ? "," : ""}`);
+      });
+      faqJsonLd.push("    ]");
+      faqJsonLd.push("  }");
+      faqJsonLd.push("  </script>");
+    }
+
+    // Build JSON-LD: Article
+    const articleJsonLd: string[] = [
+      "  <script type=\"application/ld+json\">",
+      "  {",
+      "    \"@context\": \"https://schema.org\",",
+      "    \"@type\": \"BlogPosting\",",
+      `    "headline": "${esc(title)}",`,
+      ...(description ? [`    "description": "${esc(description)}",`] : []),
+      ...(heroUrl ? [`    "image": "${heroUrl}",`] : []),
+      ...(authorName ? [
+        "    \"author\": {",
+        "      \"@type\": \"Person\",",
+        `      "name": "${esc(authorName)}"`,
+        "    },",
+      ] : []),
+      ...(datePublished ? [`    "datePublished": "${datePublished}",`] : []),
+      ...(dateModified ? [`    "dateModified": "${dateModified}",`] : []),
+      ...(wordCount ? [`    "wordCount": ${wordCount},`] : []),
+      ...(category ? [`    "articleSection": "${esc(category)}",`] : []),
+      `    "inLanguage": "${activeLang}"`,
+      "  }",
+      "  </script>",
+    ];
+
+    // Indent body HTML into the article tag
+    const indentedBody = bodyHtml
+      .split("\n")
+      .map((line) => (line.trim() ? `    ${line}` : ""))
+      .join("\n");
+
+    const previewHtml = [
+      "<!DOCTYPE html>",
+      `<html lang="${activeLang}">`,
+      "<head>",
+      "  <meta charset=\"utf-8\">",
+      "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+      `  <title>${title}</title>`,
+      ...(description ? [`  <meta name="description" content="${esc(description)}">`] : []),
+      ...(keywords ? [`  <meta name="keywords" content="${esc(keywords)}">`] : []),
+      `  <link rel="canonical" href="${canonicalUrl}">`,
+      "",
+      "  <!-- Open Graph -->",
+      `  <meta property="og:title" content="${esc(title)}">`,
+      `  <meta property="og:type" content="article">`,
+      `  <meta property="og:url" content="${canonicalUrl}">`,
+      ...(description ? [`  <meta property="og:description" content="${esc(description)}">`] : []),
+      ...(heroUrl ? [`  <meta property="og:image" content="${heroUrl}">`] : []),
+      `  <meta property="og:locale" content="${activeLang}">`,
+      ...(datePublished ? [`  <meta property="article:published_time" content="${datePublished}">`] : []),
+      ...(dateModified ? [`  <meta property="article:modified_time" content="${dateModified}">`] : []),
+      ...(authorName ? [`  <meta property="article:author" content="${esc(authorName)}">`] : []),
+      "",
+      "  <!-- Twitter Card -->",
+      `  <meta name="twitter:card" content="summary_large_image">`,
+      `  <meta name="twitter:title" content="${esc(title)}">`,
+      ...(description ? [`  <meta name="twitter:description" content="${esc(description)}">`] : []),
+      ...(heroUrl ? [`  <meta name="twitter:image" content="${heroUrl}">`] : []),
+      "",
+      "  <!-- hreflang -->",
+      ...langs.map((l) => {
+        const s = version?.languages?.find((v) => v.lang === l)?.slug ?? "";
+        return `  <link rel="alternate" hreflang="${l}" href="/${l}/${s}">`;
+      }),
+      "",
+      "  <!-- Structured Data -->",
+      ...articleJsonLd,
+      ...faqJsonLd,
+      "",
+      "  <style>",
+      "    :root {",
+      "      --border: #e2e2e2;",
+      "      --muted-foreground: #737373;",
+      "    }",
+      "",
+      "    * { box-sizing: border-box; }",
+      "",
+      "    body {",
+      "      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
+      "      max-width: 720px;",
+      "      margin: 2rem auto;",
+      "      padding: 0 1.5rem;",
+      "      line-height: 1.7;",
+      "      color: #1a1a1a;",
+      "    }",
+      "",
+      "    h1 { font-size: 2rem; margin: 1.5rem 0 0.5rem; }",
+      "    h2 { font-size: 1.5rem; margin: 2rem 0 0.75rem; }",
+      "    h3 { font-size: 1.2rem; margin: 1.5rem 0 0.5rem; }",
+      "    p { margin: 0.75rem 0; }",
+      "    img { max-width: 100%; height: auto; }",
+      "    blockquote { border-left: 3px solid #ddd; margin: 1rem 0; padding: 0.5rem 1rem; color: #555; }",
+      "    hr { border: none; border-top: 1px solid #ddd; margin: 2rem 0; }",
+      "    ul, ol { padding-left: 1.5rem; }",
+      "    a { color: #2563eb; }",
+      "    .meta { color: #737373; font-size: 0.85rem; margin-bottom: 1.5rem; }",
+      "",
+      "    /* Image figures */",
+      "    figure.image-figure { margin: 1rem 0; padding: 0; }",
+      "    figure.image-figure[data-align=\"left\"] { float: left; margin: 0 1rem 0.75rem 0; }",
+      "    figure.image-figure[data-align=\"center\"] { text-align: center; }",
+      "    figure.image-figure[data-align=\"center\"] img { margin-inline: auto; display: block; }",
+      "    figure.image-figure[data-align=\"right\"] { float: right; margin: 0 0 0.75rem 1rem; }",
+      "    figure.image-figure[data-rounded=\"sm\"] img { border-radius: 4px; }",
+      "    figure.image-figure[data-rounded=\"md\"] img { border-radius: 8px; }",
+      "    figure.image-figure[data-rounded=\"lg\"] img { border-radius: 16px; }",
+      "    figure.image-figure[data-border=\"thin\"] img { border: 1px solid var(--border); }",
+      "    figure.image-figure[data-border=\"thick\"] img { border: 2px solid var(--border); }",
+      "    figure.image-figure[data-shadow=\"sm\"] img { box-shadow: 0 1px 3px rgba(0,0,0,.1); }",
+      "    figure.image-figure[data-shadow=\"md\"] img { box-shadow: 0 4px 12px rgba(0,0,0,.12); }",
+      "    figure.image-figure[data-shadow=\"lg\"] img { box-shadow: 0 8px 24px rgba(0,0,0,.16); }",
+      "    figure.image-figure figcaption { text-align: center; font-size: 0.85rem; color: var(--muted-foreground); margin-top: 0.5rem; }",
+      "",
+      "    /* FAQ */",
+      "    .faq { margin-top: 2.5rem; border-top: 1px solid #ddd; padding-top: 1.5rem; }",
+      "    .faq h2 { font-size: 1.4rem; margin-bottom: 1rem; }",
+      "    details { border-bottom: 1px solid #e5e5e5; padding: 0; }",
+      "    details:last-of-type { border-bottom: none; }",
+      "    details summary { cursor: pointer; padding: 0.75rem 0; font-weight: 500; list-style: none; }",
+      "    details summary::-webkit-details-marker { display: none; }",
+      "    details summary::before { content: \"\\25B6\"; display: inline-block; margin-right: 0.5rem; font-size: 0.7rem; transition: transform 0.2s; }",
+      "    details[open] summary::before { transform: rotate(90deg); }",
+      "    details p { padding: 0 0 0.75rem; margin: 0; color: #555; }",
+      "  </style>",
+      "</head>",
+      "<body>",
+      "",
+      `  <h1>${title}</h1>`,
+      ...(description || authorName ? [
+        "  <p class=\"meta\">",
+        ...(description ? [`    <em>${description}</em>`] : []),
+        ...(authorName ? [`    ${description ? "<br>" : ""}Von ${authorName}${datePublished ? ` · ${new Date(datePublished).toLocaleDateString(activeLang, { day: "numeric", month: "long", year: "numeric" })}` : ""}`] : []),
+        "  </p>",
+        "",
+      ] : [""]),
+      "  <article>",
+      indentedBody,
+      "  </article>",
+      ...faqLines,
+      "",
+      "</body>",
+      "</html>",
+      "",
+    ].join("\n");
+    const blob = new Blob([previewHtml], { type: "text/html" });
+    window.open(URL.createObjectURL(blob), "_blank");
+  }, [editorContent, activeLang, metaByLang, item, authors, customerId, projectId, versions, activeVersionId]);
+
   if (projectLoading || loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -641,15 +847,13 @@ export default function ContentEditorPage({
   const isViewingOldVersion = activeVersion && latestVersion && activeVersion.id !== latestVersion.id;
   const origMeta = metaByLang[activeLang];
   const metaDirty = origMeta
-    ? title !== origMeta.title || description !== origMeta.description || category !== origMeta.category
-    : title !== (item.title ?? "") || description !== (item.description ?? "") || category !== (item.category ?? "");
+    ? title !== origMeta.title || description !== origMeta.description || category !== origMeta.category || author !== (item.author ?? "")
+    : title !== (item.title ?? "") || description !== (item.description ?? "") || category !== (item.category ?? "") || author !== (item.author ?? "");
   const hasChanges = metaDirty || bodyDirty;
 
   return (
-    <div className="flex h-full">
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-8 space-y-6">
-        {/* Header */}
+    <ContentDetailLayout
+      header={
         <div className="flex items-center gap-4">
           <Link href="/content">
             <Button variant="ghost" size="icon">
@@ -669,13 +873,25 @@ export default function ContentEditorPage({
             </span>
           </div>
           <div className="flex gap-2">
-            {/* Save */}
-            <Button variant="outline" onClick={handleSave} disabled={saving || !hasChanges}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Save
+            <Button variant="outline" size="icon" onClick={handlePreview} title="Preview">
+              <Eye className="h-4 w-4" />
             </Button>
+            {hasChanges ? (
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+            ) : (
+              <Button variant="outline" disabled>
+                <Check className="mr-2 h-4 w-4" />
+                Saved
+              </Button>
+            )}
 
-            {/* Status-aware lifecycle actions */}
             {item.status === "draft" && (
               <Button onClick={() => handleAction("submit")} disabled={!!actionLoading}>
                 {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
@@ -720,7 +936,386 @@ export default function ContentEditorPage({
             )}
           </div>
         </div>
+      }
+      metadataPanel={
+        <>
+          {/* Version Selector */}
+          {versions.length > 0 && activeVersion && (
+            <div className="space-y-2">
+              <h3 className="font-semibold text-sm">Version</h3>
+              <Popover open={versionPopoverOpen} onOpenChange={setVersionPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between text-xs h-9">
+                    <span className="flex items-center gap-2">
+                      <Badge
+                        variant={activeVersion.publishedAt ? "default" : "outline"}
+                        className={`text-[10px] px-1.5 ${activeVersion.publishedAt ? "bg-green-600 hover:bg-green-600" : ""}`}
+                      >
+                        v{activeVersion.versionNumber}
+                      </Badge>
+                      <span className="text-muted-foreground">
+                        {activeVersion.languages?.[0]?.wordCount ? `${activeVersion.languages[0].wordCount}w` : ""} · {activeVersion.createdByName ?? activeVersion.createdBy}
+                      </span>
+                      {isViewingOldVersion && (
+                        <span className="text-violet-600 font-medium">older</span>
+                      )}
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-1.5" align="start">
+                  <div className="space-y-1">
+                    {[...versions].reverse().map((v) => {
+                      const isActive = v.id === activeVersionId;
+                      const isPublished = !!v.publishedAt;
+                      return (
+                        <button
+                          type="button"
+                          key={v.id}
+                          className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors hover:bg-muted ${isActive ? "bg-muted" : ""}`}
+                          onClick={() => {
+                            switchVersion(v.id);
+                            setVersionPopoverOpen(false);
+                          }}
+                        >
+                          <Badge
+                            variant={isPublished ? "default" : "outline"}
+                            className={`text-[10px] px-1.5 shrink-0 ${isPublished ? "bg-green-600 hover:bg-green-600" : ""}`}
+                          >
+                            v{v.versionNumber}
+                          </Badge>
+                          <span className="text-muted-foreground truncate">
+                            {v.languages?.[0]?.wordCount ? `${v.languages[0].wordCount}w` : ""}
+                            {" · "}
+                            {new Date(v.createdAt).toLocaleDateString("de-DE")}
+                            {" · "}
+                            {v.createdByName ?? v.createdBy}
+                          </span>
+                          {isPublished && (
+                            <span className="ml-auto text-[10px] text-green-600 shrink-0">live</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
 
+          {/* Scheduling */}
+          {topic && (
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm flex items-center gap-1.5">
+                <CalendarIcon className="h-3.5 w-3.5" />
+                Scheduling
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="sched-date" className="text-xs">Date</Label>
+                  <Input
+                    id="sched-date"
+                    type="date"
+                    value={schedDate}
+                    onChange={(e) => {
+                      setSchedDate(e.target.value);
+                      if (e.target.value && customerId && projectId && topic) {
+                        const newVal = schedTime ? `${e.target.value}T${schedTime}` : e.target.value;
+                        scheduleTopic(customerId, projectId, topic.id, newVal);
+                      }
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="sched-time" className="text-xs">Time</Label>
+                  <Input
+                    id="sched-time"
+                    type="time"
+                    value={schedTime}
+                    onChange={(e) => {
+                      setSchedTime(e.target.value);
+                      if (schedDate && customerId && projectId && topic) {
+                        const newVal = e.target.value ? `${schedDate}T${e.target.value}` : schedDate;
+                        scheduleTopic(customerId, projectId, topic.id, newVal);
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Metadata */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm">Metadata</h3>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                {description.length}/160 characters
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.labels.de ?? cat.labels.en ?? cat.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="author">Author</Label>
+              {authors.length > 0 ? (
+                <Select value={author} onValueChange={setAuthor}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select author" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {authors.map((a) => (
+                      <SelectItem key={a.id} value={a.name}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="author"
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  placeholder="Author name"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Hero Image */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-sm">Hero Image</h3>
+
+            {/* Preview */}
+            {item.heroImageId ? (
+              <div className="relative aspect-video rounded-md overflow-hidden border bg-muted">
+                <img
+                  src={getContentMediaUrl(customerId, projectId, item.id, item.heroImageId)}
+                  alt="Hero"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center rounded-md border border-dashed bg-muted/50 aspect-video">
+                <div className="text-center">
+                  <ImageIcon className="mx-auto h-6 w-6 text-muted-foreground" />
+                  <p className="mt-1 text-xs text-muted-foreground">No hero image</p>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs"
+                disabled={generating}
+                onClick={async () => {
+                  if (!item) return;
+                  setGenerating(true);
+                  try {
+                    const prompt = `Professional blog hero image for article titled "${item.title}". ${item.category ? `Category: ${item.category}.` : ""} ${item.keywords?.length ? `Keywords: ${item.keywords.join(", ")}.` : ""} Modern, clean, editorial style photography. No text overlays.`;
+                    const asset = await generateHeroImage(customerId, projectId, item.id, prompt);
+                    setMediaAssets((prev) => [...prev, asset]);
+                    if (!item.heroImageId) {
+                      setItem({ ...item, heroImageId: asset.id });
+                    }
+                  } catch (err) {
+                    console.error("Generate failed:", err);
+                  } finally {
+                    setGenerating(false);
+                  }
+                }}
+              >
+                {generating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
+                Generate
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}
+                Upload
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file || !item) return;
+                  setUploading(true);
+                  try {
+                    const asset = await uploadContentMedia(customerId, projectId, item.id, file);
+                    setMediaAssets((prev) => [...prev, asset]);
+                    if (!item.heroImageId) {
+                      setItem({ ...item, heroImageId: asset.id });
+                    }
+                  } catch (err) {
+                    console.error("Upload failed:", err);
+                  } finally {
+                    setUploading(false);
+                    e.target.value = "";
+                  }
+                }}
+              />
+            </div>
+
+            {/* Gallery */}
+            {mediaAssets.length > 1 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Gallery ({mediaAssets.length})</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {mediaAssets.map((asset) => (
+                    <div key={asset.id} className="relative group">
+                      <button
+                        type="button"
+                        className={`aspect-video w-full rounded-md overflow-hidden border-2 transition-colors ${
+                          item.heroImageId === asset.id ? "border-primary" : "border-transparent hover:border-muted-foreground/30"
+                        }`}
+                        onClick={async () => {
+                          if (!item || item.heroImageId === asset.id) return;
+                          await setHeroImage(customerId, projectId, item.id, asset.id);
+                          setItem({ ...item, heroImageId: asset.id });
+                        }}
+                      >
+                        <img
+                          src={getContentMediaUrl(customerId, projectId, item.id, asset.id)}
+                          alt={asset.altText ?? ""}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        className="absolute top-0.5 right-0.5 rounded-full bg-background/80 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={async () => {
+                          if (!item) return;
+                          await deleteContentMedia(customerId, projectId, item.id, asset.id);
+                          setMediaAssets((prev) => prev.filter((a) => a.id !== asset.id));
+                          if (item.heroImageId === asset.id) {
+                            setItem({ ...item, heroImageId: undefined });
+                          }
+                        }}
+                      >
+                        <X className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {mediaAssets.length === 1 && item.heroImageId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs text-muted-foreground"
+                onClick={async () => {
+                  if (!item) return;
+                  const asset = mediaAssets[0];
+                  await deleteContentMedia(customerId, projectId, item.id, asset.id);
+                  setMediaAssets([]);
+                  setItem({ ...item, heroImageId: undefined });
+                }}
+              >
+                <Trash2 className="mr-1 h-3 w-3" />
+                Remove image
+              </Button>
+            )}
+          </div>
+
+          {/* Delivery Info */}
+          {(item.deliveryRef || item.deliveryUrl) && (
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm">Delivery</h3>
+              {item.deliveryRef && (
+                <div className="text-xs">
+                  <span className="text-muted-foreground">Ref: </span>
+                  <span className="font-mono">{item.deliveryRef}</span>
+                </div>
+              )}
+              {item.deliveryUrl && (
+                <div className="text-xs">
+                  <span className="text-muted-foreground">URL: </span>
+                  <a
+                    href={item.deliveryUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline"
+                  >
+                    {item.deliveryUrl}
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Content Info */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-sm">Info</h3>
+            <div className="text-xs space-y-1">
+              <div>
+                <span className="text-muted-foreground">ID: </span>
+                <span className="font-mono">{item.id}</span>
+              </div>
+              {item.topicId && (
+                <div>
+                  <span className="text-muted-foreground">Topic: </span>
+                  <Link href={`/content/topics/${item.topicId}`} className="font-mono text-primary hover:underline">
+                    {item.topicId}
+                  </Link>
+                </div>
+              )}
+              {item.translationKey && (
+                <div>
+                  <span className="text-muted-foreground">Translation Key: </span>
+                  <span className="font-mono">{item.translationKey}</span>
+                </div>
+              )}
+              <div>
+                <span className="text-muted-foreground">Created: </span>
+                {new Date(item.createdAt).toLocaleDateString("de-DE")}
+              </div>
+              {item.publishedAt && (
+                <div>
+                  <span className="text-muted-foreground">Published: </span>
+                  {new Date(item.publishedAt).toLocaleDateString("de-DE")}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      }
+      defaultSidebarTab="metadata"
+    >
+      {/* ── Main Content ── */}
+      <div className="space-y-6">
         {/* Save Error Banner */}
         {saveError && (
           <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-950">
@@ -839,6 +1434,10 @@ export default function ContentEditorPage({
                     userEditedLangs.current.add(lang.lang);
                     setEditorContent((prev) => ({ ...prev, [lang.lang]: md }));
                   }}
+                  onImageUpload={async (file) => {
+                    const asset = await uploadContentMedia(customerId, projectId, item!.id, file, "inline");
+                    return getContentMediaUrl(customerId, projectId, item!.id, asset.id);
+                  }}
                 />
               ) : (
                 <Card>
@@ -858,234 +1457,7 @@ export default function ContentEditorPage({
 
         {/* FAQ Section */}
         <FaqSection faqs={faqs} setFaqs={setFaqs} />
-
       </div>
-
-      {/* Right Sidebar */}
-      <div className="w-80 shrink-0 overflow-y-auto border-l bg-muted/30 p-6 space-y-6">
-        {/* Version Selector */}
-        {versions.length > 0 && activeVersion && (
-          <div className="space-y-2">
-            <h3 className="font-semibold text-sm">Version</h3>
-            <Popover open={versionPopoverOpen} onOpenChange={setVersionPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-between text-xs h-9">
-                  <span className="flex items-center gap-2">
-                    <Badge
-                      variant={activeVersion.publishedAt ? "default" : "outline"}
-                      className={`text-[10px] px-1.5 ${activeVersion.publishedAt ? "bg-green-600 hover:bg-green-600" : ""}`}
-                    >
-                      v{activeVersion.versionNumber}
-                    </Badge>
-                    <span className="text-muted-foreground">
-                      {activeVersion.languages?.[0]?.wordCount ? `${activeVersion.languages[0].wordCount}w` : ""} · {activeVersion.createdByName ?? activeVersion.createdBy}
-                    </span>
-                    {isViewingOldVersion && (
-                      <span className="text-violet-600 font-medium">older</span>
-                    )}
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-1.5" align="start">
-                <div className="space-y-1">
-                  {[...versions].reverse().map((v) => {
-                    const isActive = v.id === activeVersionId;
-                    const isPublished = !!v.publishedAt;
-                    return (
-                      <button
-                        type="button"
-                        key={v.id}
-                        className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors hover:bg-muted ${isActive ? "bg-muted" : ""}`}
-                        onClick={() => {
-                          switchVersion(v.id);
-                          setVersionPopoverOpen(false);
-                        }}
-                      >
-                        <Badge
-                          variant={isPublished ? "default" : "outline"}
-                          className={`text-[10px] px-1.5 shrink-0 ${isPublished ? "bg-green-600 hover:bg-green-600" : ""}`}
-                        >
-                          v{v.versionNumber}
-                        </Badge>
-                        <span className="text-muted-foreground truncate">
-                          {v.languages?.[0]?.wordCount ? `${v.languages[0].wordCount}w` : ""}
-                          {" · "}
-                          {new Date(v.createdAt).toLocaleDateString("de-DE")}
-                          {" · "}
-                          {v.createdByName ?? v.createdBy}
-                        </span>
-                        {isPublished && (
-                          <span className="ml-auto text-[10px] text-green-600 shrink-0">live</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        )}
-
-        {/* Scheduling */}
-        {topic && (
-          <div className="space-y-3">
-            <h3 className="font-semibold text-sm flex items-center gap-1.5">
-              <CalendarIcon className="h-3.5 w-3.5" />
-              Scheduling
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="sched-date" className="text-xs">Date</Label>
-                <Input
-                  id="sched-date"
-                  type="date"
-                  value={schedDate}
-                  onChange={(e) => {
-                    setSchedDate(e.target.value);
-                    if (e.target.value && customerId && projectId && topic) {
-                      const newVal = schedTime ? `${e.target.value}T${schedTime}` : e.target.value;
-                      scheduleTopic(customerId, projectId, topic.id, newVal);
-                    }
-                  }}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="sched-time" className="text-xs">Time</Label>
-                <Input
-                  id="sched-time"
-                  type="time"
-                  value={schedTime}
-                  onChange={(e) => {
-                    setSchedTime(e.target.value);
-                    if (schedDate && customerId && projectId && topic) {
-                      const newVal = e.target.value ? `${schedDate}T${e.target.value}` : schedDate;
-                      scheduleTopic(customerId, projectId, topic.id, newVal);
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Metadata */}
-        <div className="space-y-4">
-          <h3 className="font-semibold text-sm">Metadata</h3>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-            />
-            <p className="text-xs text-muted-foreground">
-              {description.length}/160 characters
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Category</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.labels.de ?? cat.labels.en ?? cat.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Tags</Label>
-            <TagInput value={tags} onChange={setTags} placeholder="Add tag…" />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Keywords</Label>
-            <TagInput value={keywords} onChange={setKeywords} placeholder="Add keyword…" />
-          </div>
-        </div>
-
-        {/* Hero Image */}
-        <div className="space-y-3">
-          <h3 className="font-semibold text-sm">Hero Image</h3>
-          <div className="flex items-center justify-center rounded-md border border-dashed bg-muted/50 p-8">
-            <div className="text-center">
-              <ImageIcon className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="mt-2 text-xs text-muted-foreground">No image</p>
-              <Button variant="outline" size="sm" className="mt-2">
-                Generate
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Delivery Info */}
-        {(item.deliveryRef || item.deliveryUrl) && (
-          <div className="space-y-3">
-            <h3 className="font-semibold text-sm">Delivery</h3>
-            {item.deliveryRef && (
-              <div className="text-xs">
-                <span className="text-muted-foreground">Ref: </span>
-                <span className="font-mono">{item.deliveryRef}</span>
-              </div>
-            )}
-            {item.deliveryUrl && (
-              <div className="text-xs">
-                <span className="text-muted-foreground">URL: </span>
-                <a
-                  href={item.deliveryUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary underline"
-                >
-                  {item.deliveryUrl}
-                </a>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Content Info */}
-        <div className="space-y-3">
-          <h3 className="font-semibold text-sm">Info</h3>
-          <div className="text-xs space-y-1">
-            <div>
-              <span className="text-muted-foreground">ID: </span>
-              <span className="font-mono">{item.id}</span>
-            </div>
-            {item.topicId && (
-              <div>
-                <span className="text-muted-foreground">Topic: </span>
-                <span className="font-mono">{item.topicId}</span>
-              </div>
-            )}
-            {item.translationKey && (
-              <div>
-                <span className="text-muted-foreground">Translation Key: </span>
-                <span className="font-mono">{item.translationKey}</span>
-              </div>
-            )}
-            <div>
-              <span className="text-muted-foreground">Created: </span>
-              {new Date(item.createdAt).toLocaleDateString("de-DE")}
-            </div>
-            {item.publishedAt && (
-              <div>
-                <span className="text-muted-foreground">Published: </span>
-                {new Date(item.publishedAt).toLocaleDateString("de-DE")}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </ContentDetailLayout>
   );
 }

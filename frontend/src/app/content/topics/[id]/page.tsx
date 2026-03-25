@@ -1,25 +1,34 @@
 "use client";
 
-import { use, useState, useEffect, useCallback } from "react";
+import { use, useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TopicStatusBadge } from "@/components/status-badge";
+import { ContentDetailLayout } from "@/components/content-detail-layout";
 import { useProject } from "@/lib/project-context";
 import {
   getTopic,
-  updateTopicNotes,
+  updateTopic,
   approveTopic,
   rejectTopic,
+  restoreTopic,
   startProduction,
   scheduleTopic,
   enrichTopic,
   getContent,
 } from "@/lib/api";
 import type { Topic, ContentItem } from "@/lib/types";
+import { TopicChat } from "@/components/topic-chat";
 import {
   ArrowLeft,
   Check,
@@ -27,12 +36,9 @@ import {
   Play,
   Loader2,
   CalendarIcon,
-  Clock,
-  Save,
-  ArrowRight,
   Sparkles,
-  Search,
   FileText,
+  RotateCcw,
 } from "lucide-react";
 
 export default function TopicDetailPage({
@@ -41,18 +47,26 @@ export default function TopicDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: topicId } = use(params);
-  const router = useRouter();
   const { customerId, projectId, categories } = useProject();
 
   const [topic, setTopic] = useState<Topic | null>(null);
   const [linkedContent, setLinkedContent] = useState<ContentItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Editable fields
+  const [editTitle, setEditTitle] = useState("");
+  const [editAngle, setEditAngle] = useState("");
   const [notes, setNotes] = useState("");
-  const [notesDirty, setNotesDirty] = useState(false);
-  const [notesSaving, setNotesSaving] = useState(false);
-  const [schedDate, setSchedDate] = useState("");
-  const [schedTime, setSchedTime] = useState("");
+  const [schedValue, setSchedValue] = useState("");
+  const [saving, setSaving] = useState<string | null>(null);
+
+  // Keyword inputs per group
+  const [newPrimary, setNewPrimary] = useState("");
+  const [newSecondary, setNewSecondary] = useState("");
+  const [newLongTail, setNewLongTail] = useState("");
+
+  const titleRef = useRef<HTMLInputElement>(null);
 
   const loadTopic = useCallback(async () => {
     if (!customerId || !projectId) return;
@@ -61,11 +75,11 @@ export default function TopicDetailPage({
       const t = await getTopic(customerId, projectId, topicId);
       setTopic(t);
       if (t) {
+        setEditTitle(t.title);
+        setEditAngle(t.suggestedAngle ?? "");
         setNotes(t.userNotes ?? "");
         if (t.scheduledDate) {
-          const [d, time] = t.scheduledDate.split("T");
-          setSchedDate(d);
-          setSchedTime(time ?? "");
+          setSchedValue(t.scheduledDate.includes("T") ? t.scheduledDate : `${t.scheduledDate}T09:00`);
         }
       }
       // Find linked content
@@ -85,15 +99,118 @@ export default function TopicDetailPage({
     loadTopic();
   }, [loadTopic]);
 
+  // ── Auto-save helper ──────────────────────────────────────────
+  const saveField = async (field: string, value: unknown) => {
+    if (!topic) return;
+    setSaving(field);
+    try {
+      const { topic: updated } = await updateTopic(
+        customerId,
+        projectId,
+        topic.id,
+        { [field]: value } as Partial<Topic>,
+      );
+      setTopic(updated);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  // ── Title ─────────────────────────────────────────────────────
+  const handleTitleBlur = () => {
+    const trimmed = editTitle.trim();
+    if (!trimmed || trimmed === topic?.title) return;
+    saveField("title", trimmed);
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      titleRef.current?.blur();
+    }
+    if (e.key === "Escape") {
+      setEditTitle(topic?.title ?? "");
+      titleRef.current?.blur();
+    }
+  };
+
+  // ── Angle ─────────────────────────────────────────────────────
+  const handleAngleBlur = () => {
+    const trimmed = editAngle.trim();
+    if (trimmed === (topic?.suggestedAngle ?? "")) return;
+    saveField("suggestedAngle", trimmed);
+  };
+
+  // ── Notes ─────────────────────────────────────────────────────
+  const handleNotesBlur = () => {
+    if (notes === (topic?.userNotes ?? "")) return;
+    saveField("userNotes", notes);
+  };
+
+  // ── Keywords ──────────────────────────────────────────────────
+  const removeKeyword = (type: "secondary" | "longTail", kw: string) => {
+    if (!topic?.keywords) return;
+    const updated = {
+      ...topic.keywords,
+      [type]: topic.keywords[type]?.filter((k) => k !== kw) ?? [],
+    };
+    saveField("keywords", updated);
+  };
+
+  const addKeywordToGroup = (type: "secondary" | "longTail", kw: string) => {
+    if (!topic?.keywords) return;
+    const list = topic.keywords[type] ?? [];
+    if (list.includes(kw)) return;
+    saveField("keywords", { ...topic.keywords, [type]: [...list, kw] });
+  };
+
+  const handlePrimaryKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const val = newPrimary.trim();
+      if (!val || !topic?.keywords) return;
+      saveField("keywords", { ...topic.keywords, primary: val });
+      setNewPrimary("");
+    }
+  };
+
+  const removePrimary = () => {
+    if (!topic?.keywords) return;
+    saveField("keywords", { ...topic.keywords, primary: "" });
+  };
+
+  const handleSecondaryKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const val = newSecondary.trim();
+      if (!val) return;
+      addKeywordToGroup("secondary", val);
+      setNewSecondary("");
+    }
+    if (e.key === "Backspace" && !newSecondary && topic?.keywords?.secondary?.length) {
+      removeKeyword("secondary", topic.keywords.secondary[topic.keywords.secondary.length - 1]);
+    }
+  };
+
+  const handleLongTailKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const val = newLongTail.trim();
+      if (!val) return;
+      addKeywordToGroup("longTail", val);
+      setNewLongTail("");
+    }
+    if (e.key === "Backspace" && !newLongTail && topic?.keywords?.longTail?.length) {
+      removeKeyword("longTail", topic.keywords.longTail[topic.keywords.longTail.length - 1]);
+    }
+  };
+
+  // ── Actions ───────────────────────────────────────────────────
   const handleApprove = async () => {
     if (!topic) return;
     setActionLoading(true);
     try {
-      const { topic: updated } = await approveTopic(
-        customerId,
-        projectId,
-        topic.id,
-      );
+      const { topic: updated } = await approveTopic(customerId, projectId, topic.id);
       setTopic(updated);
     } finally {
       setActionLoading(false);
@@ -104,11 +221,7 @@ export default function TopicDetailPage({
     if (!topic) return;
     setActionLoading(true);
     try {
-      const { topic: updated } = await rejectTopic(
-        customerId,
-        projectId,
-        topic.id,
-      );
+      const { topic: updated } = await rejectTopic(customerId, projectId, topic.id);
       setTopic(updated);
     } finally {
       setActionLoading(false);
@@ -126,60 +239,47 @@ export default function TopicDetailPage({
     }
   };
 
+  const handleRestore = async () => {
+    if (!topic) return;
+    setActionLoading(true);
+    try {
+      const { topic: updated } = await restoreTopic(customerId, projectId, topic.id);
+      setTopic(updated);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleEnrich = async () => {
     if (!topic) return;
     setActionLoading(true);
     try {
       await enrichTopic(customerId, projectId, topic.id);
-      // Poll for completion
       setTimeout(() => loadTopic(), 3000);
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleSaveNotes = async () => {
+  const handleScheduleChange = async (value: string) => {
+    setSchedValue(value);
     if (!topic) return;
-    setNotesSaving(true);
+    const dateStr = value || null;
+    setSaving("scheduledDate");
     try {
-      const { topic: updated } = await updateTopicNotes(
-        customerId,
-        projectId,
-        topic.id,
-        notes,
-      );
+      const { topic: updated } = await scheduleTopic(customerId, projectId, topic.id, dateStr);
       setTopic(updated);
-      setNotesDirty(false);
     } finally {
-      setNotesSaving(false);
+      setSaving(null);
     }
   };
 
-  const handleSchedule = async () => {
-    if (!topic) return;
-    const dateStr = schedDate
-      ? schedTime
-        ? `${schedDate}T${schedTime}`
-        : schedDate
-      : null;
-    setActionLoading(true);
-    try {
-      const { topic: updated } = await scheduleTopic(
-        customerId,
-        projectId,
-        topic.id,
-        dateStr,
-      );
-      setTopic(updated);
-    } finally {
-      setActionLoading(false);
-    }
+  const handleTopicUpdated = (updated: Topic) => {
+    setTopic(updated);
+    setEditTitle(updated.title);
+    setEditAngle(updated.suggestedAngle ?? "");
+    setNotes(updated.userNotes ?? "");
   };
-
-  const catLabel = topic?.category
-    ? categories.find((c) => c.id === topic.category)?.labels?.de ??
-      topic.category
-    : null;
 
   if (loading) {
     return (
@@ -201,262 +301,156 @@ export default function TopicDetailPage({
   }
 
   return (
-    <div className="p-8 max-w-5xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/content">
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <TopicStatusBadge status={topic.status} />
-          <Badge variant="outline" className="text-xs">
-            Topic
-          </Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          {topic.source === "user" && !topic.enriched && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleEnrich}
-              disabled={actionLoading}
-            >
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              Analyze
-            </Button>
-          )}
-          {topic.status === "proposed" && (
-            <>
+    <ContentDetailLayout
+      header={
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/content">
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <TopicStatusBadge status={topic.status} />
+          </div>
+          <div className="flex items-center gap-2">
+            {topic.source === "user" && !topic.enriched && (
               <Button
                 size="sm"
                 variant="outline"
-                onClick={handleReject}
+                onClick={handleEnrich}
                 disabled={actionLoading}
               >
-                <X className="mr-1.5 h-3.5 w-3.5" />
-                Reject
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                Analyze
               </Button>
-              <Button
-                size="sm"
-                onClick={handleApprove}
-                disabled={actionLoading}
-              >
-                <Check className="mr-1.5 h-3.5 w-3.5" />
-                Approve
-              </Button>
-            </>
-          )}
-          {topic.status === "approved" && (
-            <Button
-              size="sm"
-              onClick={handleProduce}
-              disabled={actionLoading}
-            >
-              {actionLoading ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Play className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              Produce
-            </Button>
-          )}
-          {linkedContent && (
-            <Link href={`/content/${linkedContent.id}`}>
-              <Button size="sm" variant="outline">
-                <FileText className="mr-1.5 h-3.5 w-3.5" />
-                Open in Editor
-              </Button>
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {/* Title */}
-      <div>
-        <h1 className="text-2xl font-bold">{topic.title}</h1>
-        {topic.suggestedAngle && (
-          <p className="text-muted-foreground mt-1">{topic.suggestedAngle}</p>
-        )}
-      </div>
-
-      {/* Two-column layout */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Main Content */}
-        <div className="col-span-2 space-y-6">
-          {/* Keywords */}
-          {topic.keywords && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Keywords</h3>
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-1.5">
-                  <Badge className="bg-primary/10 text-primary border-primary/20">
-                    {topic.keywords.primary}
-                  </Badge>
-                </div>
-                {topic.keywords.secondary.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {topic.keywords.secondary.map((kw) => (
-                      <Badge key={kw} variant="secondary" className="text-xs">
-                        {kw}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                {topic.keywords.longTail.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {topic.keywords.longTail.map((kw) => (
-                      <Badge
-                        key={kw}
-                        variant="outline"
-                        className="text-xs text-muted-foreground"
-                      >
-                        {kw}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Competitor Insights */}
-          {topic.competitorInsights && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold">Competitor Insights</h3>
-              <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground whitespace-pre-wrap">
-                {topic.competitorInsights}
-              </div>
-            </div>
-          )}
-
-          {/* AI Analysis */}
-          {topic.reasoning && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold">AI Analysis</h3>
-              <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground whitespace-pre-wrap">
-                {topic.reasoning}
-              </div>
-            </div>
-          )}
-
-          {/* User Notes */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Notes</h3>
-              {notesDirty && (
+            )}
+            {topic.status === "proposed" && (
+              <>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs"
-                  onClick={handleSaveNotes}
-                  disabled={notesSaving}
+                  onClick={handleReject}
+                  disabled={actionLoading}
                 >
-                  {notesSaving ? (
-                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  ) : (
-                    <Save className="mr-1 h-3 w-3" />
-                  )}
-                  Save
+                  <X className="mr-1.5 h-3.5 w-3.5" />
+                  Reject
                 </Button>
-              )}
-            </div>
-            <Textarea
-              value={notes}
-              onChange={(e) => {
-                setNotes(e.target.value);
-                setNotesDirty(true);
-              }}
-              placeholder="Add your notes..."
-              className="min-h-[100px] resize-y"
-            />
+                <Button
+                  size="sm"
+                  onClick={handleApprove}
+                  disabled={actionLoading}
+                >
+                  <Check className="mr-1.5 h-3.5 w-3.5" />
+                  Approve
+                </Button>
+              </>
+            )}
+            {topic.status === "approved" && (
+              <Button
+                size="sm"
+                onClick={handleProduce}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Play className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Produce
+              </Button>
+            )}
+            {topic.status === "rejected" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleRestore}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Restore
+              </Button>
+            )}
+            {linkedContent && (
+              <Link href={`/content/${linkedContent.id}`}>
+                <Button size="sm" variant="outline">
+                  <FileText className="mr-1.5 h-3.5 w-3.5" />
+                  Open in Editor
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
-
-        {/* Sidebar */}
-        <div className="space-y-5">
+      }
+      metadataPanel={
+        <>
           {/* Category */}
-          {catLabel && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">
-                Category
-              </p>
-              <p className="text-sm font-medium">{catLabel}</p>
-            </div>
-          )}
-
-          {/* Search Intent */}
-          {topic.searchIntent && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">
-                Search Intent
-              </p>
-              <div className="flex items-center gap-1.5">
-                <Search className="h-3.5 w-3.5 text-muted-foreground" />
-                <p className="text-sm font-medium capitalize">
-                  {topic.searchIntent}
-                </p>
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Category</p>
+            {categories.length > 0 ? (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={topic.category || ""}
+                  onValueChange={(v) => saveField("category", v)}
+                >
+                  <SelectTrigger size="sm" className="h-8 text-xs">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.labels?.de ?? c.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {saving === "category" && (
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                )}
               </div>
-            </div>
-          )}
-
-          {/* Estimated Sections */}
-          {topic.estimatedSections > 0 && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">
-                Sections
+            ) : (
+              <p className="text-sm">
+                {categories.find((c) => c.id === topic.category)?.labels?.de ?? topic.category ?? "—"}
               </p>
-              <p className="text-sm font-medium">~{topic.estimatedSections}</p>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Scheduling */}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">
-              Scheduling
-            </p>
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Scheduled</p>
             <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <CalendarIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  type="date"
-                  value={schedDate}
-                  onChange={(e) => setSchedDate(e.target.value)}
-                  className="pl-8 h-8 text-xs"
-                />
-              </div>
-              <div className="relative w-24">
-                <Clock className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  type="time"
-                  value={schedTime}
-                  onChange={(e) => setSchedTime(e.target.value)}
-                  className="pl-8 h-8 text-xs"
-                />
-              </div>
+              <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <Input
+                type="datetime-local"
+                value={schedValue}
+                onChange={(e) => handleScheduleChange(e.target.value)}
+                className="h-8 text-xs w-full"
+              />
+              {saving === "scheduledDate" && (
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
+              )}
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-2 h-7 text-xs w-full"
-              onClick={handleSchedule}
-              disabled={actionLoading}
-            >
-              Apply
-            </Button>
           </div>
+
+          {/* Format / Search Intent */}
+          {topic.searchIntent && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Search Intent</p>
+              <p className="text-sm">{topic.searchIntent}</p>
+            </div>
+          )}
 
           {/* Created */}
           {topic.createdAt && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">
-                Created
-              </p>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Created</p>
               <p className="text-sm">
                 {new Date(topic.createdAt).toLocaleDateString("de-DE", {
                   day: "numeric",
-                  month: "long",
+                  month: "short",
                   year: "numeric",
                 })}
               </p>
@@ -465,29 +459,183 @@ export default function TopicDetailPage({
 
           {/* Linked Article */}
           {linkedContent && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2">
-                Article
-              </p>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Linked Article</p>
               <Link
                 href={`/content/${linkedContent.id}`}
-                className="flex items-center gap-2 rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                className="flex items-center gap-1.5 text-sm text-primary hover:underline"
               >
-                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {linkedContent.title || "Untitled"}
-                  </p>
-                  <p className="text-xs text-muted-foreground capitalize">
-                    {linkedContent.status}
-                  </p>
-                </div>
-                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-auto" />
+                <FileText className="h-3.5 w-3.5" />
+                {linkedContent.title || "Untitled"}
               </Link>
             </div>
           )}
+        </>
+      }
+      chatPanel={
+        <TopicChat
+          customerId={customerId}
+          projectId={projectId}
+          topicId={topicId}
+          onTopicUpdated={handleTopicUpdated}
+        />
+      }
+      defaultSidebarTab="metadata"
+    >
+      {/* ── Main Content ── */}
+      <div className="space-y-6">
+        {/* Editable Title + Angle */}
+        <div className="rounded-xl bg-muted/40 px-5 py-4 space-y-1">
+          <div className="relative">
+            <input
+              ref={titleRef}
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              onKeyDown={handleTitleKeyDown}
+              className="w-full text-2xl font-bold bg-transparent border-none outline-none rounded px-1 -mx-1 hover:bg-muted/50 focus:bg-muted/50 transition-colors"
+            />
+            {saving === "title" && (
+              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          <div className="relative">
+            <input
+              value={editAngle}
+              onChange={(e) => setEditAngle(e.target.value)}
+              onBlur={handleAngleBlur}
+              placeholder="Add a suggested angle..."
+              className="w-full text-sm text-muted-foreground bg-transparent border-none outline-none rounded px-1 -mx-1 hover:bg-muted/50 focus:bg-muted/50 transition-colors"
+            />
+            {saving === "suggestedAngle" && (
+              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            )}
+          </div>
+        </div>
+
+        {/* Keywords */}
+        {topic.keywords && (
+          <div className="rounded-xl bg-muted/40 px-5 py-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold">Keywords</h3>
+              {saving === "keywords" && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              )}
+            </div>
+
+            {/* Primary */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Primary</p>
+              <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/60 px-2 py-1.5 min-h-[34px]">
+                {topic.keywords.primary && (
+                  <Badge className="bg-primary/10 text-primary border-primary/20 gap-1 pr-1">
+                    {topic.keywords.primary}
+                    <button onClick={removePrimary} className="ml-0.5 hover:text-destructive transition-colors">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {!topic.keywords.primary && (
+                  <input
+                    value={newPrimary}
+                    onChange={(e) => setNewPrimary(e.target.value)}
+                    onKeyDown={handlePrimaryKeyDown}
+                    placeholder="Type and press Enter..."
+                    className="flex-1 min-w-[120px] text-xs bg-transparent border-none outline-none"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Secondary */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Secondary</p>
+              <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/60 px-2 py-1.5 min-h-[34px]">
+                {topic.keywords.secondary?.map((kw) => (
+                  <Badge key={kw} variant="secondary" className="text-xs gap-1 pr-1">
+                    {kw}
+                    <button onClick={() => removeKeyword("secondary", kw)} className="ml-0.5 hover:text-destructive transition-colors">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                <input
+                  value={newSecondary}
+                  onChange={(e) => setNewSecondary(e.target.value)}
+                  onKeyDown={handleSecondaryKeyDown}
+                  placeholder={topic.keywords.secondary?.length ? "" : "Type and press Enter..."}
+                  className="flex-1 min-w-[120px] text-xs bg-transparent border-none outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Long-tail */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Long-tail</p>
+              <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-background/60 px-2 py-1.5 min-h-[34px]">
+                {topic.keywords.longTail?.map((kw) => (
+                  <Badge key={kw} variant="outline" className="text-xs text-muted-foreground gap-1 pr-1">
+                    {kw}
+                    <button onClick={() => removeKeyword("longTail", kw)} className="ml-0.5 hover:text-destructive transition-colors">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                <input
+                  value={newLongTail}
+                  onChange={(e) => setNewLongTail(e.target.value)}
+                  onKeyDown={handleLongTailKeyDown}
+                  placeholder={topic.keywords.longTail?.length ? "" : "Type and press Enter..."}
+                  className="flex-1 min-w-[120px] text-xs bg-transparent border-none outline-none"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Competitor Analysis */}
+        {(topic.competitorInsights || topic.reasoning) && (
+          <div className="rounded-xl bg-muted/40 px-5 py-4 space-y-4">
+            <h3 className="text-sm font-semibold flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+              AI Research
+            </h3>
+            {topic.competitorInsights && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Competitor Analysis</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {topic.competitorInsights}
+                </p>
+              </div>
+            )}
+            {topic.reasoning && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Strategic Fit</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {topic.reasoning}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Notes */}
+        <div className="rounded-xl bg-muted/40 px-5 py-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold">Notes</h3>
+            {saving === "userNotes" && (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={handleNotesBlur}
+            placeholder="Add your notes..."
+            className="min-h-[100px] resize-y bg-background/60 shadow-none"
+          />
         </div>
       </div>
-    </div>
+    </ContentDetailLayout>
   );
 }
