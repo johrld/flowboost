@@ -835,8 +835,8 @@ export default function ContentEditorPage({
     return (
       <div className="p-8">
         <p className="text-muted-foreground">Content not found</p>
-        <Link href="/content" className="text-primary underline text-sm">
-          Back to Content
+        <Link href="/briefings" className="text-primary underline text-sm">
+          Back to Briefings
         </Link>
       </div>
     );
@@ -855,7 +855,7 @@ export default function ContentEditorPage({
     <ContentDetailLayout
       header={
         <div className="flex items-center gap-4">
-          <Link href="/content">
+          <Link href={item.briefingId ? `/briefings/${item.briefingId}` : item.topicId ? `/briefings/${item.topicId}` : "/briefings"}>
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-4 w-4" />
             </Button>
@@ -1287,7 +1287,7 @@ export default function ContentEditorPage({
               {item.topicId && (
                 <div>
                   <span className="text-muted-foreground">Topic: </span>
-                  <Link href={`/content/topics/${item.topicId}`} className="font-mono text-primary hover:underline">
+                  <Link href={`/briefings/${item.topicId}`} className="font-mono text-primary hover:underline">
                     {item.topicId}
                   </Link>
                 </div>

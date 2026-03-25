@@ -344,19 +344,30 @@ export default function BriefingDetailPage({ params }: { params: Promise<{ id: s
                 <Button><Plus className="mr-2 h-4 w-4" />Create</Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                {(contentTypes.length > 0 ? contentTypes.map((ct) => (
-                  <DropdownMenuItem
-                    key={ct.id}
-                    className="gap-2"
-                    onClick={() => handleProduce(
-                      ct.category === "social" ? "social_post" : ct.id === "newsletter" ? "newsletter" : "article",
-                      ct.category === "social" ? ct.id.replace("-post", "") : undefined,
-                    )}
-                  >
-                    {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
-                    {ct.label}
-                  </DropdownMenuItem>
-                )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                {(contentTypes.length > 0 ? contentTypes.map((ct) => {
+                  // Map content type to API type + platform
+                  let apiType = "article";
+                  let platform: string | undefined;
+                  if (ct.category === "social") {
+                    apiType = "social_post";
+                    // Extract platform from id: "linkedin-post" → "linkedin"
+                    platform = ct.id.replace(/-post$/, "");
+                  } else if (ct.category === "email" || ct.id === "newsletter") {
+                    apiType = "newsletter";
+                  } else if (ct.id === "guide" || ct.id.includes("guide")) {
+                    apiType = "guide";
+                  }
+                  return (
+                    <DropdownMenuItem
+                      key={ct.id}
+                      className="gap-2"
+                      onClick={() => handleProduce(apiType, platform)}
+                    >
+                      {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                      {ct.label}
+                    </DropdownMenuItem>
+                  );
+                }) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
                   <DropdownMenuItem key={opt.platform ?? opt.type} className="gap-2" onClick={() => handleProduce(opt.type, opt.platform)}>
                     {opt.icon}{opt.label}
                   </DropdownMenuItem>

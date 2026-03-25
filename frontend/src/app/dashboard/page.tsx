@@ -526,7 +526,7 @@ function DetailDialog({
             </Link>
           )}
           {item.type === "topic" && (
-            <Link href={`/content/topics/${item.topicId}`} className="flex-1">
+            <Link href={`/briefings/${item.topicId}`} className="flex-1">
               <Button variant="outline" className="w-full gap-1.5">
                 View Details
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -765,7 +765,7 @@ function AssignDialog({
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" asChild>
-                  <Link href="/social">View Social Posts</Link>
+                  <Link href="/briefings">View Briefings</Link>
                 </Button>
                 <Button variant="outline" size="sm" asChild>
                   <Link href="/connectors">Configure Connectors</Link>
