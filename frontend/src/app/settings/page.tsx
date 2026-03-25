@@ -76,7 +76,6 @@ function SettingsPageContent() {
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [languages, setLanguages] = useState<{ code: string; name: string; enabled: boolean }[]>([]);
-  const [articlesPerWeek, setArticlesPerWeek] = useState(3);
   const [generalStatus, setGeneralStatus] = useState<SaveStatus>("idle");
 
   // Connector sync state (read-only categories + authors from repo)
@@ -96,8 +95,7 @@ function SettingsPageContent() {
   // Pipeline tab state
   const [defaultModel, setDefaultModel] = useState("sonnet");
   const [maxRetries, setMaxRetries] = useState(3);
-  const [maxBudget, setMaxBudget] = useState(5);
-  const [imagenModel, setImagenModel] = useState("imagen-4-fast");
+  const [imagenModel, setImagenModel] = useState("imagen-4.0-fast-generate-001");
   const [pipelineStatus, setPipelineStatus] = useState<SaveStatus>("idle");
 
   // Brand Voice tab state
@@ -123,14 +121,12 @@ function SettingsPageContent() {
       setProjectName(proj.name);
       setProjectDescription(proj.description ?? "");
       setLanguages(proj.languages ?? []);
-      setArticlesPerWeek(proj.publishFrequency?.articlesPerWeek ?? 3);
       setCompetitors(proj.competitors ?? []);
 
       // Populate pipeline settings
       setDefaultModel(proj.pipeline?.defaultModel ?? "sonnet");
       setMaxRetries(proj.pipeline?.maxRetriesPerPhase ?? 3);
-      setMaxBudget(proj.pipeline?.maxBudgetPerArticle ?? 5);
-      setImagenModel(proj.pipeline?.imagenModel ?? "imagen-4-fast");
+      setImagenModel(proj.pipeline?.imagenModel ?? "imagen-4.0-fast-generate-001");
 
       // Load text files in parallel
       const [bv, pb] = await Promise.all([
@@ -165,7 +161,6 @@ function SettingsPageContent() {
       name: projectName,
       description: projectDescription,
       languages,
-      publishFrequency: { articlesPerWeek, preferredDays: project!.publishFrequency?.preferredDays ?? [] },
     });
   });
 
@@ -204,7 +199,6 @@ function SettingsPageContent() {
       pipeline: {
         defaultModel,
         maxRetriesPerPhase: maxRetries,
-        maxBudgetPerArticle: maxBudget,
         imagenModel,
       },
     });
@@ -287,10 +281,8 @@ function SettingsPageContent() {
       <Tabs defaultValue={searchParams.get("tab") ?? "general"}>
         <TabsList className="flex-wrap">
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="brief">Project Brief</TabsTrigger>
-          <TabsTrigger value="authors">Authors</TabsTrigger>
-          <TabsTrigger value="brand">Brand Voice</TabsTrigger>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
+          <TabsTrigger value="ai-context">AI Context</TabsTrigger>
+          <TabsTrigger value="connector-data">Connector Data</TabsTrigger>
           <TabsTrigger value="competitors">Competitors</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
         </TabsList>
@@ -355,28 +347,13 @@ function SettingsPageContent() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Publishing Frequency</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={14}
-                    value={articlesPerWeek}
-                    onChange={(e) => setArticlesPerWeek(Number(e.target.value))}
-                    className="w-20"
-                  />
-                  <span className="text-sm text-muted-foreground">articles per week</span>
-                </div>
-              </div>
-
               <SaveButton status={generalStatus} onClick={saveGeneral} />
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Project Brief */}
-        <TabsContent value="brief" className="mt-6">
+        {/* AI Context (Project Brief + Brand Voice) */}
+        <TabsContent value="ai-context" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Project Brief</CardTitle>
@@ -386,93 +363,26 @@ function SettingsPageContent() {
             </CardHeader>
             <CardContent className="space-y-4">
               <Textarea
-                className="min-h-[500px] font-mono text-sm"
-                placeholder={`# Project Brief\n\n## About the Business\nWhat does the business do?\n\n## Target Audience\nWho are we writing for?\n\n## Unique Selling Points\n- USP 1\n- USP 2\n\n## Goals\nWhat should the content achieve?\n\n## Competitors & Positioning\nHow do we differentiate?`}
+                className="min-h-[300px] font-mono text-sm"
+                placeholder={`# Project Brief\n\n## About the Business\nWhat does the business do?\n\n## Target Audience\nWho are we writing for?\n\n## Unique Selling Points\n- USP 1\n- USP 2\n\n## Goals\nWhat should the content achieve?`}
                 value={projectBriefContent}
                 onChange={(e) => setProjectBriefContent(e.target.value)}
               />
               <SaveButton status={projectBriefStatus} onClick={saveProjectBrief} />
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Authors (read-only, synced from connector) */}
-        <TabsContent value="authors" className="mt-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold">Authors</h3>
-              <p className="text-sm text-muted-foreground">
-                Synced from your connected repository
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              {lastSync && (
-                <span className="text-xs text-muted-foreground">
-                  Last synced: {lastSync.toLocaleTimeString()}
-                </span>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={syncFromConnector}
-                disabled={syncing || !project?.connector?.github}
-              >
-                {syncing ? (
-                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-3 w-3" />
-                )}
-                Sync
-              </Button>
-            </div>
-          </div>
-
-          {remoteAuthors.length > 0 ? (
-            <div className="rounded-lg border divide-y">
-              {remoteAuthors.map((author) => (
-                <div key={author.id} className="flex items-center gap-4 px-4 py-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{author.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {author.title?.de || author.title?.en || ""}{author.title?.de || author.title?.en ? " · " : ""}<span className="font-mono">{author.id}</span>
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border p-8 text-center">
-              {!project?.connector?.github ? (
-                <>
-                  <Cable className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">Connect a Git repository to sync authors</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm text-muted-foreground">No authors synced yet</p>
-                  <Button variant="outline" size="sm" className="mt-3" onClick={syncFromConnector}>
-                    <RefreshCw className="mr-2 h-3 w-3" />
-                    Sync Now
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Brand Voice */}
-        <TabsContent value="brand" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Brand Voice Guidelines</CardTitle>
+              <CardTitle>Brand Voice</CardTitle>
               <CardDescription>
-                Define your brand tone, forbidden terms, and writing style
+                Tone, forbidden terms, writing style — controls how AI agents write
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <Textarea
-                className="min-h-[400px] font-mono text-sm"
-                placeholder="# Brand Voice&#10;&#10;## Tone&#10;- Warm, supportive, knowledgeable&#10;&#10;## Forbidden Terms&#10;- ...&#10;&#10;## Writing Style&#10;- Short paragraphs..."
+                className="min-h-[300px] font-mono text-sm"
+                placeholder={`# Brand Voice\n\n## Tone\n- Warm, supportive, knowledgeable\n\n## Forbidden Terms\n- ...\n\n## Writing Style\n- Short paragraphs, active voice`}
                 value={brandVoiceContent}
                 onChange={(e) => setBrandVoiceContent(e.target.value)}
               />
@@ -481,13 +391,13 @@ function SettingsPageContent() {
           </Card>
         </TabsContent>
 
-        {/* Categories (read-only, synced from connector) */}
-        <TabsContent value="categories" className="mt-6 space-y-4">
+        {/* Connector Data (Authors + Categories, read-only) */}
+        <TabsContent value="connector-data" className="mt-6 space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold">Categories</h3>
+              <h3 className="text-lg font-semibold">Connector Data</h3>
               <p className="text-sm text-muted-foreground">
-                Synced from your connected repository
+                Authors and categories synced from your connected repository
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -512,33 +422,54 @@ function SettingsPageContent() {
             </div>
           </div>
 
-          {remoteCategories.length > 0 ? (
-            <div className="rounded-lg border divide-y">
-              {remoteCategories.map((cat) => (
-                <div key={cat.id} className="flex items-center gap-4 px-4 py-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{cat.name.de || cat.name.en || cat.id}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{cat.id}</p>
-                  </div>
-                </div>
-              ))}
+          {!project?.connector?.github ? (
+            <div className="rounded-lg border p-8 text-center">
+              <Cable className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">Connect a GitHub repository to sync authors and categories</p>
             </div>
           ) : (
-            <div className="rounded-lg border p-8 text-center">
-              {!project?.connector?.github ? (
-                <>
-                  <Cable className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">Connect a Git repository to sync categories</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm text-muted-foreground">No categories synced yet</p>
-                  <Button variant="outline" size="sm" className="mt-3" onClick={syncFromConnector}>
-                    <RefreshCw className="mr-2 h-3 w-3" />
-                    Sync Now
-                  </Button>
-                </>
-              )}
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Authors</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {remoteAuthors.length > 0 ? (
+                    <div className="rounded-lg border divide-y">
+                      {remoteAuthors.map((author) => (
+                        <div key={author.id} className="px-3 py-2">
+                          <p className="text-sm font-medium">{author.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {author.title?.de || author.title?.en || ""}{author.title?.de || author.title?.en ? " · " : ""}<span className="font-mono">{author.id}</span>
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No authors synced yet</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Categories</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {remoteCategories.length > 0 ? (
+                    <div className="rounded-lg border divide-y">
+                      {remoteCategories.map((cat) => (
+                        <div key={cat.id} className="px-3 py-2">
+                          <p className="text-sm font-medium">{cat.name.de || cat.name.en || cat.id}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{cat.id}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No categories synced yet</p>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
         </TabsContent>
@@ -628,26 +559,12 @@ function SettingsPageContent() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="sonnet">Claude Sonnet</SelectItem>
-                    <SelectItem value="opus">Claude Opus</SelectItem>
-                    <SelectItem value="haiku">Claude Haiku</SelectItem>
+                    <SelectItem value="sonnet">Sonnet</SelectItem>
+                    <SelectItem value="opus">Opus</SelectItem>
+                    <SelectItem value="haiku">Haiku</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">Model used for content generation agents</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Max Budget per Article (USD)</Label>
-                <Input
-                  type="number"
-                  min={0.5}
-                  max={50}
-                  step={0.5}
-                  value={maxBudget}
-                  onChange={(e) => setMaxBudget(Number(e.target.value))}
-                  className="w-32"
-                />
-                <p className="text-xs text-muted-foreground">Pipeline stops if cost exceeds this limit</p>
+                <p className="text-xs text-muted-foreground">Claude model used for content generation agents</p>
               </div>
 
               <div className="space-y-2">
@@ -669,9 +586,9 @@ function SettingsPageContent() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="imagen-4-fast">Imagen 4 Fast</SelectItem>
-                    <SelectItem value="imagen-4">Imagen 4</SelectItem>
-                    <SelectItem value="imagen-3">Imagen 3</SelectItem>
+                    <SelectItem value="imagen-4.0-fast-generate-001">Imagen 4 Fast</SelectItem>
+                    <SelectItem value="imagen-4.0-generate-001">Imagen 4</SelectItem>
+                    <SelectItem value="imagen-3.0-generate-002">Imagen 3</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">Google AI model for hero image generation</p>
