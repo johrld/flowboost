@@ -36,6 +36,7 @@ export interface ContentItem {
   keywords?: string[];
   author?: string;
   topicId?: string;
+  briefingId?: string;
   translationKey?: string;
   parentId?: string;
   currentVersionId?: string;
@@ -243,6 +244,21 @@ export interface Topic {
   approvedAt?: string;
   rejectedAt?: string;
   rejectionReason?: string;
+
+  // Briefing extensions
+  inputs?: BriefingInput[];
+  outputIds?: string[];
+}
+
+export type BriefingInputType = "text" | "transcript" | "image" | "url" | "document";
+
+export interface BriefingInput {
+  id: string;
+  type: BriefingInputType;
+  content: string;
+  fileName?: string;
+  mimeType?: string;
+  createdAt: string;
 }
 
 

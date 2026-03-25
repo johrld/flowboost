@@ -1,4 +1,4 @@
-import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage, ContentMediaAsset } from "./types";
+import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage, ContentMediaAsset, BriefingInput } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
 
@@ -204,6 +204,73 @@ export function applyTopicChatUpdates(
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/chat/apply`, {
     method: "POST",
     body: JSON.stringify({ updates }),
+  });
+}
+
+// ── Briefing Inputs ──────────────────────────────────────────────
+
+export function addBriefingInput(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  data: { type: string; content: string; fileName?: string },
+): Promise<BriefingInput> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/inputs`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function uploadBriefingFile(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  file: File,
+): Promise<BriefingInput> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(
+    `${API_URL}/customers/${customerId}/projects/${projectId}/topics/${topicId}/inputs/upload`,
+    { method: "POST", body: formData },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `Upload failed: ${res.status}`);
+  }
+  return res.json() as Promise<BriefingInput>;
+}
+
+export function deleteBriefingInput(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  inputId: string,
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/inputs/${inputId}`, {
+    method: "DELETE",
+  });
+}
+
+export function getBriefingInputFileUrl(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  inputId: string,
+): string {
+  return `${API_URL}/customers/${customerId}/projects/${projectId}/topics/${topicId}/inputs/${inputId}/file`;
+}
+
+// ── Briefing Produce ────────────────────────────────────────────
+
+export function produceBriefingOutput(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  data: { type: string; platform?: string },
+): Promise<{ message: string; contentItemId: string; briefingId: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/produce`, {
+    method: "POST",
+    body: JSON.stringify(data),
   });
 }
 

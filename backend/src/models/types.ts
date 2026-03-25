@@ -181,6 +181,25 @@ export interface Topic {
   approvedAt?: string;
   rejectedAt?: string;
   rejectionReason?: string;
+
+  // ── Briefing extensions ────────────────────────────────
+  // Inputs: source material (text, files, URLs, transcripts)
+  inputs?: BriefingInput[];
+  // Output references: ContentItem IDs produced from this briefing
+  outputIds?: string[];
+}
+
+// ─── Briefing Input ─────────────────────────────────────────
+
+export type BriefingInputType = "text" | "transcript" | "image" | "url" | "document";
+
+export interface BriefingInput {
+  id: string;
+  type: BriefingInputType;
+  content: string;              // Text content or relative file path
+  fileName?: string;
+  mimeType?: string;
+  createdAt: string;
 }
 
 // ─── Articles (V2 — kept for backward compat, use ContentItem for new code) ──
@@ -248,6 +267,7 @@ export interface ContentItem {
 
   // Links
   topicId?: string;
+  briefingId?: string;
   translationKey?: string;
   parentId?: string;
 
