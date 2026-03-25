@@ -1,0 +1,19 @@
+# Local overrides for docker-compose.yml
+# Copy to docker-compose.override.yml (gitignored) and uncomment what you need.
+
+services:
+  api:
+    volumes:
+      # ── Claude CLI Credentials (Max subscription) ──────────
+      # Mount your local Claude CLI credentials into the container.
+      # Only needed if you DON'T set ANTHROPIC_API_KEY in .env.
+      # - ~/.claude.json:/root/.claude.json:ro
+      # - ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro
+    environment: {}
+      # ── Custom domain (e.g. Cloudflare Tunnel) ─────────────
+      # - FRONTEND_URL=https://app.yourdomain.com
+
+  dashboard:
+    environment: {}
+      # ── Custom API URL ─────────────────────────────────────
+      # - NEXT_PUBLIC_API_URL=https://api.yourdomain.com

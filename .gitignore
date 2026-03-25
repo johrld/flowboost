@@ -8,11 +8,9 @@ node_modules/
 backend/dist/
 *.log
 
-# Backend Runtime Data
-backend/data/**/pipeline-runs/
-backend/data/**/api-keys.json
+# Backend Runtime Data (user-specific project data)
+backend/data/
 backend/data-backup-*/
-# NOTE: articles/ are tracked until Supabase migration
 
 # Secrets & Keys
 keys/
@@ -24,6 +22,9 @@ frontend/.next/
 frontend/out/
 frontend/next-env.d.ts
 *.tsbuildinfo
+
+# Docker override (user-specific)
+docker-compose.override.yml
 
 # OS
 .DS_Store
