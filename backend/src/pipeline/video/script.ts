@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createLogger } from "../../utils/logger.js";
 import { runAgentTracked } from "../engine.js";
+import { extractJson } from "../extract-json.js";
 import type { PipelineContext } from "../context.js";
 
 const log = createLogger("video:script");
@@ -77,10 +78,7 @@ Output ONLY valid JSON in this exact format:
   });
 
   // Parse JSON from agent response
-  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Script agent did not return valid JSON");
-
-  const script: VideoScript = JSON.parse(jsonMatch[0]);
+  const script = extractJson<VideoScript>(result.text);
 
   // Save script to scratchpad
   const scriptPath = path.join(ctx.scratchpadDir, "script.json");

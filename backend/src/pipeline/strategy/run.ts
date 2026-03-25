@@ -144,11 +144,14 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
     const topics = strategyOutput.topics ?? [];
     const now = new Date().toISOString();
     for (const topic of topics) {
-      if (!topic.id) topic.id = crypto.randomUUID();
       if (!topic.status) topic.status = "proposed";
       topic.createdAt = now;
       topic.runId = ctx.run.id;
-      ctx.stores.topics.update(topic.id, topic) ?? ctx.stores.topics.create(topic as Omit<Topic, "id"> & { id: string });
+      // Strip agent-provided id (e.g. "topic-1") so Store.create() generates
+      // a UUID that matches the directory name. Otherwise get("topic-1") fails
+      // because no directory "topic-1/" exists.
+      const { id: _agentId, ...topicData } = topic;
+      ctx.stores.topics.create(topicData as Omit<Topic, "id">);
     }
 
     // Save content plan (audit data only, no topics)

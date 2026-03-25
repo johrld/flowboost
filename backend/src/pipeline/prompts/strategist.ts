@@ -92,8 +92,5 @@ ${JSON.stringify(research.topics, null, 2)}
 }
 \`\`\`
 
-5. Write this JSON to the file: ${project.id}/content-plan.json using the Write tool.
-   Path: data/projects/${project.id}/content-plan.json
-
-Output ONLY the JSON content plan. No explanations.`;
+IMPORTANT: Your response must be ONLY the JSON object above. No text before or after. Do not wrap it in markdown code blocks. Do not write it to a file.`;
 }

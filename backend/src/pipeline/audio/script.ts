@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createLogger } from "../../utils/logger.js";
 import { runAgentTracked } from "../engine.js";
+import { extractJson } from "../extract-json.js";
 import type { PipelineContext } from "../context.js";
 
 const log = createLogger("audio:script");
@@ -72,10 +73,7 @@ Output ONLY valid JSON:
     useMcpTools: false,
   });
 
-  const jsonMatch = result.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Audio script agent did not return valid JSON");
-
-  const script: AudioScript = JSON.parse(jsonMatch[0]);
+  const script = extractJson<AudioScript>(result.text);
 
   const scriptPath = path.join(ctx.scratchpadDir, "audio-script.json");
   fs.mkdirSync(path.dirname(scriptPath), { recursive: true });

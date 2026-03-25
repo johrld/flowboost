@@ -292,7 +292,7 @@ export async function topicRoutes(app: FastifyInstance) {
         appendChat(dir, assistantMsg);
 
         // Check if response contains field updates
-        const jsonMatch = assistantText.match(/```json\s*\n([\s\S]*?)\n```/);
+        const jsonMatch = assistantText.match(/```(?:json)?\s*\r?\n?([\s\S]*?)\r?\n?\s*```/i);
         if (jsonMatch) {
           try {
             const parsed = JSON.parse(jsonMatch[1]) as { updates?: Partial<Topic> };
