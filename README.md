@@ -245,6 +245,10 @@ To publish articles directly to a GitHub repo:
 - `chore/` — Maintenance
 - `refactor/` — Code restructuring
 
+## Contributors
+
+- [Magnus Hinzke](https://github.com/MagnusHL)
+
 ## License
 
 See [LICENSE](LICENSE) for details.
