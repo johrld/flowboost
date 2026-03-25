@@ -236,7 +236,8 @@ export type ContentType =
   | "landing_page"
   | "video"
   | "audio"
-  | "social_post";
+  | "social_post"
+  | "newsletter";
 
 export type ContentItemStatus =
   | "planned"
@@ -304,6 +305,11 @@ export interface ContentVersion {
   video?: VideoVersionMeta;
   audio?: AudioVersionMeta;
   social?: SocialVersionMeta;
+  newsletter?: NewsletterVersionMeta;
+
+  // Connector-specific data (for platforms with custom slot structures)
+  customFields?: Record<string, unknown>;
+  connectorSchemaId?: string;
 
   // Pipeline tracking
   pipelineRunId?: string;
@@ -350,10 +356,19 @@ export interface AudioVersionMeta {
 }
 
 export interface SocialVersionMeta {
-  platform: string;
+  platform: "linkedin" | "instagram" | "x" | "tiktok";
   characterCount: number;
   hashtagCount: number;
   hasMedia: boolean;
+  format?: "text" | "carousel" | "thread" | "reel" | "story" | "poll";
+  slideCount?: number;
+}
+
+export interface NewsletterVersionMeta {
+  subject: string;
+  previewText: string;
+  wordCount: number;
+  sectionCount: number;
 }
 
 // ─── Media Assets ───────────────────────────────────────────────
@@ -426,6 +441,7 @@ export type PipelineType =
   | "video_production"
   | "audio_production"
   | "social_production"
+  | "email_production"
   | "update"
   | "translation";
 export type RunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";

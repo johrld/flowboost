@@ -10,7 +10,7 @@ export interface ChatMessage {
 
 // ── Content V3 ──────────────────────────────────────────────────
 
-export type ContentType = "article" | "guide" | "landing_page" | "video" | "audio" | "social_post";
+export type ContentType = "article" | "guide" | "landing_page" | "video" | "audio" | "social_post" | "newsletter";
 
 export type ContentItemStatus =
   | "planned"

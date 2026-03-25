@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { runSimpleAgent } from "../../pipeline/engine.js";
 import { readChat, appendChat } from "../../models/chat.js";
+import { PipelineContext } from "../../pipeline/context.js";
+import { runSocialPipeline } from "../../pipeline/social/run.js";
+import { runEmailPipeline } from "../../pipeline/email/run.js";
 import type { ChatMessage, Topic, BriefingInputType } from "../../models/types.js";
 import { createLogger } from "../../utils/logger.js";
 
@@ -491,7 +494,7 @@ export async function topicRoutes(app: FastifyInstance) {
       const contentItem = app.ctx.contentFor(customerId, projectId).create({
         customerId,
         projectId,
-        type: (type === "newsletter" ? "article" : type) as "article" | "social_post", // newsletter type added in Phase 2
+        type: type as "article" | "social_post" | "newsletter",
         status: "planned",
         title: topic.title,
         category: topic.category,
@@ -505,27 +508,74 @@ export async function topicRoutes(app: FastifyInstance) {
       // Add to briefing outputs
       topics.addOutput(topicId, contentItem.id);
 
-      // Start the appropriate pipeline based on type
-      // For now, only article production is fully implemented
-      // Social + newsletter pipelines will be added in Phase 2
-      if (type === "article" && topic.status === "approved") {
-        // Redirect to existing produce endpoint logic
-        return reply.status(201).send({
-          message: "Content item created. Use POST /pipeline/produce to start article production.",
-          contentItemId: contentItem.id,
-          briefingId: topicId,
-          type,
-          platform,
+      // Determine pipeline type and start asynchronously
+      const pipelineType = type === "social_post" ? "social_production" as const
+        : type === "newsletter" ? "email_production" as const
+        : "production" as const;
+
+      // Create pipeline run
+      const phases = type === "social_post"
+        ? [{ name: "generate", status: "pending" as const, agentCalls: [] }, { name: "image", status: "pending" as const, agentCalls: [] }]
+        : type === "newsletter"
+        ? [{ name: "generate", status: "pending" as const, agentCalls: [] }]
+        : [
+            { name: "outline", status: "pending" as const, agentCalls: [] },
+            { name: "writing", status: "pending" as const, agentCalls: [] },
+            { name: "assembly", status: "pending" as const, agentCalls: [] },
+            { name: "image", status: "pending" as const, agentCalls: [] },
+            { name: "quality", status: "pending" as const, agentCalls: [] },
+            { name: "translation", status: "pending" as const, agentCalls: [] },
+          ];
+
+      const run = app.ctx.pipelineRunsFor(customerId, projectId).create({
+        customerId,
+        projectId,
+        type: pipelineType,
+        status: "pending",
+        topicId,
+        phases,
+        totalCostUsd: 0,
+        totalTokens: { input: 0, output: 0 },
+        createdAt: now,
+      });
+
+      // Build pipeline context
+      const ctx = new PipelineContext(
+        customerId,
+        project,
+        run,
+        {
+          customers: app.ctx.customers,
+          projects: app.ctx.projectsFor(customerId),
+          articles: app.ctx.articlesFor(customerId, projectId),
+          content: app.ctx.contentFor(customerId, projectId),
+          pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
+          topics: app.ctx.topicsFor(customerId, projectId),
+        },
+        app.ctx.dataDir,
+        topic,
+      );
+
+      // Fire and forget
+      if (type === "social_post") {
+        runSocialPipeline(ctx, platform ?? "linkedin").catch((err) => {
+          log.error({ runId: run.id, err }, "social pipeline failed");
+        });
+      } else if (type === "newsletter") {
+        runEmailPipeline(ctx).catch((err) => {
+          log.error({ runId: run.id, err }, "email pipeline failed");
         });
       }
+      // For article: user should use existing POST /pipeline/produce endpoint
+      // (which handles the full article pipeline with outline, writing etc.)
 
       return reply.status(201).send({
-        message: "Content item created",
+        message: `${type} pipeline started`,
         contentItemId: contentItem.id,
         briefingId: topicId,
+        runId: run.id,
         type,
         platform,
-        note: type !== "article" ? "Pipeline for this content type will be available in Phase 2" : undefined,
       });
     },
   );

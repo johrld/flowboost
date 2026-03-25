@@ -119,6 +119,7 @@ const contentTypeConfig: Record<ContentType, { label: string; className: string 
   video: { label: "Video", className: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300" },
   audio: { label: "Audio", className: "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300" },
   social_post: { label: "Social", className: "bg-pink-50 text-pink-700 dark:bg-pink-950 dark:text-pink-300" },
+  newsletter: { label: "Newsletter", className: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
 };
 
 export function ContentTypeBadge({ type }: { type: ContentType }) {
