@@ -1,14 +1,108 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { getFileContent } from "../../services/github.js";
 import { createLogger } from "../../utils/logger.js";
+import type { Project } from "../../models/types.js";
 
+const log = createLogger("projects");
 const syncLog = createLogger("connector-sync");
+
+/**
+ * Copy project default files (section-specs, templates, SEO docs) into a new project directory.
+ */
+function copyProjectDefaults(projectDir: string, dataDir: string): void {
+  const defaultsDir = path.join(dataDir, "..", "data.seed", "project-defaults");
+  if (!fs.existsSync(defaultsDir)) {
+    log.warn({ defaultsDir }, "project-defaults not found, skipping");
+    return;
+  }
+
+  const copyRecursive = (src: string, dest: string) => {
+    if (fs.statSync(src).isDirectory()) {
+      fs.mkdirSync(dest, { recursive: true });
+      for (const entry of fs.readdirSync(src)) {
+        copyRecursive(path.join(src, entry), path.join(dest, entry));
+      }
+    } else {
+      fs.copyFileSync(src, dest);
+    }
+  };
+
+  for (const entry of fs.readdirSync(defaultsDir)) {
+    copyRecursive(path.join(defaultsDir, entry), path.join(projectDir, entry));
+  }
+  log.info({ projectDir }, "project defaults copied");
+}
 
 export async function projectRoutes(app: FastifyInstance) {
   // GET /customers/:customerId/projects
   app.get<{ Params: { customerId: string } }>("/", async (request) => {
     const { customerId } = request.params;
     return app.ctx.projectsFor(customerId).list();
+  });
+
+  // POST /customers/:customerId/projects
+  app.post<{
+    Params: { customerId: string };
+    Body: {
+      name: string;
+      slug?: string;
+      description?: string;
+      defaultLanguage: string;
+      languages?: { code: string; name: string; enabled: boolean }[];
+      categories?: { id: string; labels: Record<string, string> }[];
+    };
+  }>("/", async (request, reply) => {
+    const { customerId } = request.params;
+    const customer = app.ctx.customers.get(customerId);
+    if (!customer) {
+      return reply.status(404).send({ error: "Customer not found" });
+    }
+
+    const { name, slug, description, defaultLanguage, languages, categories } = request.body as {
+      name: string;
+      slug?: string;
+      description?: string;
+      defaultLanguage: string;
+      languages?: { code: string; name: string; enabled: boolean }[];
+      categories?: { id: string; labels: Record<string, string> }[];
+    };
+
+    if (!name || !defaultLanguage) {
+      return reply.status(400).send({ error: "name and defaultLanguage are required" });
+    }
+
+    const now = new Date().toISOString();
+    const projectData: Omit<Project, "id"> = {
+      customerId,
+      name,
+      slug: slug ?? name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+      description: description ?? "",
+      defaultLanguage,
+      languages: languages ?? [{ code: defaultLanguage, name: defaultLanguage, enabled: true }],
+      categories: categories ?? [],
+      keywords: {},
+      connector: { type: "filesystem", filesystem: { outputDir: "./output" } },
+      pipeline: {
+        defaultModel: "sonnet",
+        maxRetriesPerPhase: 2,
+        maxBudgetPerArticle: 2,
+        imagenModel: "imagen-4.0-fast-generate-001",
+      },
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const store = app.ctx.projectsFor(customerId);
+    const project = store.create(projectData);
+
+    // Copy default files (section-specs, templates, SEO docs)
+    const projectDir = store.entityDir(project.id);
+    copyProjectDefaults(projectDir, app.ctx.dataDir);
+
+    log.info({ projectId: project.id, name }, "project created");
+    return reply.status(201).send(project);
   });
 
   // GET /customers/:customerId/projects/:projectId
