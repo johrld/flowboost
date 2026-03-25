@@ -282,6 +282,8 @@ export interface ContentTypeDefinition {
   description?: string;
   category: "site" | "social" | "email" | "media";
   source: "builtin" | "connector" | "custom";
+  connectorType?: string;
+  connectorRef?: string;
   icon?: string;
   fields: Array<{
     id: string;

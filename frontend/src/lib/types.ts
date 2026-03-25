@@ -186,7 +186,7 @@ export interface Competitor {
 }
 
 export interface ConnectorConfig {
-  type: "git" | "github" | "filesystem" | "api";
+  type: "git" | "github" | "filesystem" | "shopware" | "wordpress" | "api";
   git?: {
     repoUrl: string;
     branch: string;
