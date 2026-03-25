@@ -6,7 +6,7 @@ import type { Project, PipelineRun, Topic } from "../models/types.js";
 import type { CustomerStore } from "../models/customer.js";
 import type { ProjectStore } from "../models/project.js";
 import type { ArticleStore } from "../models/article.js";
-import type { ContentStore } from "../models/content.js";
+import type { ContentStore, MediaAssetStore } from "../models/content.js";
 import type { PipelineRunStore } from "../models/pipeline-run.js";
 import type { TopicStore } from "../models/topic.js";
 import { getCloneUrl } from "../services/github.js";
@@ -21,6 +21,7 @@ export class PipelineContext {
       projects: ProjectStore;
       articles: ArticleStore;
       content: ContentStore;
+      media: MediaAssetStore;
       pipelineRuns: PipelineRunStore;
       topics: TopicStore;
     },

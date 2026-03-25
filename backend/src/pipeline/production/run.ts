@@ -1,10 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import sharp from "sharp";
 import { createLogger } from "../../utils/logger.js";
 import type { PipelineContext } from "../context.js";
-import type { Article, ArticleVersion, ContentItemStatus, ContentMediaAsset, LanguageVariant } from "../../models/types.js";
-import { ContentMediaStore } from "../../models/content-media.js";
+import type { Article, ArticleVersion, ContentItemStatus, LanguageVariant } from "../../models/types.js";
+import { MediaService } from "../../services/media.js";
 import { runOutlinePhase } from "./outline.js";
 import { runWritingPhase } from "./writing.js";
 import { runAssemblyPhase } from "./assembly.js";
@@ -189,33 +188,36 @@ export async function runProductionPipeline(ctx: PipelineContext): Promise<Artic
   if (imagePath && fs.existsSync(imagePath)) {
     try {
       const imgBuffer = fs.readFileSync(imagePath);
-      const imgMeta = await sharp(imgBuffer).metadata();
-      const assetId = crypto.randomUUID();
-      const fileName = `${assetId}.png`;
-      const seoFilename = `${version.slug}-hero`;
+      const mediaStore = ctx.stores.media;
+      const service = new MediaService(mediaStore);
 
-      const asset: ContentMediaAsset = {
-        id: assetId,
-        contentId: contentItem.id,
-        type: "image",
-        source: "generated",
-        role: "hero",
+      // Auto-tags from topic keywords
+      const autoTags = topic.keywords
+        ? [topic.keywords.primary, ...topic.keywords.secondary].filter(Boolean)
+        : [];
+
+      const result = await service.ingest({
+        customerId: ctx.customerId,
+        projectId: project.id,
+        fileName: `${version.slug}-hero.png`,
         mimeType: "image/png",
-        fileName,
-        seoFilename,
-        fileSize: imgBuffer.length,
-        width: imgMeta.width,
-        height: imgMeta.height,
+        buffer: imgBuffer,
+        source: "generated",
+        title: `Hero: ${topic.title}`,
+        tags: autoTags,
         generationModel: project.pipeline.imagenModel ?? "imagen-4.0-fast-generate-001",
-        createdAt: now,
-      };
+        generationCostUsd: 0.02,
+      });
 
-      const contentDir = ctx.stores.content.entityDir(contentItem.id);
-      const mediaStore = new ContentMediaStore(contentDir);
-      mediaStore.add(asset, imgBuffer);
+      // Set as hero image and track usage
+      ctx.stores.content.update(contentItem.id, { heroImageId: result.asset.id });
+      mediaStore.addUsage(result.asset.id, {
+        contentId: contentItem.id,
+        role: "hero",
+        addedAt: now,
+      });
 
-      ctx.stores.content.update(contentItem.id, { heroImageId: assetId });
-      log.info({ contentId: contentItem.id, assetId }, "hero image tracked in media store");
+      log.info({ contentId: contentItem.id, assetId: result.asset.id }, "hero image saved to media library");
     } catch (err) {
       log.warn({ err }, "failed to track hero image in media store — non-fatal");
     }

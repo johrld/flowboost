@@ -367,6 +367,11 @@ export interface MediaAsset {
   generationModel?: string;
   generationCostUsd?: number;
 
+  title?: string;
+  description?: string;
+  tags: string[];
+  usedBy: MediaUsageRef[];
+
   createdAt: string;
   updatedAt: string;
 }
@@ -377,25 +382,20 @@ export interface MediaAssetRef {
   lang?: string;
 }
 
-// ─── Content Media (per-content-item) ────────────────────────────
-
-export interface ContentMediaAsset {
-  id: string;
+export interface MediaUsageRef {
   contentId: string;
-  type: MediaType;
-  source: MediaSource;
-  role: "hero" | "inline";
-  mimeType: string;
-  fileName: string;         // on disk: "{uuid}.png"
-  seoFilename: string;      // for delivery: "{slug}-hero"
-  altText?: string;
-  fileSize: number;
-  width?: number;
-  height?: number;
-  generationPrompt?: string;
-  generationModel?: string;
-  generationCostUsd?: number;
-  createdAt: string;
+  role: "hero" | "inline" | "thumbnail" | "attachment" | "social_media";
+  addedAt: string;
+}
+
+export interface MediaFilter {
+  type?: MediaType;
+  source?: MediaSource;
+  tags?: string[];
+  search?: string;
+  unused?: boolean;
+  page?: number;
+  limit?: number;
 }
 
 // ─── Pipeline Runs ──────────────────────────────────────────────

@@ -4,16 +4,14 @@ import type { FastifyInstance } from "fastify";
 import { createLogger } from "../../utils/logger.js";
 import { createSiteConnector } from "../../connectors/site/factory.js";
 import { ContentIndexStore } from "../../models/content-index.js";
-import sharp from "sharp";
 import type {
   ContentItem,
   ContentItemStatus,
-  ContentMediaAsset,
   ContentType,
   LanguageVariant,
   SiteContentLangMeta,
 } from "../../models/types.js";
-import { generateImageBuffer } from "../../services/imagen.js";
+import { MediaService } from "../../services/media.js";
 
 const log = createLogger("api:content");
 
@@ -225,8 +223,8 @@ export async function contentRoutes(app: FastifyInstance) {
       // Stage hero image into version assets for delivery
       const freshItem = content.get(contentId)!;
       if (freshItem.heroImageId) {
-        const contentMedia = app.ctx.contentMediaFor(customerId, projectId, contentId);
-        stageHeroImageForDelivery(contentMedia, freshItem.heroImageId, versionDir, latestVersion.languages);
+        const mediaStore = app.ctx.mediaFor(customerId, projectId);
+        stageHeroImageForDelivery(mediaStore, freshItem.heroImageId, versionDir, latestVersion.languages);
       }
 
       // Build ArticleVersion-compatible objects for SiteConnector
@@ -672,20 +670,10 @@ export async function contentRoutes(app: FastifyInstance) {
     const content = app.ctx.contentFor(customerId, projectId);
     if (!content.get(contentId)) return reply.status(404).send({ error: "Content not found" });
 
-    const mediaStore = app.ctx.contentMediaFor(customerId, projectId, contentId);
-    let assets = mediaStore.list();
-
-    // Lazy migration: if no media.json exists, scan version directories for hero images
-    if (assets.length === 0) {
-      assets = migrateExistingHeroImages(content, mediaStore, contentId);
-      if (assets.length > 0) {
-        // Auto-set first as heroImageId
-        const item = content.get(contentId)!;
-        if (!item.heroImageId) {
-          content.update(contentId, { heroImageId: assets[0].id });
-        }
-      }
-    }
+    const store = app.ctx.mediaFor(customerId, projectId);
+    const allAssets = store.list();
+    // Filter: Nur Assets die von diesem Content genutzt werden
+    const assets = allAssets.filter(a => a.usedBy?.some(u => u.contentId === contentId));
 
     return { total: assets.length, assets };
   });
@@ -695,11 +683,11 @@ export async function contentRoutes(app: FastifyInstance) {
     Params: { customerId: string; projectId: string; contentId: string; assetId: string };
   }>("/:contentId/media/:assetId/file", async (request, reply) => {
     const { customerId, projectId, contentId, assetId } = request.params;
-    const mediaStore = app.ctx.contentMediaFor(customerId, projectId, contentId);
-    const asset = mediaStore.get(assetId);
+    const store = app.ctx.mediaFor(customerId, projectId);
+    const asset = store.get(assetId);
     if (!asset) return reply.status(404).send({ error: "Media asset not found" });
 
-    const filePath = mediaStore.filePath(asset);
+    const filePath = path.join(store.getOriginalDir(assetId), path.basename(asset.localPath));
     if (!fs.existsSync(filePath)) return reply.status(404).send({ error: "File not found on disk" });
 
     const stream = fs.createReadStream(filePath);
@@ -723,41 +711,31 @@ export async function contentRoutes(app: FastifyInstance) {
     const item = content.get(contentId);
     if (!item) return reply.status(404).send({ error: "Content not found" });
 
-    const buffer = await generateImageBuffer(prompt, { aspectRatio });
-    const meta = await sharp(buffer).metadata();
+    const store = app.ctx.mediaFor(customerId, projectId);
+    const service = new MediaService(store);
+    const result = await service.generate({
+      customerId,
+      projectId,
+      prompt,
+      aspectRatio,
+      title: `Hero: ${item.title}`,
+      tags: item.keywords ?? [],
+    });
 
-    const id = crypto.randomUUID();
-    const fileName = `${id}.png`;
-    const seoFilename = buildSeoFilename(item, role);
-
-    const asset: ContentMediaAsset = {
-      id,
+    // Track usage
+    store.addUsage(result.asset.id, {
       contentId,
-      type: "image",
-      source: "generated",
       role,
-      mimeType: "image/png",
-      fileName,
-      seoFilename,
-      fileSize: buffer.length,
-      width: meta.width,
-      height: meta.height,
-      generationPrompt: prompt,
-      generationModel: process.env.IMAGEN_MODEL ?? "imagen-4.0-fast-generate-001",
-      generationCostUsd: 0.02,
-      createdAt: new Date().toISOString(),
-    };
+      addedAt: new Date().toISOString(),
+    });
 
-    const mediaStore = app.ctx.contentMediaFor(customerId, projectId, contentId);
-    mediaStore.add(asset, buffer);
-
-    // Auto-set as hero if none set (only for hero role)
+    // Auto-set as hero
     if (role === "hero" && !item.heroImageId) {
-      content.update(contentId, { heroImageId: id, updatedAt: new Date().toISOString() });
+      content.update(contentId, { heroImageId: result.asset.id, updatedAt: new Date().toISOString() });
     }
 
-    log.info({ contentId, assetId: id, role }, "image generated");
-    return asset;
+    log.info({ contentId, assetId: result.asset.id, role }, "image generated");
+    return result;
   });
 
   // POST /content/:contentId/media/upload — upload custom image
@@ -787,38 +765,33 @@ export async function contentRoutes(app: FastifyInstance) {
 
     if (!fileBuffer) return reply.status(400).send({ error: "No file uploaded" });
 
-    const meta = await sharp(fileBuffer).metadata();
-    const ext = filename.split(".").pop() ?? "png";
-
-    const id = crypto.randomUUID();
-    const fileName = `${id}.${ext}`;
-    const seoFilename = buildSeoFilename(item, role);
-
-    const asset: ContentMediaAsset = {
-      id,
-      contentId,
-      type: "image",
-      source: "uploaded",
-      role,
+    const store = app.ctx.mediaFor(customerId, projectId);
+    const service = new MediaService(store);
+    const result = await service.ingest({
+      customerId,
+      projectId,
+      fileName: filename,
       mimeType: mimetype,
-      fileName,
-      seoFilename,
-      fileSize: fileBuffer.length,
-      width: meta.width,
-      height: meta.height,
-      createdAt: new Date().toISOString(),
-    };
+      buffer: fileBuffer,
+      source: "uploaded",
+      title: filename,
+      tags: item.keywords ?? [],
+    });
 
-    const mediaStore = app.ctx.contentMediaFor(customerId, projectId, contentId);
-    mediaStore.add(asset, fileBuffer);
+    // Track usage
+    store.addUsage(result.asset.id, {
+      contentId,
+      role,
+      addedAt: new Date().toISOString(),
+    });
 
-    // Auto-set as hero if none set (only for hero role)
+    // Auto-set as hero
     if (role === "hero" && !item.heroImageId) {
-      content.update(contentId, { heroImageId: id, updatedAt: new Date().toISOString() });
+      content.update(contentId, { heroImageId: result.asset.id, updatedAt: new Date().toISOString() });
     }
 
-    log.info({ contentId, assetId: id, role }, "image uploaded");
-    return asset;
+    log.info({ contentId, assetId: result.asset.id, role }, "image uploaded");
+    return result;
   });
 
   // PUT /content/:contentId/hero — select hero image
@@ -833,8 +806,8 @@ export async function contentRoutes(app: FastifyInstance) {
     if (!item) return reply.status(404).send({ error: "Content not found" });
 
     if (assetId) {
-      const mediaStore = app.ctx.contentMediaFor(customerId, projectId, contentId);
-      if (!mediaStore.get(assetId)) {
+      const store = app.ctx.mediaFor(customerId, projectId);
+      if (!store.get(assetId)) {
         return reply.status(404).send({ error: "Media asset not found" });
       }
     }
@@ -856,101 +829,43 @@ export async function contentRoutes(app: FastifyInstance) {
     const item = content.get(contentId);
     if (!item) return reply.status(404).send({ error: "Content not found" });
 
-    const mediaStore = app.ctx.contentMediaFor(customerId, projectId, contentId);
-    if (!mediaStore.delete(assetId)) {
-      return reply.status(404).send({ error: "Media asset not found" });
-    }
+    const store = app.ctx.mediaFor(customerId, projectId);
+    store.removeUsage(assetId, contentId);
+    // Nicht das Asset selbst löschen -- nur die Usage-Referenz entfernen
+    // Das Asset bleibt in der Mediathek
 
     // Clear heroImageId if it was the hero
     if (item.heroImageId === assetId) {
       content.update(contentId, { heroImageId: undefined, updatedAt: new Date().toISOString() });
     }
 
-    log.info({ contentId, assetId }, "media asset deleted");
-    return { message: "Asset deleted", assetId };
+    log.info({ contentId, assetId }, "media usage removed");
+    return { message: "Usage removed", assetId };
   });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
-/** Build SEO-friendly filename from content item metadata */
-function buildSeoFilename(item: ContentItem, role: string): string {
-  const base = (item.translationKey ?? item.title ?? item.id)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60);
-  return `${base}-${role}`;
-}
-
-/** Lazy migration: discover hero images from existing version directories */
-function migrateExistingHeroImages(
-  content: import("../../models/content.js").ContentStore,
-  mediaStore: import("../../models/content-media.js").ContentMediaStore,
-  contentId: string,
-): ContentMediaAsset[] {
-  const versions = content.getVersions(contentId);
-  const migrated: ContentMediaAsset[] = [];
-
-  for (const version of versions) {
-    const versionDir = content.getVersionDir(contentId, version.id);
-    const assetsDir = path.join(versionDir, "assets");
-    if (!fs.existsSync(assetsDir)) continue;
-
-    // Scan assets/{lang}/*-hero.png
-    const langDirs = fs.readdirSync(assetsDir, { withFileTypes: true }).filter((d) => d.isDirectory());
-    for (const langDir of langDirs) {
-      const langAssetsPath = path.join(assetsDir, langDir.name);
-      const files = fs.readdirSync(langAssetsPath).filter((f) => f.includes("-hero") && f.endsWith(".png"));
-      for (const file of files) {
-        const filePath = path.join(langAssetsPath, file);
-        const buffer = fs.readFileSync(filePath);
-        const id = crypto.randomUUID();
-        const fileName = `${id}.png`;
-        const seoFilename = file.replace(/\.png$/, "");
-
-        const asset: ContentMediaAsset = {
-          id,
-          contentId,
-          type: "image",
-          source: "generated",
-          role: "hero",
-          mimeType: "image/png",
-          fileName,
-          seoFilename,
-          fileSize: buffer.length,
-          createdAt: version.createdAt,
-        };
-
-        mediaStore.add(asset, buffer);
-        migrated.push(asset);
-        // Only migrate first found hero image
-        return migrated;
-      }
-    }
-  }
-
-  return migrated;
-}
-
 /** Stage hero image into version assets directory before delivery */
 export function stageHeroImageForDelivery(
-  contentMediaStore: import("../../models/content-media.js").ContentMediaStore,
+  mediaStore: import("../../models/content.js").MediaAssetStore,
   heroImageId: string,
   versionDir: string,
   languages: LanguageVariant[],
 ): void {
-  const asset = contentMediaStore.get(heroImageId);
+  const asset = mediaStore.get(heroImageId);
   if (!asset) return;
 
-  const srcPath = contentMediaStore.filePath(asset);
+  const originalDir = mediaStore.getOriginalDir(heroImageId);
+  const srcPath = path.join(originalDir, path.basename(asset.localPath));
   if (!fs.existsSync(srcPath)) return;
 
   const ext = asset.fileName.split(".").pop() ?? "png";
+  const seoFilename = (asset.title ?? asset.fileName).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
   for (const lang of languages) {
     const destDir = path.join(versionDir, "assets", lang.lang);
     fs.mkdirSync(destDir, { recursive: true });
-    const destPath = path.join(destDir, `${asset.seoFilename}.${ext}`);
+    const destPath = path.join(destDir, `${seoFilename}.${ext}`);
     fs.copyFileSync(srcPath, destPath);
   }
 }
