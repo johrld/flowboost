@@ -7,14 +7,10 @@ services:
       - "${PORT:-6100}:${PORT:-6100}"
     volumes:
       - ./backend/data:/app/data
-      # Dev: Claude credentials for Max subscription (Agent SDK uses CLI internally)
-      # Prod: remove these mounts and set ANTHROPIC_API_KEY in .env instead
-      - /root/.claude.json:/root/.claude.json:ro
-      - /root/.claude/.credentials.json:/root/.claude/.credentials.json:ro
     env_file: .env
     environment:
       - DATA_DIR=/app/data
-      - FRONTEND_URL=https://appflowboost.ixr.dev
+      - FRONTEND_URL=http://localhost:${FRONTEND_PORT:-6101}
     restart: unless-stopped
 
   dashboard:
@@ -31,7 +27,7 @@ services:
     environment:
       - PORT=6001
       - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_API_URL=https://apiflowboost.ixr.dev
+      - NEXT_PUBLIC_API_URL=http://localhost:${PORT:-6100}
       - WATCHPACK_POLLING=true
     depends_on:
       - api

@@ -1,0 +1,18 @@
+{
+  "id": "default",
+  "name": "Acme Corp",
+  "slug": "default",
+  "plan": "pro",
+  "authors": [
+    {
+      "id": "alex",
+      "name": "Alex Demo",
+      "role": {
+        "de": "Content Manager",
+        "en": "Content Manager"
+      }
+    }
+  ],
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}
