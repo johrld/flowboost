@@ -23,7 +23,9 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  getCustomer,
   getCustomers,
+  getProject,
   getProjects,
   getProjectBrief,
   getBrandVoice,
@@ -32,6 +34,7 @@ import {
   updateBrandVoice,
   syncConnectorData,
 } from "@/lib/api";
+import { useProject } from "@/lib/project-context";
 import type { Project, Customer, Competitor } from "@/lib/types";
 import {
   Save,
@@ -60,6 +63,7 @@ function SaveButton({ status, onClick }: { status: SaveStatus; onClick: () => vo
 }
 
 function SettingsPageContent() {
+  const { customerId: ctxCustomerId, project: ctxProject } = useProject();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState("");
@@ -103,25 +107,16 @@ function SettingsPageContent() {
   const [projectBriefStatus, setProjectBriefStatus] = useState<SaveStatus>("idle");
 
   const loadData = useCallback(async () => {
+    if (!ctxCustomerId || !ctxProject) return;
     try {
       setLoading(true);
       setError(null);
 
-      const customers = await getCustomers();
-      if (customers.length === 0) {
-        setError("No customers found");
-        return;
-      }
-      const cust = customers[0];
+      const cust = await getCustomer(ctxCustomerId);
       setCustomerId(cust.id);
       setCustomer(cust);
 
-      const projects = await getProjects(cust.id);
-      if (projects.length === 0) {
-        setError("No projects found");
-        return;
-      }
-      const proj = projects[0];
+      const proj = await getProject(ctxCustomerId, ctxProject.id);
       setProject(proj);
 
       // Populate form state from project
@@ -149,7 +144,7 @@ function SettingsPageContent() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [ctxCustomerId, ctxProject]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
