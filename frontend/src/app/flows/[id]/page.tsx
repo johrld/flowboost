@@ -137,6 +137,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const [addingInput, setAddingInput] = useState(false);
   const [sourceText, setSourceText] = useState("");
   const [showAddSource, setShowAddSource] = useState(false);
+  const [showTextInput, setShowTextInput] = useState(false);
   const [selectedInputId, setSelectedInputId] = useState<string | null>(null);
   const [reanalyzeNote, setReanalyzeNote] = useState("");
   const [showReanalyzeNote, setShowReanalyzeNote] = useState(false);
@@ -551,16 +552,15 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      {/* ── Add Source Dialog ───────────────────────────── */}
-      <Dialog open={showAddSource} onOpenChange={setShowAddSource}>
-        <DialogContent className="sm:max-w-md">
+      {/* ── Add Source Dialog (Step 1: Drop + Buttons) ── */}
+      <Dialog open={showAddSource} onOpenChange={(open) => { setShowAddSource(open); if (!open) setSourceText(""); }}>
+        <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Add Sources</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Drop Zone */}
             <div
-              className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
+              className={`rounded-xl border-2 border-dashed p-12 text-center transition-colors ${
                 isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/15"
               }`}
               onDragOver={handleDragOver}
@@ -571,47 +571,49 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
               <p className="text-sm text-muted-foreground">Drop files here</p>
             </div>
 
-            {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => { fileInputRef.current?.click(); setShowAddSource(false); }}
-                className="flex flex-col items-center gap-2 rounded-xl border p-4 hover:bg-muted/50 transition-colors"
+                className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 hover:bg-muted transition-colors"
               >
                 <Upload className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-medium">Upload File</span>
+                <span className="text-xs font-medium">Upload</span>
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowAddSource(false);
-                  // Focus will shift to the inline text area below
-                  setTimeout(() => document.getElementById("source-text-input")?.focus(), 100);
-                }}
-                className="flex flex-col items-center gap-2 rounded-xl border p-4 hover:bg-muted/50 transition-colors"
+                onClick={() => { setShowAddSource(false); setShowTextInput(true); }}
+                className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 hover:bg-muted transition-colors"
               >
                 <FileEdit className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-medium">Text or URL</span>
+                <span className="text-xs font-medium">Text or URL</span>
               </button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-            {/* Quick URL/Text Input */}
-            <div className="space-y-2">
-              <textarea
-                id="source-text-input"
-                value={sourceText}
-                onChange={(e) => setSourceText(e.target.value)}
-                placeholder="Paste a URL or type notes..."
-                rows={3}
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <div className="flex justify-end">
-                <Button size="sm" onClick={() => { handleAddSource(); setShowAddSource(false); }} disabled={!sourceText.trim() || addingInput}>
-                  {addingInput ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-                  Add
-                </Button>
-              </div>
-            </div>
+      {/* ── Text/URL Input Dialog (Step 2) ──────────────── */}
+      <Dialog open={showTextInput} onOpenChange={(open) => { setShowTextInput(open); if (!open) setSourceText(""); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Text or URL</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Paste a URL, or type text to add as a source for this flow.</p>
+          <textarea
+            value={sourceText}
+            onChange={(e) => setSourceText(e.target.value)}
+            placeholder="Paste URL or type notes here..."
+            rows={6}
+            autoFocus
+            className="w-full rounded-lg border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[120px]"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setShowTextInput(false); setShowAddSource(true); }}>Back</Button>
+            <Button size="sm" onClick={() => { handleAddSource(); setShowTextInput(false); }} disabled={!sourceText.trim() || addingInput}>
+              {addingInput && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+              Add
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
