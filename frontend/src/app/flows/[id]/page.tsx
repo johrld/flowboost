@@ -439,9 +439,11 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 <button
                   type="button"
                   onClick={() => setShowAddSource(true)}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b"
+                  className="flex items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b"
                 >
-                  <Plus className="h-4 w-4" />
+                  <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+                    <Plus className="h-4 w-4" />
+                  </div>
                   Add Source
                 </button>
               )}
