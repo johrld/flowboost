@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Store } from "./store.js";
 import { createLogger } from "../utils/logger.js";
-import type { Topic, BriefingInput, ProcessedInputData, ChatDistillation } from "./types.js";
+import type { Topic, FlowInput, ProcessedInputData, ChatDistillation } from "./types.js";
 
 const log = createLogger("topic-store");
 
@@ -19,11 +19,11 @@ export class TopicStore extends Store<Topic> {
   }
 
   /** Add a text/URL input (no file upload) */
-  addInput(topicId: string, input: Omit<BriefingInput, "id" | "createdAt">): BriefingInput | null {
+  addInput(topicId: string, input: Omit<FlowInput, "id" | "createdAt">): FlowInput | null {
     const topic = this.get(topicId);
     if (!topic) return null;
 
-    const entry: BriefingInput = {
+    const entry: FlowInput = {
       id: crypto.randomUUID(),
       ...input,
       createdAt: new Date().toISOString(),
@@ -41,8 +41,8 @@ export class TopicStore extends Store<Topic> {
   addFileInput(
     topicId: string,
     file: { buffer: Buffer; fileName: string; mimeType: string },
-    type: BriefingInput["type"] = "document",
-  ): BriefingInput | null {
+    type: FlowInput["type"] = "document",
+  ): FlowInput | null {
     const topic = this.get(topicId);
     if (!topic) return null;
 
@@ -54,7 +54,7 @@ export class TopicStore extends Store<Topic> {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, diskName), file.buffer);
 
-    const entry: BriefingInput = {
+    const entry: FlowInput = {
       id: inputId,
       type,
       content: `inputs/${diskName}`,

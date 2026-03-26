@@ -5,7 +5,7 @@ import { PipelineContext } from "../../pipeline/context.js";
 import { runProductionPipeline } from "../../pipeline/production/run.js";
 import { runSocialPipeline } from "../../pipeline/social/run.js";
 import { runEmailPipeline } from "../../pipeline/email/run.js";
-import type { ChatMessage, Topic, BriefingInputType } from "../../models/types.js";
+import type { ChatMessage, Topic, FlowInputType } from "../../models/types.js";
 import { processInput } from "../../pipeline/ingest/process-input.js";
 import { distillChat } from "../../pipeline/ingest/distill-chat.js";
 import { createLogger } from "../../utils/logger.js";
@@ -36,10 +36,10 @@ function buildSystemPrompt(topic: Topic): string {
   if (topic.reasoning) parts.push(`\n## AI Analysis\n${topic.reasoning}`);
   if (topic.userNotes) parts.push(`\n## User Notes\n${topic.userNotes}`);
 
-  // Briefing Inputs — uses processed summaries when available
+  // Flow Inputs — uses processed summaries when available
   const inputs = topic.inputs ?? [];
   if (inputs.length > 0) {
-    parts.push("\n## Briefing Inputs (uploaded by user)");
+    parts.push("\n## Flow Inputs (uploaded by user)");
     for (const input of inputs) {
       if (input.type === "text" || input.type === "transcript") {
         if (input.processed?.status === "completed" && input.processed.summary) {
@@ -392,18 +392,18 @@ export async function topicRoutes(app: FastifyInstance) {
     },
   );
 
-  // ── Briefing Input Endpoints ──────────────────────────────
+  // ── Flow Input Endpoints ──────────────────────────────
 
   // POST /topics/:topicId/inputs — Add text/URL input
   app.post<{
     Params: { customerId: string; projectId: string; topicId: string };
-    Body: { type: BriefingInputType; content: string; fileName?: string };
+    Body: { type: FlowInputType; content: string; fileName?: string };
   }>(
     "/:topicId/inputs",
     async (request, reply) => {
       const { customerId, projectId, topicId } = request.params;
       const { type, content, fileName } = (request.body ?? {}) as {
-        type?: BriefingInputType;
+        type?: FlowInputType;
         content?: string;
         fileName?: string;
       };
@@ -412,7 +412,7 @@ export async function topicRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "type and content are required" });
       }
 
-      const validTypes: BriefingInputType[] = ["text", "transcript", "image", "url", "document"];
+      const validTypes: FlowInputType[] = ["text", "transcript", "image", "url", "document"];
       if (!validTypes.includes(type)) {
         return reply.status(400).send({ error: `Invalid input type. Must be one of: ${validTypes.join(", ")}` });
       }
@@ -464,7 +464,7 @@ export async function topicRoutes(app: FastifyInstance) {
       const buffer = await file.toBuffer();
 
       // Determine input type from mime
-      let inputType: BriefingInputType = "document";
+      let inputType: FlowInputType = "document";
       if (mimeType.startsWith("image/")) inputType = "image";
       else if (mimeType.startsWith("audio/")) inputType = "transcript";
 
@@ -582,7 +582,7 @@ export async function topicRoutes(app: FastifyInstance) {
     },
   );
 
-  // ── Briefing Produce Endpoint ─────────────────────────────
+  // ── Flow Produce Endpoint ─────────────────────────────
 
   // POST /topics/:topicId/produce — Create output from briefing
   app.post<{
@@ -640,7 +640,7 @@ export async function topicRoutes(app: FastifyInstance) {
         log.warn({ topicId, err }, "chat distillation failed, proceeding without it");
       }
 
-      // Create ContentItem linked to this briefing
+      // Create ContentItem linked to this flow
       const now = new Date().toISOString();
       const contentItem = app.ctx.contentFor(customerId, projectId).create({
         customerId,
@@ -656,7 +656,7 @@ export async function topicRoutes(app: FastifyInstance) {
         updatedAt: now,
       });
 
-      // Add to briefing outputs
+      // Add to flow outputs
       topics.addOutput(topicId, contentItem.id);
 
       // Determine pipeline type and start asynchronously

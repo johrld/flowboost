@@ -57,18 +57,18 @@ import {
   getTopic,
   getTopicChat,
   sendTopicChat,
-  addBriefingInput,
-  uploadBriefingFile,
-  deleteBriefingInput,
-  getBriefingInputFileUrl,
-  produceBriefingOutput,
+  addFlowInput,
+  uploadFlowFile,
+  deleteFlowInput,
+  getFlowInputFileUrl,
+  produceFlowOutput,
   getContent,
   getContentTypes,
   enrichTopic,
-  reprocessBriefingInput,
+  reprocessFlowInput,
   type ContentTypeDefinition,
 } from "@/lib/api";
-import type { Topic, BriefingInput, ChatMessage, ContentItem } from "@/lib/types";
+import type { Topic, FlowInput, ChatMessage, ContentItem } from "@/lib/types";
 import { format, formatDistanceToNow } from "date-fns";
 
 // ── Icons & Config ────────────────────────────────────────────
@@ -189,7 +189,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const handleReanalyze = async (inputId: string, note?: string) => {
     if (!customerId || !projectId) return;
     try {
-      await reprocessBriefingInput(customerId, projectId, id, inputId, note);
+      await reprocessFlowInput(customerId, projectId, id, inputId, note);
       setShowReanalyzeNote(false);
       setReanalyzeNote("");
       await loadData();
@@ -206,7 +206,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
     try {
       // Auto-detect URL
       const isUrl = /^https?:\/\/.+/.test(inputText.trim());
-      await addBriefingInput(customerId, projectId, id, {
+      await addFlowInput(customerId, projectId, id, {
         type: isUrl ? "url" : "text",
         content: inputText.trim(),
       });
@@ -223,7 +223,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
     if (!files || files.length === 0 || !customerId || !projectId) return;
     for (const file of Array.from(files)) {
       try {
-        await uploadBriefingFile(customerId, projectId, id, file);
+        await uploadFlowFile(customerId, projectId, id, file);
       } catch (err) {
         console.error("Upload failed:", err);
       }
@@ -234,7 +234,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const handleDeleteInput = async (inputId: string) => {
     if (!customerId || !projectId) return;
     try {
-      await deleteBriefingInput(customerId, projectId, id, inputId);
+      await deleteFlowInput(customerId, projectId, id, inputId);
       await loadData();
     } catch (err) {
       console.error("Failed to delete input:", err);
@@ -267,7 +267,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const handleProduce = async (type: string, platform?: string) => {
     if (!customerId || !projectId) return;
     try {
-      await produceBriefingOutput(customerId, projectId, id, { type, platform });
+      await produceFlowOutput(customerId, projectId, id, { type, platform });
       await loadData();
     } catch (err) {
       console.error("Produce failed:", err);

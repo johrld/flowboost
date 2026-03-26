@@ -1,4 +1,4 @@
-import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage, ContentMediaAsset, BriefingInput } from "./types";
+import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage, ContentMediaAsset, FlowInput } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
 
@@ -207,26 +207,26 @@ export function applyTopicChatUpdates(
   });
 }
 
-// ── Briefing Inputs ──────────────────────────────────────────────
+// ── Flow Inputs ──────────────────────────────────────────────
 
-export function addBriefingInput(
+export function addFlowInput(
   customerId: string,
   projectId: string,
   topicId: string,
   data: { type: string; content: string; fileName?: string },
-): Promise<BriefingInput> {
+): Promise<FlowInput> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/inputs`, {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
-export async function uploadBriefingFile(
+export async function uploadFlowFile(
   customerId: string,
   projectId: string,
   topicId: string,
   file: File,
-): Promise<BriefingInput> {
+): Promise<FlowInput> {
   const formData = new FormData();
   formData.append("file", file);
   const res = await fetch(
@@ -237,10 +237,10 @@ export async function uploadBriefingFile(
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error ?? `Upload failed: ${res.status}`);
   }
-  return res.json() as Promise<BriefingInput>;
+  return res.json() as Promise<FlowInput>;
 }
 
-export function deleteBriefingInput(
+export function deleteFlowInput(
   customerId: string,
   projectId: string,
   topicId: string,
@@ -251,7 +251,7 @@ export function deleteBriefingInput(
   });
 }
 
-export function getBriefingInputFileUrl(
+export function getFlowInputFileUrl(
   customerId: string,
   projectId: string,
   topicId: string,
@@ -262,7 +262,7 @@ export function getBriefingInputFileUrl(
 
 // ── Input Processing ─────────────────────────────────────────────
 
-export function reprocessBriefingInput(
+export function reprocessFlowInput(
   customerId: string,
   projectId: string,
   topicId: string,
@@ -285,9 +285,9 @@ export function distillTopicChat(
   });
 }
 
-// ── Briefing Produce ────────────────────────────────────────────
+// ── Flow Produce ────────────────────────────────────────────
 
-export function produceBriefingOutput(
+export function produceFlowOutput(
   customerId: string,
   projectId: string,
   topicId: string,

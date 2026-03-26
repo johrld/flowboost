@@ -40,7 +40,7 @@ export async function runEnrichPipeline(
       tools: ["WebSearch", "WebFetch", "Read", "mcp__flowboost__flowboost_read_project_data", "mcp__flowboost__flowboost_read_content_index"],
     };
 
-    const briefingContext = ctx.buildFullBriefingContext();
+    const briefingContext = ctx.buildFullFlowContext();
     const prompt = buildEnricherPrompt(project, topic, existingTopics, briefingContext);
     const result = await runAgentTracked(ctx, "enrich", prompt, config);
     const enriched = extractJson<Partial<Topic>>(result.text);

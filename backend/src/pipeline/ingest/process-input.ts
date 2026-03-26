@@ -3,7 +3,7 @@ import path from "node:path";
 import { createLogger } from "../../utils/logger.js";
 import { extractJson } from "../extract-json.js";
 import type { TopicStore } from "../../models/topic.js";
-import type { BriefingInput, ProcessedInputData } from "../../models/types.js";
+import type { FlowInput, ProcessedInputData } from "../../models/types.js";
 
 const log = createLogger("ingest");
 
@@ -25,7 +25,7 @@ const API_TIMEOUT_MS = 60_000;
 export async function processInput(
   topicStore: TopicStore,
   topicId: string,
-  input: BriefingInput,
+  input: FlowInput,
 ): Promise<void> {
   // Orient-check: skip if already completed or currently processing
   if (input.processed?.status === "completed" || input.processed?.status === "processing") {
@@ -104,7 +104,7 @@ function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = API_TIMEOU
 
 // ── Per-type processors ──────────────────────────────────
 
-async function processUrl(input: BriefingInput): Promise<ProcessedInputData> {
+async function processUrl(input: FlowInput): Promise<ProcessedInputData> {
   const note = input.processed?.userNote;
 
   // Fetch URL content directly (no Agent SDK — avoids tool permission issues in containers)
@@ -158,7 +158,7 @@ Also include "fetchedContent": the first 2000 characters of readable text from t
 async function processDocument(
   topicStore: TopicStore,
   topicId: string,
-  input: BriefingInput,
+  input: FlowInput,
 ): Promise<ProcessedInputData> {
   const note = input.processed?.userNote;
   const isTextFile = input.mimeType?.startsWith("text/");
@@ -213,7 +213,7 @@ async function processDocument(
 async function processAudio(
   topicStore: TopicStore,
   topicId: string,
-  input: BriefingInput,
+  input: FlowInput,
 ): Promise<ProcessedInputData> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -263,7 +263,7 @@ async function processAudio(
 async function processImage(
   topicStore: TopicStore,
   topicId: string,
-  input: BriefingInput,
+  input: FlowInput,
 ): Promise<ProcessedInputData> {
   const filePath = topicStore.getInputFilePath(topicId, input.id);
   if (!filePath) throw new Error("Image file not found on disk");
@@ -295,7 +295,7 @@ Return JSON only:
   };
 }
 
-async function processText(input: BriefingInput): Promise<ProcessedInputData> {
+async function processText(input: FlowInput): Promise<ProcessedInputData> {
   if (input.content.length < 500) {
     return { status: "completed", summary: input.content };
   }

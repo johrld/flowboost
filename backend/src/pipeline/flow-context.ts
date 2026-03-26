@@ -1,13 +1,13 @@
-import type { Topic, ChatMessage, BriefingInput } from "../models/types.js";
+import type { Topic, ChatMessage, FlowInput } from "../models/types.js";
 
 /**
- * Build briefing context from a topic's processed inputs and chat distillation.
+ * Build flow context from a topic's processed inputs and chat distillation.
  *
  * Uses processed summaries when available, falls back to raw content.
  * Research data (keywords, angle, insights) is on the Topic itself
  * and is read directly by each prompt builder — not duplicated here.
  */
-export function buildBriefingContext(
+export function buildFlowContext(
   topic: Topic,
   chatMessages?: ChatMessage[],
   options?: {

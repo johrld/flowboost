@@ -5,7 +5,7 @@ import { simpleGit } from "simple-git";
 import type { Project, PipelineRun, Topic, ChatMessage } from "../models/types.js";
 import type { ConnectorSchema } from "../connectors/site/types.js";
 import { readChat } from "../models/chat.js";
-import { buildBriefingContext } from "./briefing-context.js";
+import { buildFlowContext } from "./flow-context.js";
 import type { CustomerStore } from "../models/customer.js";
 import type { ProjectStore } from "../models/project.js";
 import type { ArticleStore } from "../models/article.js";
@@ -32,8 +32,8 @@ export class PipelineContext {
     public readonly connectorSchema?: ConnectorSchema,
   ) {}
 
-  /** Build a prompt context string from briefing inputs (uses processed summaries when available) */
-  getBriefingInputsContext(): string {
+  /** Build a prompt context string from flow inputs (uses processed summaries when available) */
+  getFlowInputsContext(): string {
     if (!this.topic?.inputs || this.topic.inputs.length === 0) return "";
     const textInputs = this.topic.inputs
       .filter((i) => i.type === "text" || i.type === "transcript")
@@ -44,11 +44,11 @@ export class PipelineContext {
         return `[${i.type}]: ${i.content}`;
       });
     if (textInputs.length === 0) return "";
-    return `\n## Briefing Inputs\n${textInputs.join("\n\n")}`;
+    return `\n## Flow Inputs\n${textInputs.join("\n\n")}`;
   }
 
-  /** Build full briefing context including inputs, chat, and notes */
-  buildFullBriefingContext(options?: {
+  /** Build full flow context including inputs, chat, and notes */
+  buildFullFlowContext(options?: {
     includeChat?: boolean;
     maxInputChars?: number;
     maxChatMessages?: number;
@@ -62,7 +62,7 @@ export class PipelineContext {
     } catch {
       // No chat available
     }
-    return buildBriefingContext(this.topic, chatMessages, options);
+    return buildFlowContext(this.topic, chatMessages, options);
   }
 
   /** Build a prompt context string from connector schema slots */

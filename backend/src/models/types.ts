@@ -192,18 +192,18 @@ export interface Topic {
   rejectedAt?: string;
   rejectionReason?: string;
 
-  // ── Briefing extensions ────────────────────────────────
+  // ── Flow extensions ────────────────────────────────────
   // Inputs: source material (text, files, URLs, transcripts)
-  inputs?: BriefingInput[];
-  // Output references: ContentItem IDs produced from this briefing
+  inputs?: FlowInput[];
+  // Output references: ContentItem IDs produced from this flow
   outputIds?: string[];
   // Distilled chat decisions (extracted from brainstorm chat)
   chatDistillation?: ChatDistillation;
 }
 
-// ─── Briefing Input ─────────────────────────────────────────
+// ─── Flow Input ─────────────────────────────────────────────
 
-export type BriefingInputType = "text" | "transcript" | "image" | "url" | "document";
+export type FlowInputType = "text" | "transcript" | "image" | "url" | "document";
 
 export type InputProcessingStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -220,9 +220,9 @@ export interface ProcessedInputData {
   error?: string;
 }
 
-export interface BriefingInput {
+export interface FlowInput {
   id: string;
-  type: BriefingInputType;
+  type: FlowInputType;
   content: string;              // Text content or relative file path
   fileName?: string;
   mimeType?: string;

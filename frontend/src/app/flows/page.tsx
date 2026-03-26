@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { useProject } from "@/lib/project-context";
 import { getTopics, createTopic } from "@/lib/api";
-import type { Topic, BriefingInput } from "@/lib/types";
+import type { Topic, FlowInput } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
@@ -39,7 +39,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   rejected: "outline",
 };
 
-function InputCountBadge({ inputs }: { inputs?: BriefingInput[] }) {
+function InputCountBadge({ inputs }: { inputs?: FlowInput[] }) {
   if (!inputs || inputs.length === 0) return null;
   const types = inputs.map((i) => i.type);
   const icons: React.ReactNode[] = [];

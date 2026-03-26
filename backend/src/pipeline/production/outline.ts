@@ -55,7 +55,7 @@ export async function runOutlinePhase(ctx: PipelineContext): Promise<Outline> {
       tools: ["Read", "Write", "mcp__flowboost__flowboost_read_project_data"],
     };
 
-    const briefingContext = ctx.buildFullBriefingContext();
+    const briefingContext = ctx.buildFullFlowContext();
     // Load article guidelines from blog-post content type
     const ctStore = new ContentTypeStore(ctx.projectDir);
     const blogPostType = ctStore.get("blog-post");

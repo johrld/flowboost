@@ -265,13 +265,13 @@ export interface Topic {
   rejectedAt?: string;
   rejectionReason?: string;
 
-  // Briefing extensions
-  inputs?: BriefingInput[];
+  // Flow extensions
+  inputs?: FlowInput[];
   outputIds?: string[];
   chatDistillation?: ChatDistillation;
 }
 
-export type BriefingInputType = "text" | "transcript" | "image" | "url" | "document";
+export type FlowInputType = "text" | "transcript" | "image" | "url" | "document";
 
 export type InputProcessingStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -288,9 +288,9 @@ export interface ProcessedInputData {
   error?: string;
 }
 
-export interface BriefingInput {
+export interface FlowInput {
   id: string;
-  type: BriefingInputType;
+  type: FlowInputType;
   content: string;
   fileName?: string;
   mimeType?: string;
