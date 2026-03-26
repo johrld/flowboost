@@ -155,7 +155,7 @@ export interface ContentAudit {
 
 export interface Topic {
   id: string;
-  status: "proposed" | "approved" | "rejected" | "in_production" | "produced";
+  status: "proposed" | "approved" | "rejected" | "in_production" | "produced" | "archived";
   title: string;
   category: string;
   priority: number;

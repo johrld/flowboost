@@ -166,7 +166,7 @@ export async function topicRoutes(app: FastifyInstance) {
       const body = (request.body ?? {}) as Record<string, unknown>;
       const safeFields = [
         "title", "category", "keywords", "suggestedAngle", "searchIntent",
-        "estimatedSections", "format", "userNotes", "scheduledDate",
+        "estimatedSections", "format", "userNotes", "scheduledDate", "status",
       ];
       const updates: Record<string, unknown> = {};
 
@@ -194,6 +194,21 @@ export async function topicRoutes(app: FastifyInstance) {
 
       topics.update(topicId, updates);
       return { message: "Topic updated", topic: topics.get(topicId) };
+    },
+  );
+
+  // DELETE /customers/:customerId/projects/:projectId/topics/:topicId
+  app.delete<{ Params: { customerId: string; projectId: string; topicId: string } }>(
+    "/:topicId",
+    async (request, reply) => {
+      const { customerId, projectId, topicId } = request.params;
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
+      if (!topic) {
+        return reply.status(404).send({ error: "Topic not found" });
+      }
+      topics.delete(topicId);
+      return { message: "Flow deleted" };
     },
   );
 

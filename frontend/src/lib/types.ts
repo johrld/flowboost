@@ -155,7 +155,7 @@ export interface ContentMediaAsset {
 
 // ── Topic Status ────────────────────────────────────────────────
 
-export type TopicStatus = "proposed" | "approved" | "rejected" | "in_production" | "produced";
+export type TopicStatus = "proposed" | "approved" | "rejected" | "in_production" | "produced" | "archived";
 
 // ── Pipeline ────────────────────────────────────────────────────
 

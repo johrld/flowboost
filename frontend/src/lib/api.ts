@@ -162,6 +162,16 @@ export function updateTopicNotes(
   return updateTopic(customerId, projectId, topicId, { userNotes });
 }
 
+export function deleteTopic(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}`, {
+    method: "DELETE",
+  });
+}
+
 export function enrichTopic(
   customerId: string,
   projectId: string,

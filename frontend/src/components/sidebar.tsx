@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useProject } from "@/lib/project-context";
 import { CreateProjectWizard } from "@/components/create-project-wizard";
-import { getTopics, createTopic, updateTopic } from "@/lib/api";
+import { getTopics, createTopic, updateTopic, deleteTopic } from "@/lib/api";
 import type { Topic } from "@/lib/types";
 
 const settingsItems = [
@@ -101,20 +101,41 @@ export function Sidebar() {
     }
   };
 
-  const handleDeleteFlow = async (flowId: string) => {
+  const handleArchiveFlow = async (flowId: string) => {
     if (!customerId || !projectId) return;
     try {
-      await updateTopic(customerId, projectId, flowId, { status: "rejected" as Topic["status"] });
+      await updateTopic(customerId, projectId, flowId, { status: "archived" as Topic["status"] });
       await loadFlows();
-      if (pathname === `/flows/${flowId}`) router.push("/flows");
+    } catch (err) {
+      console.error("Archive failed:", err);
+    }
+  };
+
+  const handleUnarchiveFlow = async (flowId: string) => {
+    if (!customerId || !projectId) return;
+    try {
+      await updateTopic(customerId, projectId, flowId, { status: "proposed" as Topic["status"] });
+      await loadFlows();
+    } catch (err) {
+      console.error("Unarchive failed:", err);
+    }
+  };
+
+  const handleDeleteFlow = async (flowId: string) => {
+    if (!customerId || !projectId) return;
+    if (!confirm("Permanently delete this flow? This cannot be undone.")) return;
+    try {
+      await deleteTopic(customerId, projectId, flowId);
+      await loadFlows();
+      if (pathname === `/flows/${flowId}`) router.push("/dashboard");
     } catch (err) {
       console.error("Delete failed:", err);
     }
   };
 
   // Split flows into active and archived
-  const activeFlows = flows.filter((f) => f.status !== "rejected");
-  const archivedFlows = flows.filter((f) => f.status === "rejected");
+  const activeFlows = flows.filter((f) => f.status !== "rejected" && f.status !== "archived");
+  const archivedFlows = flows.filter((f) => f.status === "archived");
 
   const calendarActive = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
   const monitorActive = pathname === "/monitor" || pathname.startsWith("/monitor/");
@@ -235,6 +256,9 @@ export function Sidebar() {
                     <DropdownMenuItem onClick={() => { setRenamingId(flow.id); setRenameValue(flow.title); }}>
                       <Pencil className="mr-2 h-3.5 w-3.5" />Rename
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleArchiveFlow(flow.id)}>
+                      <Archive className="mr-2 h-3.5 w-3.5" />Archive
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteFlow(flow.id)}>
                       <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
@@ -249,28 +273,49 @@ export function Sidebar() {
             <p className="px-3 py-2 text-xs text-muted-foreground">No active flows</p>
           )}
 
-          {/* Archive Toggle */}
-          {archivedFlows.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowArchive(!showArchive)}
-              className="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-2"
-            >
-              <Archive className="h-3 w-3" />
-              Archive ({archivedFlows.length})
-              <ChevronDown className={cn("h-3 w-3 ml-auto transition-transform", showArchive && "rotate-180")} />
-            </button>
-          )}
+          {/* Archive Toggle — always visible */}
+          <button
+            type="button"
+            onClick={() => setShowArchive(!showArchive)}
+            className="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-3"
+          >
+            <Archive className="h-3 w-3" />
+            Archive{archivedFlows.length > 0 && ` (${archivedFlows.length})`}
+            <ChevronDown className={cn("h-3 w-3 ml-auto transition-transform", showArchive && "rotate-180")} />
+          </button>
 
-          {showArchive && archivedFlows.map((flow) => (
-            <Link
-              key={flow.id}
-              href={`/flows/${flow.id}`}
-              className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <span className="truncate">{flow.title}</span>
-            </Link>
-          ))}
+          {showArchive && (
+            archivedFlows.length === 0 ? (
+              <p className="px-3 py-1.5 text-xs text-muted-foreground/50">No archived flows</p>
+            ) : (
+              archivedFlows.map((flow) => (
+                <div key={flow.id} className="group relative">
+                  <Link
+                    href={`/flows/${flow.id}`}
+                    className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors pr-8"
+                  >
+                    <span className="truncate">{flow.title}</span>
+                  </Link>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-sidebar-accent opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground">
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" side="right">
+                      <DropdownMenuItem onClick={() => handleUnarchiveFlow(flow.id)}>
+                        <Archive className="mr-2 h-3.5 w-3.5" />Unarchive
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteFlow(flow.id)}>
+                        <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ))
+            )
+          )}
         </div>
       </div>
 
