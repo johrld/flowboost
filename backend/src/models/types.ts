@@ -197,11 +197,28 @@ export interface Topic {
   inputs?: BriefingInput[];
   // Output references: ContentItem IDs produced from this briefing
   outputIds?: string[];
+  // Distilled chat decisions (extracted from brainstorm chat)
+  chatDistillation?: ChatDistillation;
 }
 
 // ─── Briefing Input ─────────────────────────────────────────
 
 export type BriefingInputType = "text" | "transcript" | "image" | "url" | "document";
+
+export type InputProcessingStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface ProcessedInputData {
+  status: InputProcessingStatus;
+  summary?: string;
+  keyPoints?: string[];
+  transcript?: string;
+  description?: string;
+  extractedText?: string;
+  fetchedContent?: string;
+  userNote?: string;
+  processedAt?: string;
+  error?: string;
+}
 
 export interface BriefingInput {
   id: string;
@@ -210,6 +227,20 @@ export interface BriefingInput {
   fileName?: string;
   mimeType?: string;
   createdAt: string;
+  processed?: ProcessedInputData;
+}
+
+// ─── Chat Distillation ─────────────────────────────────────
+
+export interface ChatDistillation {
+  keyDecisions: string[];
+  contentDirection: string;
+  mustInclude: string[];
+  rejectedIdeas: string[];
+  rejectedApproaches: string[];
+  contentReferences: string[];
+  toneNotes: string;
+  distilledAt: string;
 }
 
 // ─── Articles (V2 — kept for backward compat, use ContentItem for new code) ──

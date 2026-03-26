@@ -7,6 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -59,6 +65,7 @@ import {
   getContent,
   getContentTypes,
   enrichTopic,
+  reprocessBriefingInput,
   type ContentTypeDefinition,
 } from "@/lib/api";
 import type { Topic, BriefingInput, ChatMessage, ContentItem } from "@/lib/types";
@@ -140,6 +147,9 @@ export default function BriefingDetailPage({ params }: { params: Promise<{ id: s
   const [researchExpanded, setResearchExpanded] = useState(true);
   const [sending, setSending] = useState(false);
   const [addingInput, setAddingInput] = useState(false);
+  const [selectedInputId, setSelectedInputId] = useState<string | null>(null);
+  const [reanalyzeNote, setReanalyzeNote] = useState("");
+  const [showReanalyzeNote, setShowReanalyzeNote] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = useCallback(async () => {
@@ -167,6 +177,26 @@ export default function BriefingDetailPage({ params }: { params: Promise<{ id: s
   }, [customerId, projectId, id]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Auto-poll when any input is processing
+  useEffect(() => {
+    if (!topic?.inputs?.some((i) => i.processed?.status === "processing")) return;
+    const interval = setInterval(() => loadData(), 3000);
+    return () => clearInterval(interval);
+  }, [topic?.inputs, loadData]);
+
+  // ── Reanalyze handler ──────────────────────────────────
+  const handleReanalyze = async (inputId: string, note?: string) => {
+    if (!customerId || !projectId) return;
+    try {
+      await reprocessBriefingInput(customerId, projectId, id, inputId, note);
+      setShowReanalyzeNote(false);
+      setReanalyzeNote("");
+      await loadData();
+    } catch (err) {
+      console.error("Reanalyze failed:", err);
+    }
+  };
 
   // ── Input handlers ──────────────────────────────────────
 
@@ -430,37 +460,165 @@ export default function BriefingDetailPage({ params }: { params: Promise<{ id: s
             </div>
           ) : (
             <div className="space-y-1">
-              {inputs.map((input) => (
-                <div key={input.id} className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted/50 transition-colors group">
-                  <span className="text-muted-foreground shrink-0">{INPUT_ICONS[input.type] ?? <FileText className="h-4 w-4" />}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{INPUT_LABELS[input.type] ?? input.type}</span>
-                      {input.fileName && <span className="text-xs text-muted-foreground">{input.fileName}</span>}
-                    </div>
-                    {input.type === "url" ? (
-                      <a href={input.content} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
-                        {input.content.replace(/^https?:\/\//, "").slice(0, 60)}
-                        <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
-                    ) : input.type !== "image" ? (
-                      <p className="text-xs text-muted-foreground truncate">{input.content}</p>
-                    ) : null}
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {formatDistanceToNow(new Date(input.createdAt), { addSuffix: true })}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteInput(input.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
+              {inputs.map((input) => {
+                const status = input.processed?.status;
+                const isProcessing = status === "processing";
+                const isCompleted = status === "completed";
+                const isFailed = status === "failed";
+                const notProcessed = !status || status === "pending";
+                const hasSummary = isCompleted && (input.processed?.summary || input.processed?.description);
+
+                return (
+                  <div
+                    key={input.id}
+                    className={`flex items-center gap-3 rounded-lg p-3 transition-colors group ${hasSummary ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30"}`}
+                    onClick={() => hasSummary && setSelectedInputId(input.id)}
                   >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
+                    <span className="text-muted-foreground shrink-0">{INPUT_ICONS[input.type] ?? <FileText className="h-4 w-4" />}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium truncate">{input.fileName ?? INPUT_LABELS[input.type] ?? input.type}</span>
+                        {/* Status badges */}
+                        {isProcessing && (
+                          <span className="inline-flex items-center gap-1 text-xs text-amber-500">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Analyzing
+                          </span>
+                        )}
+                        {isCompleted && <span className="text-xs text-emerald-500">Analyzed</span>}
+                        {isFailed && <span className="text-xs text-destructive">Failed</span>}
+                      </div>
+                      {input.type === "url" && (
+                        <a href={input.content} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          {input.content.replace(/^https?:\/\//, "").slice(0, 50)}
+                          <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      )}
+                      {/* Summary preview */}
+                      {hasSummary && (
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                          {input.processed?.summary ?? input.processed?.description}
+                        </p>
+                      )}
+                      {/* Error message */}
+                      {isFailed && (
+                        <p className="text-xs text-destructive/70 mt-0.5 truncate">{input.processed?.error}</p>
+                      )}
+                    </div>
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {(notProcessed || isFailed) && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleReanalyze(input.id); }}
+                          className="text-xs text-primary hover:underline px-2 py-1"
+                        >
+                          {isFailed ? "Retry" : "Analyze"}
+                        </button>
+                      )}
+                      {hasSummary && <Search className="h-3.5 w-3.5 text-muted-foreground" />}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteInput(input.id); }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+
           )}
+
+          {/* Summary Detail Dialog */}
+          <Dialog open={!!selectedInputId} onOpenChange={(open) => { if (!open) { setSelectedInputId(null); setShowReanalyzeNote(false); setReanalyzeNote(""); } }}>
+            <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+              {(() => {
+                const input = inputs.find((i) => i.id === selectedInputId);
+                if (!input?.processed) return null;
+                const p = input.processed;
+                return (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        {INPUT_ICONS[input.type]}
+                        {input.fileName ?? INPUT_LABELS[input.type] ?? input.type}
+                      </DialogTitle>
+                      {input.type === "url" && (
+                        <a href={input.content} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                          {input.content} <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      )}
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      {p.summary && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Summary</h4>
+                          <p className="text-sm leading-relaxed">{p.summary}</p>
+                        </div>
+                      )}
+                      {p.description && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Description</h4>
+                          <p className="text-sm leading-relaxed">{p.description}</p>
+                        </div>
+                      )}
+                      {p.keyPoints && p.keyPoints.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Key Points</h4>
+                          <ul className="text-sm space-y-1">
+                            {p.keyPoints.map((point, i) => (
+                              <li key={i} className="flex gap-2"><span className="text-muted-foreground shrink-0">-</span><span>{point}</span></li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {p.transcript && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Transcript</h4>
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{p.transcript.slice(0, 2000)}</p>
+                        </div>
+                      )}
+                      {p.extractedText && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Extracted Text</h4>
+                          <p className="text-xs text-muted-foreground font-mono whitespace-pre-wrap">{p.extractedText.slice(0, 1000)}</p>
+                        </div>
+                      )}
+                      {/* Re-analyze */}
+                      <div className="flex items-center gap-2 pt-2 border-t">
+                        <Button variant="outline" size="sm" onClick={() => { handleReanalyze(input.id); setSelectedInputId(null); }}>
+                          Re-analyze
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setShowReanalyzeNote(!showReanalyzeNote)}>
+                          Re-analyze with note
+                        </Button>
+                      </div>
+                      {showReanalyzeNote && (
+                        <div className="flex gap-2">
+                          <Input
+                            value={reanalyzeNote}
+                            onChange={(e) => setReanalyzeNote(e.target.value)}
+                            placeholder="Focus on..."
+                            className="text-sm"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && reanalyzeNote.trim()) {
+                                handleReanalyze(input.id, reanalyzeNote);
+                                setSelectedInputId(null);
+                              }
+                            }}
+                          />
+                          <Button size="sm" onClick={() => { if (reanalyzeNote.trim()) { handleReanalyze(input.id, reanalyzeNote); setSelectedInputId(null); } }}>Go</Button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* ── Brainstorm Tab ──────────────────────────────── */}

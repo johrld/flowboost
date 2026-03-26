@@ -268,9 +268,25 @@ export interface Topic {
   // Briefing extensions
   inputs?: BriefingInput[];
   outputIds?: string[];
+  chatDistillation?: ChatDistillation;
 }
 
 export type BriefingInputType = "text" | "transcript" | "image" | "url" | "document";
+
+export type InputProcessingStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface ProcessedInputData {
+  status: InputProcessingStatus;
+  summary?: string;
+  keyPoints?: string[];
+  transcript?: string;
+  description?: string;
+  extractedText?: string;
+  fetchedContent?: string;
+  userNote?: string;
+  processedAt?: string;
+  error?: string;
+}
 
 export interface BriefingInput {
   id: string;
@@ -279,6 +295,18 @@ export interface BriefingInput {
   fileName?: string;
   mimeType?: string;
   createdAt: string;
+  processed?: ProcessedInputData;
+}
+
+export interface ChatDistillation {
+  keyDecisions: string[];
+  contentDirection: string;
+  mustInclude: string[];
+  rejectedIdeas: string[];
+  rejectedApproaches: string[];
+  contentReferences: string[];
+  toneNotes: string;
+  distilledAt: string;
 }
 
 

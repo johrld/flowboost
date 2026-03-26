@@ -6,6 +6,8 @@ import { runProductionPipeline } from "../../pipeline/production/run.js";
 import { runSocialPipeline } from "../../pipeline/social/run.js";
 import { runEmailPipeline } from "../../pipeline/email/run.js";
 import type { ChatMessage, Topic, BriefingInputType } from "../../models/types.js";
+import { processInput } from "../../pipeline/ingest/process-input.js";
+import { distillChat } from "../../pipeline/ingest/distill-chat.js";
 import { createLogger } from "../../utils/logger.js";
 
 const log = createLogger("topic-chat");
@@ -34,17 +36,38 @@ function buildSystemPrompt(topic: Topic): string {
   if (topic.reasoning) parts.push(`\n## AI Analysis\n${topic.reasoning}`);
   if (topic.userNotes) parts.push(`\n## User Notes\n${topic.userNotes}`);
 
-  // Briefing Inputs — so the chat knows what the user uploaded
+  // Briefing Inputs — uses processed summaries when available
   const inputs = topic.inputs ?? [];
   if (inputs.length > 0) {
     parts.push("\n## Briefing Inputs (uploaded by user)");
     for (const input of inputs) {
       if (input.type === "text" || input.type === "transcript") {
-        parts.push(`\n### ${input.type === "transcript" ? "Voice Memo Transcript" : "Note"}\n${input.content.slice(0, 2000)}`);
+        if (input.processed?.status === "completed" && input.processed.summary) {
+          parts.push(`\n### ${input.type === "transcript" ? "Voice Memo (Transcribed)" : "Note (Summarized)"}\n${input.processed.summary}`);
+          if (input.processed.keyPoints?.length) {
+            parts.push(`Key points: ${input.processed.keyPoints.join("; ")}`);
+          }
+        } else {
+          parts.push(`\n### ${input.type === "transcript" ? "Voice Memo" : "Note"}\n${input.content.slice(0, 2000)}`);
+        }
       } else if (input.type === "url") {
-        parts.push(`- **URL:** ${input.content}`);
-      } else if (input.type === "image" || input.type === "document") {
-        parts.push(`- **File:** ${input.fileName ?? input.type} (${input.mimeType ?? "unknown"})`);
+        if (input.processed?.status === "completed" && input.processed.summary) {
+          parts.push(`- **URL:** ${input.content}\n  Summary: ${input.processed.summary}`);
+        } else {
+          parts.push(`- **URL:** ${input.content}`);
+        }
+      } else if (input.type === "image") {
+        if (input.processed?.status === "completed" && input.processed.description) {
+          parts.push(`- **Image (${input.fileName ?? "image"}):** ${input.processed.description}`);
+        } else {
+          parts.push(`- **File:** ${input.fileName ?? input.type} (${input.mimeType ?? "unknown"})`);
+        }
+      } else if (input.type === "document") {
+        if (input.processed?.status === "completed" && input.processed.summary) {
+          parts.push(`- **Document (${input.fileName ?? "document"}):** ${input.processed.summary}`);
+        } else {
+          parts.push(`- **File:** ${input.fileName ?? input.type} (${input.mimeType ?? "unknown"})`);
+        }
       }
     }
   }
@@ -400,6 +423,11 @@ export async function topicRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Topic not found" });
       }
 
+      // Fire-and-forget async processing
+      processInput(topics, topicId, input).catch((err) => {
+        log.error({ topicId, inputId: input.id, err }, "input processing failed");
+      });
+
       return reply.status(201).send(input);
     },
   );
@@ -429,7 +457,7 @@ export async function topicRoutes(app: FastifyInstance) {
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ];
-      if (!ALLOWED_MIMES.some((m) => mimeType === m || (m.endsWith("/*") && mimeType.startsWith(m.replace("/*", "/"))))) {
+      if (!ALLOWED_MIMES.includes(mimeType)) {
         return reply.status(400).send({ error: `File type not allowed: ${mimeType}` });
       }
 
@@ -446,7 +474,69 @@ export async function topicRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Topic not found" });
       }
 
+      // Fire-and-forget async processing
+      processInput(topics, topicId, input).catch((err) => {
+        log.error({ topicId, inputId: input.id, err }, "input processing failed");
+      });
+
       return reply.status(201).send(input);
+    },
+  );
+
+  // POST /topics/:topicId/inputs/:inputId/reprocess — Re-process input with optional note
+  app.post<{
+    Params: { customerId: string; projectId: string; topicId: string; inputId: string };
+    Body: { note?: string };
+  }>(
+    "/:topicId/inputs/:inputId/reprocess",
+    async (request, reply) => {
+      const { customerId, projectId, topicId, inputId } = request.params;
+      const { note } = (request.body ?? {}) as { note?: string };
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
+      if (!topic) return reply.status(404).send({ error: "Topic not found" });
+
+      const input = (topic.inputs ?? []).find((i) => i.id === inputId);
+      if (!input) return reply.status(404).send({ error: "Input not found" });
+
+      // Reset status and optionally set new note, then re-process
+      topics.updateInputProcessed(topicId, inputId, {
+        status: "pending",
+        ...(note ? { userNote: note } : {}),
+      });
+
+      // Re-read to get the updated input with correct processed state
+      const updated = topics.get(topicId);
+      const updatedInput = (updated?.inputs ?? []).find((i) => i.id === inputId);
+      if (updatedInput) {
+        processInput(topics, topicId, updatedInput).catch((err) => {
+          log.error({ topicId, inputId, err }, "reprocessing failed");
+        });
+      }
+
+      return { message: "Reprocessing started" };
+    },
+  );
+
+  // POST /topics/:topicId/distill — Manually trigger chat distillation
+  app.post<{
+    Params: { customerId: string; projectId: string; topicId: string };
+  }>(
+    "/:topicId/distill",
+    async (request, reply) => {
+      const { customerId, projectId, topicId } = request.params;
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
+      if (!topic) return reply.status(404).send({ error: "Topic not found" });
+
+      const chatDir = topics.entityDir(topicId);
+      const chatMessages = readChat(chatDir);
+      if (chatMessages.length === 0) {
+        return reply.status(400).send({ error: "No chat messages to distill" });
+      }
+
+      const distillation = await distillChat(topics, topicId, chatMessages, topic.chatDistillation);
+      return { message: "Chat distilled", distillation };
     },
   );
 
@@ -524,9 +614,30 @@ export async function topicRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Topic not found" });
       }
 
+      // Block production if inputs are still processing
+      const pendingInputs = (topic.inputs ?? []).filter(
+        (i) => i.processed?.status === "processing" || i.processed?.status === "pending",
+      );
+      if (pendingInputs.length > 0) {
+        return reply.status(400).send({
+          error: `${pendingInputs.length} input(s) still processing. Wait for all inputs to finish before producing content.`,
+        });
+      }
+
       const project = app.ctx.projectsFor(customerId).get(projectId);
       if (!project) {
         return reply.status(404).send({ error: "Project not found" });
+      }
+
+      // Distill chat before production (merge with existing distillation)
+      try {
+        const chatDir = topics.entityDir(topicId);
+        const chatMessages = readChat(chatDir);
+        if (chatMessages.length > 0) {
+          await distillChat(topics, topicId, chatMessages, topic.chatDistillation);
+        }
+      } catch (err) {
+        log.warn({ topicId, err }, "chat distillation failed, proceeding without it");
       }
 
       // Create ContentItem linked to this briefing

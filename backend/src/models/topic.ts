@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Store } from "./store.js";
 import { createLogger } from "../utils/logger.js";
-import type { Topic, BriefingInput } from "./types.js";
+import type { Topic, BriefingInput, ProcessedInputData, ChatDistillation } from "./types.js";
 
 const log = createLogger("topic-store");
 
@@ -105,6 +105,32 @@ export class TopicStore extends Store<Topic> {
 
     const filePath = path.join(this.entityDir(topicId), input.content);
     return fs.existsSync(filePath) ? filePath : null;
+  }
+
+  // ── Processing Status ─────────────────────────────────
+
+  /** Update the processed data for a specific input */
+  updateInputProcessed(topicId: string, inputId: string, processed: ProcessedInputData): boolean {
+    const topic = this.get(topicId);
+    if (!topic) return false;
+
+    const inputs = topic.inputs ?? [];
+    const input = inputs.find((i) => i.id === inputId);
+    if (!input) return false;
+
+    input.processed = processed;
+    this.update(topicId, { inputs } as Partial<Topic>);
+    log.debug({ topicId, inputId, status: processed.status }, "input processing updated");
+    return true;
+  }
+
+  /** Update chat distillation for a topic */
+  updateChatDistillation(topicId: string, distillation: ChatDistillation): boolean {
+    const topic = this.get(topicId);
+    if (!topic) return false;
+    this.update(topicId, { chatDistillation: distillation } as Partial<Topic>);
+    log.debug({ topicId }, "chat distillation updated");
+    return true;
   }
 
   // ── Output Management ──────────────────────────────────

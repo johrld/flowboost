@@ -32,12 +32,17 @@ export class PipelineContext {
     public readonly connectorSchema?: ConnectorSchema,
   ) {}
 
-  /** Build a prompt context string from briefing inputs (text + transcript content) */
+  /** Build a prompt context string from briefing inputs (uses processed summaries when available) */
   getBriefingInputsContext(): string {
     if (!this.topic?.inputs || this.topic.inputs.length === 0) return "";
     const textInputs = this.topic.inputs
       .filter((i) => i.type === "text" || i.type === "transcript")
-      .map((i) => `[${i.type}]: ${i.content}`);
+      .map((i) => {
+        if (i.processed?.status === "completed" && i.processed.summary) {
+          return `[${i.type} — processed]: ${i.processed.summary}`;
+        }
+        return `[${i.type}]: ${i.content}`;
+      });
     if (textInputs.length === 0) return "";
     return `\n## Briefing Inputs\n${textInputs.join("\n\n")}`;
   }

@@ -260,6 +260,31 @@ export function getBriefingInputFileUrl(
   return `${API_URL}/customers/${customerId}/projects/${projectId}/topics/${topicId}/inputs/${inputId}/file`;
 }
 
+// ── Input Processing ─────────────────────────────────────────────
+
+export function reprocessBriefingInput(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  inputId: string,
+  note?: string,
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/inputs/${inputId}/reprocess`, {
+    method: "POST",
+    body: JSON.stringify(note ? { note } : {}),
+  });
+}
+
+export function distillTopicChat(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+): Promise<{ message: string; distillation: unknown }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/distill`, {
+    method: "POST",
+  });
+}
+
 // ── Briefing Produce ────────────────────────────────────────────
 
 export function produceBriefingOutput(
