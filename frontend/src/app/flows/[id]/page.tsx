@@ -302,16 +302,17 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="h-screen overflow-y-auto">
-      {/* ── Sticky Header ─────────────────────────────── */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b">
-        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-lg font-semibold truncate">{topic.title}</h1>
+      <div className="max-w-3xl mx-auto px-6">
+
+        {/* ── Flow Title ────────────────────────────────── */}
+        <div className="flex items-start justify-between pt-8 pb-6">
+          <h1 className="text-2xl font-semibold">{topic.title}</h1>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm">
+              <Button size="sm" variant="outline" className="shrink-0 ml-4">
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Create
-                <ChevronDown className="ml-1.5 h-3 w-3" />
+                <ChevronDown className="ml-1.5 h-3 w-3 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -334,21 +335,11 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </div>
-
-      <div className="max-w-3xl mx-auto px-6 py-6 space-y-6">
 
         {/* ── Chat Input (like ChatGPT) ─────────────────── */}
-        <div className="rounded-xl border bg-background shadow-sm p-3">
-          <div className="flex gap-2 items-center">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="shrink-0 p-2 rounded-md hover:bg-muted text-muted-foreground"
-              title="Attach file"
-            >
-              <Paperclip className="h-4 w-4" />
-            </button>
+        <div className="rounded-2xl border shadow-sm px-4 py-3 mb-8">
+          <div className="flex gap-3 items-center">
+            <Plus className="h-5 w-5 text-muted-foreground shrink-0" />
             <input
               ref={fileInputRef}
               type="file"
@@ -356,34 +347,48 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
               multiple
               onChange={(e) => { handleFileUpload(e.target.files); e.target.value = ""; }}
             />
-            <Input
+            <input
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
-              placeholder="Message..."
+              placeholder={`Message in ${topic.title.slice(0, 30)}...`}
               disabled={sending}
-              className="flex-1 border-0 shadow-none focus-visible:ring-0 px-0"
+              className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
             />
-            <Button size="icon" variant="ghost" className="shrink-0" onClick={handleSendChat} disabled={!chatInput.trim() || sending}>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="shrink-0 p-1.5 rounded-lg hover:bg-muted text-muted-foreground"
+              title="Attach file"
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleSendChat}
+              disabled={!chatInput.trim() || sending}
+              className="shrink-0 p-1.5 rounded-lg bg-foreground text-background disabled:opacity-30"
+            >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-            </Button>
+            </button>
           </div>
         </div>
 
         {/* ── Tabs: Chat | Sources | Content ────────────── */}
-        <div>
-          <div className="flex items-center gap-1 mb-4">
+        <div className="pb-12">
+          <div className="flex items-center gap-2 mb-6">
             {(["chat", "sources", "content"] as const).map((tab) => {
               const count = tab === "sources" ? inputs.length : tab === "content" ? outputs.length : chatMessages.length;
+              const isActive = bottomTab === tab;
               return (
                 <button
                   key={tab}
                   type="button"
-                  onClick={() => setBottomTab(tab as "sources" | "content")}
-                  className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
-                    bottomTab === tab
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  onClick={() => setBottomTab(tab)}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+                    isActive
+                      ? "bg-foreground text-background border-foreground"
+                      : "text-muted-foreground border-transparent hover:text-foreground"
                   }`}
                 >
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}{count > 0 ? ` (${count})` : ""}
