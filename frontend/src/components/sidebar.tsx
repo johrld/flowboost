@@ -8,6 +8,9 @@ import {
   CalendarDays,
   Activity,
   Cable,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
   Settings,
   ChevronDown,
   Plus,
@@ -26,7 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useProject } from "@/lib/project-context";
 import { CreateProjectWizard } from "@/components/create-project-wizard";
-import { getTopics, createTopic } from "@/lib/api";
+import { getTopics, createTopic, updateTopic } from "@/lib/api";
 import type { Topic } from "@/lib/types";
 
 const settingsItems = [
@@ -43,6 +46,8 @@ export function Sidebar() {
   const [flows, setFlows] = useState<Topic[]>([]);
   const [showArchive, setShowArchive] = useState(false);
   const [creatingFlow, setCreatingFlow] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const loadFlows = useCallback(async () => {
     if (!customerId || !projectId) return;
@@ -81,6 +86,29 @@ export function Sidebar() {
       console.error("Failed to create flow:", err);
     } finally {
       setCreatingFlow(false);
+    }
+  };
+
+  const handleRenameFlow = async (flowId: string) => {
+    if (!renameValue.trim() || !customerId || !projectId) return;
+    try {
+      await updateTopic(customerId, projectId, flowId, { title: renameValue.trim() });
+      setRenamingId(null);
+      await loadFlows();
+      window.dispatchEvent(new Event("flows-updated"));
+    } catch (err) {
+      console.error("Rename failed:", err);
+    }
+  };
+
+  const handleDeleteFlow = async (flowId: string) => {
+    if (!customerId || !projectId) return;
+    try {
+      await updateTopic(customerId, projectId, flowId, { status: "rejected" as Topic["status"] });
+      await loadFlows();
+      if (pathname === `/flows/${flowId}`) router.push("/flows");
+    } catch (err) {
+      console.error("Delete failed:", err);
     }
   };
 
@@ -162,24 +190,58 @@ export function Sidebar() {
           {activeFlows.map((flow) => {
             const isActive = pathname === `/flows/${flow.id}`;
             const outputCount = flow.outputIds?.length ?? 0;
+            const isRenaming = renamingId === flow.id;
+
+            if (isRenaming) {
+              return (
+                <div key={flow.id} className="px-3 py-1">
+                  <input
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={() => handleRenameFlow(flow.id)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleRenameFlow(flow.id); if (e.key === "Escape") setRenamingId(null); }}
+                    autoFocus
+                    className="w-full text-sm bg-transparent outline-none border-b border-primary py-0.5"
+                  />
+                </div>
+              );
+            }
+
             return (
-              <Link
-                key={flow.id}
-                href={`/flows/${flow.id}`}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors group",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                )}
-              >
-                <span className="flex-1 truncate">{flow.title}</span>
-                {outputCount > 0 && (
-                  <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
-                    {outputCount}
-                  </span>
-                )}
-              </Link>
+              <div key={flow.id} className="group relative">
+                <Link
+                  href={`/flows/${flow.id}`}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors pr-8",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <span className="flex-1 truncate">{flow.title}</span>
+                  {outputCount > 0 && (
+                    <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+                      {outputCount}
+                    </span>
+                  )}
+                </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-sidebar-accent opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground">
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" side="right">
+                    <DropdownMenuItem onClick={() => { setRenamingId(flow.id); setRenameValue(flow.title); }}>
+                      <Pencil className="mr-2 h-3.5 w-3.5" />Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteFlow(flow.id)}>
+                      <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             );
           })}
 
