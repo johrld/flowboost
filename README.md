@@ -315,26 +315,35 @@ Set these in your `.env` or hosting platform:
    |----------|----------|-------|
    | `ANTHROPIC_API_KEY` | Yes (or use CLI login) | Your Anthropic Console key |
    | `GEMINI_API_KEY` | No | Google Gemini key for image generation |
-   | `FRONTEND_URL` | No | Public dashboard URL for CORS (default: auto-detected) |
+   | `NEXT_PUBLIC_API_URL` | Yes | `/backend` (see step 5 below) |
 
-4. Configure **one domain** for the dashboard service (e.g. `flowboost.yourdomain.com`). The API is proxied through the dashboard — no separate API domain needed.
+4. Configure **two domain entries** on the same host:
+   - `yourdomain.com` → **dashboard** service, port `6001`
+   - `yourdomain.com/backend` → **api** service, port `6100`, **strip path enabled**
 
-5. Deploy
+   This routes the dashboard and API through a single domain. The browser calls `/backend/health` and the platform strips `/backend` before forwarding to the API.
 
-6. **Authentication** — choose one:
+5. Set `NEXT_PUBLIC_API_URL=/backend` as environment variable — this tells the frontend to call the API via the `/backend` path on the same domain.
+
+6. Deploy
+
+7. **Authentication** — choose one:
    - **API Key**: Set `ANTHROPIC_API_KEY` as env var — done, no further steps
    - **CLI Login** (Max/Pro subscription): Open the terminal in the Dokploy dashboard for the API service, run `claude login`, follow the URL to authorize. Credentials persist in the `claude-credentials` volume across rebuilds.
 
-7. Open your dashboard URL — the onboarding wizard will guide you through creating your first project
+8. Open your dashboard URL — the onboarding wizard will guide you through creating your first project
 
-> **Note:** `setup.sh` is NOT needed for production — project defaults are baked into the Docker image. The onboarding wizard handles first-time setup.
+> **Note:** `setup.sh` is NOT needed for production — a default customer is created automatically on first start. The onboarding wizard handles project setup.
 >
 > **Warning:** `docker compose down -v` deletes all volumes including credentials and data.
 
-**Behind a Reverse Proxy (Traefik, Nginx, Caddy):**
-- Point your domain to the dashboard port (default 6101) — the API is proxied through it automatically
-- No separate API domain needed (the dashboard proxies `/backend/*` to the API service)
-- Optional: Set `FRONTEND_URL` for CORS if needed
+**Plain Docker (no platform):**
+
+```bash
+docker compose -f docker-compose.production.yml up --build -d
+```
+
+Dashboard at `http://localhost:6101`, API at `http://localhost:6100`. No extra proxy needed for local/testing use. For production with a custom domain, put a reverse proxy in front (Caddy, Nginx, or Traefik) with path-based routing as described above.
 
 ### Data Persistence
 
