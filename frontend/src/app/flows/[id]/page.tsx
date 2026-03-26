@@ -420,6 +420,22 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                 ))
               )}
+              {/* AI thinking indicator */}
+              {sending && (
+                <div className="flex gap-3">
+                  <div className="shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center bg-muted">
+                    <Bot className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="flex-1 min-w-0 pt-1">
+                    <div className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1.5">Thinking...</p>
+                  </div>
+                </div>
+              )}
               <div ref={chatEndRef} />
             </div>
           )}
