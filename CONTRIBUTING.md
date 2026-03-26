@@ -36,14 +36,10 @@
 git clone https://github.com/YOUR_USERNAME/flowboost.git
 cd flowboost
 
-# 2. Configure environment
-cp .env.example .env
-# Set ANTHROPIC_API_KEY in .env
-
-# 3. Initialize data
+# 2. Run setup (creates .env, configures auth, seeds data)
 bash scripts/setup.sh
 
-# 4. Start services
+# 3. Start services
 docker compose up --build
 ```
 
@@ -51,10 +47,10 @@ Dashboard: http://localhost:6101 — API: http://localhost:6100
 
 ## Branching
 
-All PRs go against `main`. No `develop` branch.
+All PRs go against `main`. No `develop` branch. Direct pushes to `main` are blocked — all changes must go through a PR.
 
 ```
-main (always stable)
+main (protected: no force push, no direct push, PRs required)
   └── feat/your-feature → PR → main
 ```
 

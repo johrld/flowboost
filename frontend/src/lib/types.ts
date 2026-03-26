@@ -10,7 +10,7 @@ export interface ChatMessage {
 
 // ── Content V3 ──────────────────────────────────────────────────
 
-export type ContentType = "article" | "guide" | "landing_page" | "video" | "audio" | "social_post";
+export type ContentType = "article" | "guide" | "landing_page" | "video" | "audio" | "social_post" | "newsletter";
 
 export type ContentItemStatus =
   | "planned"
@@ -36,6 +36,7 @@ export interface ContentItem {
   keywords?: string[];
   author?: string;
   topicId?: string;
+  briefingId?: string;
   translationKey?: string;
   parentId?: string;
   currentVersionId?: string;
@@ -62,6 +63,10 @@ export interface ContentVersion {
   text?: TextVersionMeta;
   video?: VideoVersionMeta;
   audio?: AudioVersionMeta;
+  social?: SocialVersionMeta;
+  newsletter?: NewsletterVersionMeta;
+  customFields?: Record<string, unknown>;
+  connectorSchemaId?: string;
   pipelineRunId?: string;
   seoScore?: number;
   qualityScore?: number;
@@ -106,6 +111,22 @@ export interface AudioVersionMeta {
   format: string;
   sampleRate: number;
   hasTranscript: boolean;
+}
+
+export interface SocialVersionMeta {
+  platform: "linkedin" | "instagram" | "x" | "tiktok";
+  characterCount: number;
+  hashtagCount: number;
+  hasMedia: boolean;
+  format?: "text" | "carousel" | "thread" | "reel" | "story" | "poll";
+  slideCount?: number;
+}
+
+export interface NewsletterVersionMeta {
+  subject: string;
+  previewText: string;
+  wordCount: number;
+  sectionCount: number;
 }
 
 // ── Content Media ───────────────────────────────────────────────
@@ -165,7 +186,7 @@ export interface Competitor {
 }
 
 export interface ConnectorConfig {
-  type: "git" | "github" | "filesystem" | "api";
+  type: "git" | "github" | "filesystem" | "shopware" | "wordpress" | "api";
   git?: {
     repoUrl: string;
     branch: string;
@@ -243,6 +264,21 @@ export interface Topic {
   approvedAt?: string;
   rejectedAt?: string;
   rejectionReason?: string;
+
+  // Briefing extensions
+  inputs?: BriefingInput[];
+  outputIds?: string[];
+}
+
+export type BriefingInputType = "text" | "transcript" | "image" | "url" | "document";
+
+export interface BriefingInput {
+  id: string;
+  type: BriefingInputType;
+  content: string;
+  fileName?: string;
+  mimeType?: string;
+  createdAt: string;
 }
 
 
@@ -250,7 +286,7 @@ export interface PipelineRun {
   id: string;
   customerId: string;
   projectId: string;
-  type: "strategy" | "production" | "video_production" | "audio_production" | "social_production" | "update" | "translation";
+  type: "strategy" | "production" | "video_production" | "audio_production" | "social_production" | "email_production" | "update" | "translation";
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
   topicId?: string;
   phases: PipelinePhase[];

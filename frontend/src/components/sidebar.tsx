@@ -6,14 +6,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
-  FileText,
-  Share2,
+  Layers,
   Activity,
   Users,
   Cable,
   Settings,
   ChevronDown,
   Plus,
+  LayoutTemplate,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,14 +29,14 @@ import { CreateProjectWizard } from "@/components/create-project-wizard";
 
 const navItems = [
   { href: "/dashboard", label: "Plan", icon: CalendarDays },
-  { href: "/content", label: "Articles", icon: FileText },
-  { href: "/social", label: "Social Posts", icon: Share2 },
+  { href: "/briefings", label: "Briefings", icon: Layers },
   { href: "/monitor", label: "Monitor", icon: Activity },
   { href: "/team", label: "Team", icon: Users },
 ];
 
 const settingsItems = [
   { href: "/connectors", label: "Connectors", icon: Cable },
+  { href: "/settings/content-types", label: "Content Types", icon: LayoutTemplate },
   { href: "/settings", label: "Project", icon: Settings },
 ];
 

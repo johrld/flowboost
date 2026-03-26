@@ -252,7 +252,7 @@ export default function MonitorPage() {
                       {runTopics.map((topic) => (
                         <Link
                           key={topic.id}
-                          href={`/content/topics/${topic.id}`}
+                          href={`/briefings/${topic.id}`}
                           className="flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5 hover:bg-muted/50 transition-colors group"
                         >
                           <div className="flex items-center gap-2.5 min-w-0">

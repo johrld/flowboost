@@ -81,7 +81,7 @@ export interface Competitor {
 }
 
 export interface ConnectorConfig {
-  type: "git" | "github" | "filesystem" | "api";
+  type: "git" | "github" | "filesystem" | "shopware" | "wordpress" | "api";
   git?: {
     repoUrl: string;
     branch: string;
@@ -98,6 +98,16 @@ export interface ConnectorConfig {
   };
   filesystem?: {
     outputDir: string;
+  };
+  shopware?: {
+    shopUrl: string;
+    clientId: string;
+    clientSecret: string;
+  };
+  wordpress?: {
+    siteUrl: string;
+    username: string;
+    applicationPassword: string;
   };
 }
 
@@ -181,6 +191,25 @@ export interface Topic {
   approvedAt?: string;
   rejectedAt?: string;
   rejectionReason?: string;
+
+  // ── Briefing extensions ────────────────────────────────
+  // Inputs: source material (text, files, URLs, transcripts)
+  inputs?: BriefingInput[];
+  // Output references: ContentItem IDs produced from this briefing
+  outputIds?: string[];
+}
+
+// ─── Briefing Input ─────────────────────────────────────────
+
+export type BriefingInputType = "text" | "transcript" | "image" | "url" | "document";
+
+export interface BriefingInput {
+  id: string;
+  type: BriefingInputType;
+  content: string;              // Text content or relative file path
+  fileName?: string;
+  mimeType?: string;
+  createdAt: string;
 }
 
 // ─── Articles (V2 — kept for backward compat, use ContentItem for new code) ──
@@ -217,7 +246,8 @@ export type ContentType =
   | "landing_page"
   | "video"
   | "audio"
-  | "social_post";
+  | "social_post"
+  | "newsletter";
 
 export type ContentItemStatus =
   | "planned"
@@ -248,6 +278,7 @@ export interface ContentItem {
 
   // Links
   topicId?: string;
+  briefingId?: string;
   translationKey?: string;
   parentId?: string;
 
@@ -284,6 +315,11 @@ export interface ContentVersion {
   video?: VideoVersionMeta;
   audio?: AudioVersionMeta;
   social?: SocialVersionMeta;
+  newsletter?: NewsletterVersionMeta;
+
+  // Connector-specific data (for platforms with custom slot structures)
+  customFields?: Record<string, unknown>;
+  connectorSchemaId?: string;
 
   // Pipeline tracking
   pipelineRunId?: string;
@@ -330,10 +366,19 @@ export interface AudioVersionMeta {
 }
 
 export interface SocialVersionMeta {
-  platform: string;
+  platform: "linkedin" | "instagram" | "x" | "tiktok";
   characterCount: number;
   hashtagCount: number;
   hasMedia: boolean;
+  format?: "text" | "carousel" | "thread" | "reel" | "story" | "poll";
+  slideCount?: number;
+}
+
+export interface NewsletterVersionMeta {
+  subject: string;
+  previewText: string;
+  wordCount: number;
+  sectionCount: number;
 }
 
 // ─── Media Assets ───────────────────────────────────────────────
@@ -406,6 +451,7 @@ export type PipelineType =
   | "video_production"
   | "audio_production"
   | "social_production"
+  | "email_production"
   | "update"
   | "translation";
 export type RunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";

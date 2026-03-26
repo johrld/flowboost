@@ -1,7 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { runSimpleAgent } from "../../pipeline/engine.js";
 import { readChat, appendChat } from "../../models/chat.js";
-import type { ChatMessage, Topic } from "../../models/types.js";
+import { PipelineContext } from "../../pipeline/context.js";
+import { runProductionPipeline } from "../../pipeline/production/run.js";
+import { runSocialPipeline } from "../../pipeline/social/run.js";
+import { runEmailPipeline } from "../../pipeline/email/run.js";
+import type { ChatMessage, Topic, BriefingInputType } from "../../models/types.js";
 import { createLogger } from "../../utils/logger.js";
 
 const log = createLogger("topic-chat");
@@ -29,6 +33,21 @@ function buildSystemPrompt(topic: Topic): string {
   if (topic.competitorInsights) parts.push(`\n## Competitor Insights\n${topic.competitorInsights}`);
   if (topic.reasoning) parts.push(`\n## AI Analysis\n${topic.reasoning}`);
   if (topic.userNotes) parts.push(`\n## User Notes\n${topic.userNotes}`);
+
+  // Briefing Inputs — so the chat knows what the user uploaded
+  const inputs = topic.inputs ?? [];
+  if (inputs.length > 0) {
+    parts.push("\n## Briefing Inputs (uploaded by user)");
+    for (const input of inputs) {
+      if (input.type === "text" || input.type === "transcript") {
+        parts.push(`\n### ${input.type === "transcript" ? "Voice Memo Transcript" : "Note"}\n${input.content.slice(0, 2000)}`);
+      } else if (input.type === "url") {
+        parts.push(`- **URL:** ${input.content}`);
+      } else if (input.type === "image" || input.type === "document") {
+        parts.push(`- **File:** ${input.fileName ?? input.type} (${input.mimeType ?? "unknown"})`);
+      }
+    }
+  }
 
   parts.push(
     "",
@@ -347,6 +366,263 @@ export async function topicRoutes(app: FastifyInstance) {
 
       topics.update(topicId, safeUpdates);
       return { message: "Topic updated", topic: topics.get(topicId) };
+    },
+  );
+
+  // ── Briefing Input Endpoints ──────────────────────────────
+
+  // POST /topics/:topicId/inputs — Add text/URL input
+  app.post<{
+    Params: { customerId: string; projectId: string; topicId: string };
+    Body: { type: BriefingInputType; content: string; fileName?: string };
+  }>(
+    "/:topicId/inputs",
+    async (request, reply) => {
+      const { customerId, projectId, topicId } = request.params;
+      const { type, content, fileName } = (request.body ?? {}) as {
+        type?: BriefingInputType;
+        content?: string;
+        fileName?: string;
+      };
+
+      if (!type || !content?.trim()) {
+        return reply.status(400).send({ error: "type and content are required" });
+      }
+
+      const validTypes: BriefingInputType[] = ["text", "transcript", "image", "url", "document"];
+      if (!validTypes.includes(type)) {
+        return reply.status(400).send({ error: `Invalid input type. Must be one of: ${validTypes.join(", ")}` });
+      }
+
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const input = topics.addInput(topicId, { type, content: content.trim(), fileName });
+      if (!input) {
+        return reply.status(404).send({ error: "Topic not found" });
+      }
+
+      return reply.status(201).send(input);
+    },
+  );
+
+  // POST /topics/:topicId/inputs/upload — Upload file input
+  app.post<{
+    Params: { customerId: string; projectId: string; topicId: string };
+  }>(
+    "/:topicId/inputs/upload",
+    async (request, reply) => {
+      const { customerId, projectId, topicId } = request.params;
+
+      const file = await request.file();
+      if (!file) {
+        return reply.status(400).send({ error: "No file uploaded" });
+      }
+
+      const mimeType = file.mimetype;
+      const fileName = file.filename;
+
+      // Validate MIME type (allowlist)
+      const ALLOWED_MIMES = [
+        "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
+        "audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/webm", "audio/x-m4a",
+        "application/pdf",
+        "text/plain", "text/markdown", "text/csv",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ];
+      if (!ALLOWED_MIMES.some((m) => mimeType === m || (m.endsWith("/*") && mimeType.startsWith(m.replace("/*", "/"))))) {
+        return reply.status(400).send({ error: `File type not allowed: ${mimeType}` });
+      }
+
+      const buffer = await file.toBuffer();
+
+      // Determine input type from mime
+      let inputType: BriefingInputType = "document";
+      if (mimeType.startsWith("image/")) inputType = "image";
+      else if (mimeType.startsWith("audio/")) inputType = "transcript";
+
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const input = topics.addFileInput(topicId, { buffer, fileName, mimeType }, inputType);
+      if (!input) {
+        return reply.status(404).send({ error: "Topic not found" });
+      }
+
+      return reply.status(201).send(input);
+    },
+  );
+
+  // DELETE /topics/:topicId/inputs/:inputId — Remove input
+  app.delete<{
+    Params: { customerId: string; projectId: string; topicId: string; inputId: string };
+  }>(
+    "/:topicId/inputs/:inputId",
+    async (request, reply) => {
+      const { customerId, projectId, topicId, inputId } = request.params;
+      const topics = app.ctx.topicsFor(customerId, projectId);
+
+      const removed = topics.removeInput(topicId, inputId);
+      if (!removed) {
+        return reply.status(404).send({ error: "Topic or input not found" });
+      }
+
+      return { message: "Input removed" };
+    },
+  );
+
+  // GET /topics/:topicId/inputs/:inputId/file — Serve file input
+  app.get<{
+    Params: { customerId: string; projectId: string; topicId: string; inputId: string };
+  }>(
+    "/:topicId/inputs/:inputId/file",
+    async (request, reply) => {
+      const { customerId, projectId, topicId, inputId } = request.params;
+      const topics = app.ctx.topicsFor(customerId, projectId);
+
+      const filePath = topics.getInputFilePath(topicId, inputId);
+      if (!filePath) {
+        return reply.status(404).send({ error: "File not found" });
+      }
+
+      const topic = topics.get(topicId);
+      const input = (topic?.inputs ?? []).find((i) => i.id === inputId);
+      const mimeType = input?.mimeType ?? "application/octet-stream";
+
+      const fs = await import("node:fs");
+      const stream = fs.createReadStream(filePath);
+      return reply.type(mimeType).send(stream);
+    },
+  );
+
+  // ── Briefing Produce Endpoint ─────────────────────────────
+
+  // POST /topics/:topicId/produce — Create output from briefing
+  app.post<{
+    Params: { customerId: string; projectId: string; topicId: string };
+    Body: { type: string; platform?: string };
+  }>(
+    "/:topicId/produce",
+    async (request, reply) => {
+      const { customerId, projectId, topicId } = request.params;
+      const { type, platform } = (request.body ?? {}) as { type?: string; platform?: string };
+
+      if (!type) {
+        return reply.status(400).send({ error: "type is required (article, social_post, newsletter)" });
+      }
+
+      const validTypes = ["article", "guide", "social_post", "newsletter"] as const;
+      if (!validTypes.includes(type as typeof validTypes[number])) {
+        return reply.status(400).send({ error: `Invalid type. Must be one of: ${validTypes.join(", ")}` });
+      }
+
+      const validPlatforms = ["linkedin", "instagram", "x", "tiktok"] as const;
+      if (type === "social_post" && platform && !validPlatforms.includes(platform as typeof validPlatforms[number])) {
+        return reply.status(400).send({ error: `Invalid platform. Must be one of: ${validPlatforms.join(", ")}` });
+      }
+
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
+      if (!topic) {
+        return reply.status(404).send({ error: "Topic not found" });
+      }
+
+      const project = app.ctx.projectsFor(customerId).get(projectId);
+      if (!project) {
+        return reply.status(404).send({ error: "Project not found" });
+      }
+
+      // Create ContentItem linked to this briefing
+      const now = new Date().toISOString();
+      const contentItem = app.ctx.contentFor(customerId, projectId).create({
+        customerId,
+        projectId,
+        type: type as "article" | "social_post" | "newsletter",
+        status: "planned",
+        title: topic.title,
+        category: topic.category,
+        keywords: topic.keywords ? [topic.keywords.primary, ...topic.keywords.secondary] : undefined,
+        topicId,
+        briefingId: topicId,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // Add to briefing outputs
+      topics.addOutput(topicId, contentItem.id);
+
+      // Determine pipeline type and start asynchronously
+      const pipelineType = type === "social_post" ? "social_production" as const
+        : type === "newsletter" ? "email_production" as const
+        : "production" as const;
+
+      // Create pipeline run
+      const phases = type === "social_post"
+        ? [{ name: "generate", status: "pending" as const, agentCalls: [] }, { name: "image", status: "pending" as const, agentCalls: [] }]
+        : type === "newsletter"
+        ? [{ name: "generate", status: "pending" as const, agentCalls: [] }]
+        : [
+            { name: "outline", status: "pending" as const, agentCalls: [] },
+            { name: "writing", status: "pending" as const, agentCalls: [] },
+            { name: "assembly", status: "pending" as const, agentCalls: [] },
+            { name: "image", status: "pending" as const, agentCalls: [] },
+            { name: "quality", status: "pending" as const, agentCalls: [] },
+            { name: "translation", status: "pending" as const, agentCalls: [] },
+          ];
+
+      const run = app.ctx.pipelineRunsFor(customerId, projectId).create({
+        customerId,
+        projectId,
+        type: pipelineType,
+        status: "pending",
+        topicId,
+        phases,
+        totalCostUsd: 0,
+        totalTokens: { input: 0, output: 0 },
+        createdAt: now,
+      });
+
+      // Build pipeline context
+      const ctx = new PipelineContext(
+        customerId,
+        project,
+        run,
+        {
+          customers: app.ctx.customers,
+          projects: app.ctx.projectsFor(customerId),
+          articles: app.ctx.articlesFor(customerId, projectId),
+          content: app.ctx.contentFor(customerId, projectId),
+          pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
+          topics: app.ctx.topicsFor(customerId, projectId),
+        },
+        app.ctx.dataDir,
+        topic,
+      );
+
+      // Fire and forget — start the appropriate pipeline
+      if (type === "article" || type === "guide") {
+        // Mark topic as in production (required by production pipeline)
+        if (topic.status === "approved") {
+          topics.update(topicId, { status: "in_production" });
+        }
+        runProductionPipeline(ctx).catch((err) => {
+          log.error({ runId: run.id, err }, "production pipeline failed");
+        });
+      } else if (type === "social_post") {
+        runSocialPipeline(ctx, platform ?? "linkedin").catch((err) => {
+          log.error({ runId: run.id, err }, "social pipeline failed");
+        });
+      } else if (type === "newsletter") {
+        runEmailPipeline(ctx).catch((err) => {
+          log.error({ runId: run.id, err }, "email pipeline failed");
+        });
+      }
+
+      return reply.status(201).send({
+        message: `${type} pipeline started`,
+        contentItemId: contentItem.id,
+        briefingId: topicId,
+        runId: run.id,
+        type,
+        platform,
+      });
     },
   );
 }

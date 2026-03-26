@@ -3,6 +3,7 @@ import path from "node:path";
 import { createLogger } from "../../utils/logger.js";
 import { runAgentTracked, type AgentConfig } from "../engine.js";
 import type { PipelineContext } from "../context.js";
+import { ContentTypeStore } from "../../models/content-type.js";
 import { buildOutlineArchitectPrompt } from "../prompts/outline-architect.js";
 import { extractJson } from "../extract-json.js";
 
@@ -54,7 +55,12 @@ export async function runOutlinePhase(ctx: PipelineContext): Promise<Outline> {
       tools: ["Read", "Write", "mcp__flowboost__flowboost_read_project_data"],
     };
 
-    const prompt = buildOutlineArchitectPrompt(project, topic, scratchpadDir);
+    const briefingContext = ctx.buildFullBriefingContext();
+    // Load article guidelines from blog-post content type
+    const ctStore = new ContentTypeStore(ctx.projectDir);
+    const blogPostType = ctStore.get("blog-post");
+    const articleGuidelines = blogPostType?.agent?.guidelines;
+    const prompt = buildOutlineArchitectPrompt(project, topic, scratchpadDir, briefingContext, articleGuidelines);
     const result = await runAgentTracked(ctx, "outline", prompt, config);
 
     // Try reading from file first (agent may have written it), fallback to parsing output

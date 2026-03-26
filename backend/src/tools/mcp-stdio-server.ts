@@ -253,6 +253,89 @@ server.tool(
   },
 );
 
+// ── Tool 8: Validate Social Post ─────────────────────────────────
+
+const SOCIAL_SPECS: Record<string, { charLimit: number; hashtagLimit: number; mediaRequired: boolean }> = {
+  linkedin: { charLimit: 3000, hashtagLimit: 5, mediaRequired: false },
+  x: { charLimit: 280, hashtagLimit: 3, mediaRequired: false },
+  instagram: { charLimit: 2200, hashtagLimit: 30, mediaRequired: true },
+  tiktok: { charLimit: 4000, hashtagLimit: 5, mediaRequired: true },
+};
+
+server.tool(
+  "flowboost_validate_social_post",
+  "Validate a social media post against platform-specific rules (character limit, hashtag count, media requirements).",
+  {
+    platform: z.enum(["linkedin", "x", "instagram", "tiktok"]).describe("Target platform"),
+    text: z.string().describe("Post text content"),
+    hashtagCount: z.number().optional().describe("Number of hashtags"),
+    hasMedia: z.boolean().optional().describe("Whether the post includes media"),
+  },
+  async (args) => {
+    const spec = SOCIAL_SPECS[args.platform];
+    if (!spec) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: `Unknown platform: ${args.platform}` }) }] };
+    }
+
+    const issues: string[] = [];
+    const charCount = args.text.length;
+
+    if (charCount > spec.charLimit) {
+      issues.push(`Text exceeds ${args.platform} limit: ${charCount}/${spec.charLimit} characters`);
+    }
+    if (args.hashtagCount !== undefined && args.hashtagCount > spec.hashtagLimit) {
+      issues.push(`Too many hashtags: ${args.hashtagCount}/${spec.hashtagLimit}`);
+    }
+    if (spec.mediaRequired && !args.hasMedia) {
+      issues.push(`${args.platform} requires media (image or video)`);
+    }
+
+    const pass = issues.length === 0;
+    return {
+      content: [{
+        type: "text" as const,
+        text: JSON.stringify({ pass, platform: args.platform, charCount, charLimit: spec.charLimit, issues }),
+      }],
+    };
+  },
+);
+
+// ── Tool 9: Validate Newsletter ──────────────────────────────────
+
+server.tool(
+  "flowboost_validate_newsletter",
+  "Validate a newsletter structure (subject length, preview text, section count).",
+  {
+    subject: z.string().describe("Email subject line"),
+    previewText: z.string().optional().describe("Preview text shown in inbox"),
+    sectionCount: z.number().optional().describe("Number of content sections"),
+    wordCount: z.number().optional().describe("Total word count"),
+  },
+  async (args) => {
+    const issues: string[] = [];
+
+    if (args.subject.length < 10) issues.push("Subject too short (min 10 characters)");
+    if (args.subject.length > 80) issues.push(`Subject too long: ${args.subject.length}/80 characters`);
+    if (args.previewText && args.previewText.length > 150) {
+      issues.push(`Preview text too long: ${args.previewText.length}/150 characters`);
+    }
+    if (args.sectionCount !== undefined && args.sectionCount < 1) {
+      issues.push("Newsletter must have at least 1 section");
+    }
+    if (args.wordCount !== undefined && args.wordCount < 50) {
+      issues.push("Newsletter too short (min 50 words)");
+    }
+
+    const pass = issues.length === 0;
+    return {
+      content: [{
+        type: "text" as const,
+        text: JSON.stringify({ pass, subjectLength: args.subject.length, issues }),
+      }],
+    };
+  },
+);
+
 // ── Start server ─────────────────────────────────────────────────
 
 const transport = new StdioServerTransport();

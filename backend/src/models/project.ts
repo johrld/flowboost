@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { Store } from "./store.js";
 import type { Project, ContentPlan, ApiKeys } from "./types.js";
@@ -93,6 +94,7 @@ export class ProjectStore extends Store<Project> {
   getEffectiveStyleGuide(projectId: string, customers: CustomerStore, customerId: string): string | null {
     return this.getStyleGuide(projectId) ?? customers.getStyleGuide(customerId);
   }
+
 }
 
 export function createProjectStore(dataDir: string, customerId: string): ProjectStore {

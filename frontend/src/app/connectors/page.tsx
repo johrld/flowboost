@@ -42,6 +42,7 @@ import {
   Radio,
   Cable,
   Settings,
+  Download,
 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────
@@ -570,6 +571,37 @@ function ConnectorsPageContent() {
               </div>
             );
           })}
+          {/* Schema Import */}
+          {project?.connector?.type === "shopware" || project?.connector?.type === "wordpress" ? (
+            <div className="space-y-3 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Content Types</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Import content structures from your connected platform
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (!customerId || !projectId) return;
+                    try {
+                      const { importConnectorSchemas } = await import("@/lib/api");
+                      const result = await importConnectorSchemas(customerId, projectId);
+                      alert(`Imported ${result.types.length} content types`);
+                    } catch (err) {
+                      console.error("Schema import failed:", err);
+                      alert("Import failed — check connector credentials");
+                    }
+                  }}
+                >
+                  <Download className="mr-2 h-3.5 w-3.5" />
+                  Import Schemas
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </TabsContent>
 
         {/* ── Routing Tab ─────────────────────────────────────────── */}

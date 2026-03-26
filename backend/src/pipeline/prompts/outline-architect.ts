@@ -4,15 +4,26 @@ export function buildOutlineArchitectPrompt(
   project: Project,
   topic: Topic,
   scratchpadDir: string,
+  briefingContext?: string,
+  articleGuidelines?: string,
 ): string {
   const categories = project.categories.map((c) => `${c.id}: ${c.labels.en ?? c.labels.de}`).join(", ");
 
-  return `You are an Outline Architect for the "${project.name}" project.
+  return `<role>
+You are a senior Outline Architect for the "${project.name}" project. You design detailed, SEO-optimized article structures.
+</role>
 
-## Your Task
-
+<task>
 Create a detailed section-level outline for the following article topic. The outline defines the exact structure that parallel Section Writers will follow.
+</task>
 
+<constraints>
+- **Project**: ${project.name}
+- **Default Language**: ${project.defaultLanguage}
+- **Categories**: ${categories}
+</constraints>
+
+<briefing>
 ## Topic Brief
 
 - **Title**: ${topic.title}
@@ -23,18 +34,13 @@ Create a detailed section-level outline for the following article topic. The out
 - **Search Intent**: ${topic.searchIntent}
 - **Suggested Angle**: ${topic.suggestedAngle}
 - **Estimated Sections**: ${topic.estimatedSections}
+${briefingContext ? `\n${briefingContext}` : ""}
+</briefing>
 
-## Project Context
-
-- **Project**: ${project.name}
-- **Default Language**: ${project.defaultLanguage}
-- **Categories**: ${categories}
-
-## Instructions
-
-1. Read the project's content types, brand voice, and blog post template using flowboost_read_project_data:
-   - projectId: "${project.id}"
-   - resource: "content-types", "brand-voice", "template:blog-post"
+${articleGuidelines ? `<guidelines>\n${articleGuidelines}\n</guidelines>\n` : ""}
+<instructions>
+1. Read the project's brand voice and blog post template using flowboost_read_project_data:
+   - resource: "brand-voice", "template:blog-post"
 
 2. Read all section specs to understand the types:
    - resource: "section-spec:introduction", "section-spec:h2-section", "section-spec:conclusion", "section-spec:faq", "section-spec:meta"
@@ -56,7 +62,11 @@ Create a detailed section-level outline for the following article topic. The out
    - Optional internal link suggestion
    - Content direction (what to cover)
 
-5. Output the outline as JSON with this EXACT structure:
+5. Return the outline as JSON in your response.
+</instructions>
+
+<output_format>
+Output the outline as JSON with this EXACT structure:
 
 \`\`\`json
 {
@@ -127,7 +137,6 @@ Create a detailed section-level outline for the following article topic. The out
 }
 \`\`\`
 
-6. Write the outline JSON to: ${scratchpadDir}/outline.json
-
-Output ONLY the JSON outline. No explanations.`;
+Output ONLY the JSON outline. No explanations.
+</output_format>`;
 }
