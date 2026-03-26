@@ -701,7 +701,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
       {/* ── Source Detail Dialog ─────────────────────────── */}
       <Dialog open={!!selectedInputId} onOpenChange={(open) => { if (!open) { setSelectedInputId(null); setShowReanalyzeNote(false); setReanalyzeNote(""); } }}>
-        <DialogContent className="sm:max-w-3xl w-[95vw] max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[85vh] overflow-y-auto pt-10">
           {(() => {
             const input = inputs.find((i) => i.id === selectedInputId);
             if (!input?.processed) return null;
