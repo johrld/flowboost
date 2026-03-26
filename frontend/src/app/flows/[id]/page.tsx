@@ -424,40 +424,6 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           )}
 
-          {/* Chat Input — sticky bottom, only in Chat tab */}
-          {bottomTab === ("chat" as string) && (
-            <div className="sticky bottom-0 pt-4 pb-2 bg-background">
-              <div className="rounded-2xl border shadow-sm px-4 py-3">
-                <div className="flex gap-3 items-center">
-                  <Plus className="h-5 w-5 text-muted-foreground shrink-0" />
-                  <input
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
-                    placeholder={`Message in ${topic.title.slice(0, 30)}...`}
-                    disabled={sending}
-                    className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="shrink-0 p-1.5 rounded-lg hover:bg-muted text-muted-foreground"
-                    title="Attach file"
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSendChat}
-                    disabled={!chatInput.trim() || sending}
-                    className="shrink-0 p-1.5 rounded-lg bg-foreground text-background disabled:opacity-30"
-                  >
-                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* ── Sources Tab ───────────────────────── */}
           {bottomTab === "sources" && (
@@ -695,6 +661,43 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Fixed Chat Input (only in Chat tab) ──────────── */}
+      {bottomTab === ("chat" as string) && (
+        <div className="fixed bottom-0 left-64 right-0 z-20 p-4 bg-background/95 backdrop-blur-sm">
+          <div className="max-w-3xl mx-auto">
+            <div className="rounded-2xl border shadow-sm px-4 py-3 bg-background">
+              <div className="flex gap-3 items-center">
+                <Plus className="h-5 w-5 text-muted-foreground shrink-0" />
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+                  placeholder={`Message in ${topic.title.slice(0, 30)}...`}
+                  disabled={sending}
+                  className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="shrink-0 p-1.5 rounded-lg hover:bg-muted text-muted-foreground"
+                  title="Attach file"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendChat}
+                  disabled={!chatInput.trim() || sending}
+                  className="shrink-0 p-1.5 rounded-lg bg-foreground text-background disabled:opacity-30"
+                >
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Source Detail Dialog ─────────────────────────── */}
       <Dialog open={!!selectedInputId} onOpenChange={(open) => { if (!open) { setSelectedInputId(null); setShowReanalyzeNote(false); setReanalyzeNote(""); } }}>
