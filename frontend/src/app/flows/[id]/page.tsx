@@ -37,6 +37,7 @@ import {
   MessageCircle,
   Pencil,
   Trash2,
+  MoreHorizontal,
   ArrowUp,
   Bot,
   User,
@@ -499,14 +500,26 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                               {isFailed ? "Retry" : "Analyze"}
                             </button>
                           )}
-                          {hasSummary && <Search className="h-3.5 w-3.5 text-muted-foreground" />}
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); handleDeleteInput(input.id); }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {hasSummary && (
+                                <DropdownMenuItem onClick={() => setSelectedInputId(input.id)}>
+                                  <Search className="mr-2 h-3.5 w-3.5" />View Summary
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={() => handleReanalyze(input.id)}>
+                                <ArrowUp className="mr-2 h-3.5 w-3.5" />Refine
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteInput(input.id)}>
+                                <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     );
