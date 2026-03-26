@@ -56,12 +56,18 @@ export function Sidebar() {
 
   useEffect(() => { loadFlows(); }, [loadFlows]);
 
-  // Reload flows when navigating back to flows
+  // Reload flows on navigation and custom events
   useEffect(() => {
     if (pathname === "/flows" || pathname.startsWith("/flows/")) {
       loadFlows();
     }
   }, [pathname, loadFlows]);
+
+  useEffect(() => {
+    const handler = () => loadFlows();
+    window.addEventListener("flows-updated", handler);
+    return () => window.removeEventListener("flows-updated", handler);
+  }, [loadFlows]);
 
   const handleNewFlow = async () => {
     if (!customerId || !projectId || creatingFlow) return;
@@ -169,8 +175,8 @@ export function Sidebar() {
               >
                 <span className="flex-1 truncate">{flow.title}</span>
                 {outputCount > 0 && (
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {"●".repeat(Math.min(outputCount, 5))}
+                  <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+                    {outputCount}
                   </span>
                 )}
               </Link>

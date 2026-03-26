@@ -331,6 +331,8 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
       await updateTopic(customerId, projectId, id, { title: titleDraft.trim() });
       setTopic((t) => t ? { ...t, title: titleDraft.trim() } : t);
       setEditingTitle(false);
+      // Notify sidebar to refresh
+      window.dispatchEvent(new Event("flows-updated"));
     } catch (err) {
       console.error("Failed to update title:", err);
     }
@@ -480,19 +482,19 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 chatMessages.map((msg, i) => (
                   msg.role === "user" ? (
                     /* User: right-aligned bubble */
-                    <div key={i} className="flex justify-end group/msg">
+                    <div key={i} className="flex justify-end group">
                       <div className="max-w-[80%]">
                         <div className="bg-muted rounded-2xl rounded-br-sm px-4 py-2.5">
                           <p className="text-sm">{msg.content}</p>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1 text-right opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                        <p className="text-xs text-muted-foreground mt-1 text-right opacity-0 group-hover:opacity-100 transition-opacity">
                           {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
                         </p>
                       </div>
                     </div>
                   ) : (
                     /* AI: left-aligned, no bubble */
-                    <div key={i} className="flex gap-3 group/msg">
+                    <div key={i} className="flex gap-3 group">
                       <div className="shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center bg-muted mt-0.5">
                         <Bot className="h-3.5 w-3.5" />
                       </div>
@@ -500,7 +502,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                         <div className="text-sm prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-3 prose-blockquote:my-2 prose-a:text-primary">
                           <ReactMarkdown>{msg.content}</ReactMarkdown>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                        <p className="text-xs text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
                         </p>
                       </div>
