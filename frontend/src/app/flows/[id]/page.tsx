@@ -39,6 +39,7 @@ import {
   Trash2,
   MoreHorizontal,
   ArrowUp,
+  RefreshCw,
   Bot,
   User,
   X,
@@ -597,7 +598,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuItem onClick={() => handleReanalyze(input.id)}>
-                                <ArrowUp className="mr-2 h-3.5 w-3.5" />Refine
+                                <RefreshCw className="mr-2 h-3.5 w-3.5" />Refine
                               </DropdownMenuItem>
                               <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteInput(input.id)}>
                                 <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
