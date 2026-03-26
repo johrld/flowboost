@@ -478,6 +478,10 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                             {isCompleted && <span className="text-xs text-emerald-500">Analyzed</span>}
                             {isFailed && <span className="text-xs text-destructive">Failed</span>}
                           </div>
+                          <p className="text-xs text-muted-foreground">
+                            {INPUT_LABELS[input.type] ?? input.type}
+                            {input.createdAt && ` · ${formatDistanceToNow(new Date(input.createdAt), { addSuffix: true })}`}
+                          </p>
                           {input.type === "url" && (
                             <a href={input.content} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                               {input.content.replace(/^https?:\/\//, "").slice(0, 50)}
