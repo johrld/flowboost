@@ -678,55 +678,77 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
             const p = input.processed;
             return (
               <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    {INPUT_ICONS[input.type]}
-                    {input.fileName ?? INPUT_LABELS[input.type] ?? input.type}
-                  </DialogTitle>
+                {/* Header Card */}
+                <div className="rounded-xl bg-muted/50 p-4 space-y-1.5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-background flex items-center justify-center text-muted-foreground shadow-sm">
+                      {INPUT_ICONS[input.type]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{input.fileName ?? INPUT_LABELS[input.type] ?? input.type}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {INPUT_LABELS[input.type] ?? input.type}
+                        {input.createdAt && ` · ${formatDistanceToNow(new Date(input.createdAt), { addSuffix: true })}`}
+                        {p.status === "completed" && " · Analyzed"}
+                      </p>
+                    </div>
+                  </div>
                   {input.type === "url" && (
-                    <a href={input.content} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                    <a href={input.content} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 ml-[52px]">
                       {input.content} <ExternalLink className="h-2.5 w-2.5" />
                     </a>
                   )}
-                </DialogHeader>
+                </div>
+
                 <div className="space-y-4">
+                  {/* Summary */}
                   {p.summary && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Summary</h4>
+                    <div className="rounded-xl bg-muted/30 p-4">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Summary</h4>
                       <p className="text-sm leading-relaxed">{p.summary}</p>
                     </div>
                   )}
+
+                  {/* Description */}
                   {p.description && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Description</h4>
+                    <div className="rounded-xl bg-muted/30 p-4">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Description</h4>
                       <p className="text-sm leading-relaxed">{p.description}</p>
                     </div>
                   )}
+
+                  {/* Key Points */}
                   {p.keyPoints && p.keyPoints.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Key Points</h4>
-                      <ul className="text-sm space-y-1">
+                    <div className="rounded-xl bg-muted/30 p-4">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Key Points</h4>
+                      <ul className="text-sm space-y-1.5">
                         {p.keyPoints.map((point, i) => (
-                          <li key={i} className="flex gap-2"><span className="text-muted-foreground shrink-0">-</span><span>{point}</span></li>
+                          <li key={i} className="flex gap-2"><span className="text-muted-foreground shrink-0">•</span><span>{point}</span></li>
                         ))}
                       </ul>
                     </div>
                   )}
+
+                  {/* Transcript */}
                   {p.transcript && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Transcript</h4>
+                    <div className="rounded-xl bg-muted/30 p-4">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Transcript</h4>
                       <p className="text-sm text-muted-foreground whitespace-pre-wrap">{p.transcript.slice(0, 2000)}</p>
                     </div>
                   )}
+
+                  {/* Extracted Text */}
                   {p.extractedText && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Extracted Text</h4>
+                    <div className="rounded-xl bg-muted/30 p-4">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Extracted Text</h4>
                       <p className="text-xs text-muted-foreground font-mono whitespace-pre-wrap">{p.extractedText.slice(0, 1000)}</p>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 pt-2 border-t">
-                    <Button variant="outline" size="sm" onClick={() => { handleReanalyze(input.id); }}>Refine</Button>
-                    <Button variant="outline" size="sm" onClick={() => setShowReanalyzeNote(!showReanalyzeNote)}>Refine with note</Button>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 pt-2">
+                    <Button variant="outline" size="sm" className="rounded-full" onClick={() => { handleReanalyze(input.id); }}>Refine</Button>
+                    <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowReanalyzeNote(!showReanalyzeNote)}>Refine with note</Button>
                   </div>
                   {showReanalyzeNote && (
                     <div className="flex gap-2">
