@@ -397,7 +397,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* ── Chat Tab ──────────────────────────── */}
           {bottomTab === ("chat" as string) && (
-            <div className="space-y-4">
+            <div className="space-y-4 pb-20">
               {chatMessages.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-10 text-center">
                   <MessageCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
@@ -707,10 +707,11 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   disabled={!chatInput.trim() || sending}
                   className="shrink-0 p-1.5 rounded-lg bg-foreground text-background disabled:opacity-30"
                 >
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+                  <ArrowUp className="h-4 w-4" />
                 </button>
               </div>
             </div>
+            <div className="h-2" /> {/* spacing so content isn't hidden behind fixed input */}
           </div>
         </div>
       )}
