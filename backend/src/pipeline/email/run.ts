@@ -1,16 +1,19 @@
 import { createLogger } from "../../utils/logger.js";
 import type { PipelineContext } from "../context.js";
 import type { ContentItemStatus, NewsletterVersionMeta } from "../../models/types.js";
+import { ContentTypeStore } from "../../models/content-type.js";
 import { runAgentTracked, type AgentConfig } from "../engine.js";
-import { buildNewsletterWriterPrompt } from "../prompts/newsletter-writer.js";
+import { buildContentWriterPrompt } from "../prompts/content-writer.js";
 import { extractJson } from "../extract-json.js";
 
 const log = createLogger("email-production");
 
 interface NewsletterOutput {
   subject: string;
-  previewText: string;
-  sections: Array<{ heading: string; body: string }>;
+  preview?: string;
+  previewText?: string;
+  body?: string;
+  sections?: Array<{ heading: string; body: string }>;
   cta?: { text: string; buttonLabel: string; url: string };
 }
 
@@ -19,8 +22,8 @@ interface NewsletterOutput {
  *
  * Flow: Generate → Quality Check
  *
- * Similar to social pipeline — a single agent call produces
- * the complete newsletter structure.
+ * Uses the generic content writer prompt builder driven by
+ * the newsletter content type.
  */
 export async function runEmailPipeline(ctx: PipelineContext): Promise<void> {
   const { project, topic } = ctx;
@@ -31,6 +34,15 @@ export async function runEmailPipeline(ctx: PipelineContext): Promise<void> {
   ctx.updateRun({ status: "running", startedAt: new Date().toISOString() });
   log.info({ topic: topic.title, runId: ctx.run.id }, "starting email pipeline");
 
+  // ── Load content type ────────────────────────────────────
+  const ctStore = new ContentTypeStore(ctx.projectDir);
+  const contentType = ctStore.get("newsletter");
+  if (!contentType) {
+    const msg = "Content type not found: newsletter";
+    ctx.updateRun({ status: "failed", error: msg, completedAt: new Date().toISOString() });
+    throw new Error(msg);
+  }
+
   // ── Phase 1: Generate ─────────────────────────────────────
   ctx.startPhase("generate");
 
@@ -38,10 +50,7 @@ export async function runEmailPipeline(ctx: PipelineContext): Promise<void> {
 
   try {
     const briefingContext = ctx.buildFullBriefingContext();
-    const prompt = buildNewsletterWriterPrompt(project, topic, {
-      inputs: (topic.inputs ?? []).filter((i) => i.type === "text" || i.type === "transcript").map((i) => i.content),
-      researchAngle: topic.suggestedAngle,
-    }) + (briefingContext ? `\n${briefingContext}` : "");
+    const prompt = buildContentWriterPrompt(contentType, project, topic, briefingContext);
 
     const config: AgentConfig = {
       name: "newsletter-writer",
@@ -57,7 +66,7 @@ export async function runEmailPipeline(ctx: PipelineContext): Promise<void> {
     ctx.completePhase("generate");
     log.info({
       subject: output.subject,
-      sections: output.sections.length,
+      sections: output.sections?.length ?? 0,
     }, "newsletter generated");
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -78,15 +87,16 @@ export async function runEmailPipeline(ctx: PipelineContext): Promise<void> {
   );
 
   if (contentItem) {
-    const totalWords = output.sections.reduce(
-      (sum, s) => sum + s.body.split(/\s+/).length, 0,
-    );
+    const previewText = output.preview ?? output.previewText ?? "";
+    const totalWords = output.sections
+      ? output.sections.reduce((sum, s) => sum + s.body.split(/\s+/).length, 0)
+      : output.body ? output.body.split(/\s+/).length : 0;
 
     const newsletterMeta: NewsletterVersionMeta = {
       subject: output.subject,
-      previewText: output.previewText,
+      previewText,
       wordCount: totalWords,
-      sectionCount: output.sections.length,
+      sectionCount: output.sections?.length ?? 1,
     };
 
     const version = ctx.stores.content.createVersion(contentItem.id, {
@@ -95,7 +105,7 @@ export async function runEmailPipeline(ctx: PipelineContext): Promise<void> {
         lang: project.defaultLanguage,
         slug: topic.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60),
         title: output.subject,
-        description: output.previewText,
+        description: previewText,
         contentPath: "",
         wordCount: totalWords,
       }],

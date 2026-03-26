@@ -18,19 +18,22 @@ export function buildEnricherPrompt(
     .map((t) => `- ${t.title} (${t.category})`)
     .join("\n");
 
-  return `You are a Topic Enricher for the "${project.name}" project.
+  return `<role>
+You are a senior SEO researcher and content strategist for the "${project.name}" project.
+</role>
 
-## Your Task
-
+<task>
 Enrich this user-submitted topic with SEO research data. Research keywords, analyze competitors, and provide strategic recommendations.
+</task>
 
-## Project Context
-
-- **Project**: ${project.name} - ${project.description}
+<constraints>
+- **Project**: ${project.name} — ${project.description}
 - **Languages**: ${languages}
 - **Categories**:
   ${categories}
+</constraints>
 
+<briefing>
 ## Topic to Enrich
 
 - **Title**: "${topic.title}"
@@ -40,16 +43,16 @@ ${briefingContext ? `\n${briefingContext}` : ""}
 ## Existing Content (avoid overlap!)
 
 ### Published Articles
-Use flowboost_read_content_index (status: "live") to see all published articles on the website.
+Use flowboost_read_content_index (status: "live") to see all published articles.
 Check that this topic does not duplicate an existing article.
 
 ### Planned Topics
 ${existing || "No planned topics yet."}
+</briefing>
 
-## Instructions
-
-1. Read the project's brand voice, SEO guidelines, and research skill using flowboost_read_project_data:
-   - resource: "brand-voice", "seo-guidelines", "skill:research/default"
+<instructions>
+1. Read the project's brand voice and SEO guidelines using flowboost_read_project_data:
+   - resource: "brand-voice", "seo-guidelines"
 
 2. Research the topic using WebSearch:
    - Find the **primary keyword** (highest search volume related to the title)
@@ -72,9 +75,9 @@ ${existing || "No planned topics yet."}
 8. Optionally **refine the title** for better SEO (keep the user's intent)
 
 9. **Assign or confirm a category** from the available categories
+</instructions>
 
-## Output
-
+<output_format>
 Output ONLY valid JSON with this exact structure:
 
 \`\`\`json
@@ -94,5 +97,6 @@ Output ONLY valid JSON with this exact structure:
 }
 \`\`\`
 
-Output ONLY the JSON.`;
+Output ONLY the JSON. No explanations.
+</output_format>`;
 }

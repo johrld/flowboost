@@ -39,6 +39,13 @@ export interface CustomFieldDefinition {
   };
 }
 
+export interface ContentTypeAgent {
+  /** Agent role/identity — injected as first line of system prompt */
+  role: string;
+  /** Markdown guidelines — tone, structure, do/don'ts, examples */
+  guidelines: string;
+}
+
 export interface CustomContentType {
   id: string;
   projectId: string;
@@ -50,6 +57,7 @@ export interface CustomContentType {
   connectorRef?: string;
   icon?: string;
   fields: CustomFieldDefinition[];
+  agent?: ContentTypeAgent;
   createdAt: string;
   updatedAt: string;
 }

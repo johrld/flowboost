@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -19,6 +20,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -92,6 +99,8 @@ export default function ContentTypesPage() {
   const [editorCategory, setEditorCategory] = useState<string>("site");
   const [editorDescription, setEditorDescription] = useState("");
   const [editorFields, setEditorFields] = useState<FieldDraft[]>([]);
+  const [editorAgentRole, setEditorAgentRole] = useState("");
+  const [editorAgentGuidelines, setEditorAgentGuidelines] = useState("");
   const [saving, setSaving] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -120,12 +129,16 @@ export default function ContentTypesPage() {
         type: f.type,
         required: f.required,
       })));
+      setEditorAgentRole(ct.agent?.role ?? "");
+      setEditorAgentGuidelines(ct.agent?.guidelines ?? "");
     } else {
       setEditingType(null);
       setEditorLabel("");
       setEditorCategory("site");
       setEditorDescription("");
       setEditorFields([{ id: "", label: "", type: "short-text", required: true }]);
+      setEditorAgentRole("");
+      setEditorAgentGuidelines("");
     }
     setShowEditor(true);
   };
@@ -162,12 +175,17 @@ export default function ContentTypesPage() {
           sortOrder: i,
         }));
 
+      const agent = editorAgentRole.trim() || editorAgentGuidelines.trim()
+        ? { role: editorAgentRole.trim(), guidelines: editorAgentGuidelines.trim() }
+        : undefined;
+
       if (editingType) {
         await updateContentType(customerId, projectId, editingType.id, {
           label: editorLabel,
           description: editorDescription || undefined,
           category: editorCategory as ContentTypeDefinition["category"],
           fields,
+          agent,
         });
       } else {
         await createContentType(customerId, projectId, {
@@ -175,6 +193,7 @@ export default function ContentTypesPage() {
           description: editorDescription || undefined,
           category: editorCategory,
           fields,
+          agent,
         });
       }
       setShowEditor(false);
@@ -227,13 +246,16 @@ export default function ContentTypesPage() {
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Built-in</h2>
           <div className="space-y-2">
             {builtinTypes.map((ct) => (
-              <div key={ct.id} className="flex items-center gap-3 rounded-lg border p-3">
+              <div key={ct.id} className="flex items-center gap-3 rounded-lg border p-3 group">
                 <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category]}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{ct.label}</p>
-                  <p className="text-xs text-muted-foreground">{ct.fields.length} fields · {ct.category}</p>
+                  <p className="text-xs text-muted-foreground">{ct.fields.length} fields · {ct.category}{ct.agent ? " · Agent configured" : ""}</p>
                 </div>
                 <Badge variant="secondary" className="text-xs">Built-in</Badge>
+                <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100" onClick={() => openEditor(ct)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
               </div>
             ))}
           </div>
@@ -328,50 +350,81 @@ export default function ContentTypesPage() {
               <Input value={editorDescription} onChange={(e) => setEditorDescription(e.target.value)} placeholder="What is this content type for?" />
             </div>
 
-            {/* Fields */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Fields</Label>
-                <Button variant="ghost" size="sm" onClick={addField}>
-                  <Plus className="mr-1 h-3 w-3" />
-                  Add Field
-                </Button>
-              </div>
+            <Tabs defaultValue="fields" className="w-full">
+              <TabsList className="w-full">
+                <TabsTrigger value="fields" className="flex-1">Fields</TabsTrigger>
+                <TabsTrigger value="agent" className="flex-1">Agent</TabsTrigger>
+              </TabsList>
 
-              <div className="space-y-2">
-                {editorFields.map((field, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded border p-2">
-                    <Input
-                      value={field.label}
-                      onChange={(e) => updateField(i, { label: e.target.value })}
-                      placeholder="Field name"
-                      className="flex-1 h-8 text-sm"
-                    />
-                    <Select value={field.type} onValueChange={(v) => updateField(i, { type: v })}>
-                      <SelectTrigger className="w-32 h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FIELD_TYPES.map((ft) => (
-                          <SelectItem key={ft.value} value={ft.value}>{ft.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant={field.required ? "default" : "outline"}
-                      size="sm"
-                      className="h-8 text-xs shrink-0"
-                      onClick={() => updateField(i, { required: !field.required })}
-                    >
-                      {field.required ? "Required" : "Optional"}
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeField(i)} disabled={editorFields.length <= 1}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
+              <TabsContent value="fields" className="space-y-2 mt-3">
+                <div className="flex items-center justify-between">
+                  <Label>Fields</Label>
+                  <Button variant="ghost" size="sm" onClick={addField}>
+                    <Plus className="mr-1 h-3 w-3" />
+                    Add Field
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {editorFields.map((field, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded border p-2">
+                      <Input
+                        value={field.label}
+                        onChange={(e) => updateField(i, { label: e.target.value })}
+                        placeholder="Field name"
+                        className="flex-1 h-8 text-sm"
+                      />
+                      <Select value={field.type} onValueChange={(v) => updateField(i, { type: v })}>
+                        <SelectTrigger className="w-32 h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FIELD_TYPES.map((ft) => (
+                            <SelectItem key={ft.value} value={ft.value}>{ft.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant={field.required ? "default" : "outline"}
+                        size="sm"
+                        className="h-8 text-xs shrink-0"
+                        onClick={() => updateField(i, { required: !field.required })}
+                      >
+                        {field.required ? "Required" : "Optional"}
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeField(i)} disabled={editorFields.length <= 1}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="agent" className="space-y-4 mt-3">
+                <p className="text-xs text-muted-foreground">
+                  Configure how the AI agent behaves when creating this content type.
+                </p>
+                <div className="space-y-2">
+                  <Label>Agent Role</Label>
+                  <Input
+                    value={editorAgentRole}
+                    onChange={(e) => setEditorAgentRole(e.target.value)}
+                    placeholder="e.g. You are a senior LinkedIn content strategist..."
+                  />
+                  <p className="text-xs text-muted-foreground">First line of the agent prompt. Defines identity and expertise.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Guidelines (Markdown)</Label>
+                  <Textarea
+                    value={editorAgentGuidelines}
+                    onChange={(e) => setEditorAgentGuidelines(e.target.value)}
+                    className="min-h-[250px] font-mono text-sm"
+                    placeholder={"## Tone & Voice\n\n- Professional but approachable\n\n## Structure\n\n- Hook in first line\n- ..."}
+                  />
+                  <p className="text-xs text-muted-foreground">Tone, structure, do/don&apos;ts, examples. Injected into the agent prompt.</p>
+                </div>
+              </TabsContent>
+            </Tabs>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowEditor(false)}>Cancel</Button>

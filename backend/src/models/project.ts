@@ -95,45 +95,6 @@ export class ProjectStore extends Store<Project> {
     return this.getStyleGuide(projectId) ?? customers.getStyleGuide(customerId);
   }
 
-  // ── Agent Skills ──────────────────────────────────────
-
-  /** Read a skill file (e.g. category="social", name="linkedin") */
-  getSkill(projectId: string, category: string, name: string): string | null {
-    return this.readTextFile(projectId, `skills/${category}/${name}.md`);
-  }
-
-  /** List skill names in a category */
-  listSkillCategories(projectId: string): string[] {
-    const dir = path.join(this.entityDir(projectId), "skills");
-    if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name);
-  }
-
-  /** List skills in a category */
-  listSkills(projectId: string, category: string): string[] {
-    const dir = path.join(this.entityDir(projectId), "skills", category);
-    if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir)
-      .filter((f) => f.endsWith(".md"))
-      .map((f) => f.replace(".md", ""));
-  }
-
-  /** Save/update a skill file */
-  saveSkill(projectId: string, category: string, name: string, content: string): void {
-    const dir = path.join(this.entityDir(projectId), "skills", category);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, `${name}.md`), content, "utf-8");
-  }
-
-  /** Delete a skill file */
-  deleteSkill(projectId: string, category: string, name: string): boolean {
-    const filePath = path.join(this.entityDir(projectId), "skills", category, `${name}.md`);
-    if (!fs.existsSync(filePath)) return false;
-    fs.unlinkSync(filePath);
-    return true;
-  }
 }
 
 export function createProjectStore(dataDir: string, customerId: string): ProjectStore {

@@ -79,16 +79,24 @@ export async function contentTypeRoutes(app: FastifyInstance) {
       if (!existing) {
         return reply.status(404).send({ error: "Content type not found" });
       }
-      if (existing.source === "builtin") {
-        return reply.status(403).send({ error: "Cannot modify built-in content types" });
-      }
 
       const body = request.body as Partial<CustomContentType>;
+
+      // Built-in types: only allow agent config changes
+      if (existing.source === "builtin") {
+        if (body.label || body.description || body.category || body.fields) {
+          return reply.status(403).send({ error: "Cannot modify fields/metadata of built-in content types. Only agent configuration can be changed." });
+        }
+        const updated = store.update(typeId, { agent: body.agent });
+        return updated;
+      }
+
       const updated = store.update(typeId, {
         label: body.label,
         description: body.description,
         category: body.category,
         fields: body.fields,
+        agent: body.agent,
       });
 
       return updated;

@@ -90,7 +90,7 @@ Generate → Image (planned, not yet implemented)
 | **Generate** | Social Writer | project default | Read, MCP: read_project_data | Post text, hashtags, format, image prompt |
 | **Image** | (Imagen 4) | — | — | Social media image (planned, currently skipped) |
 
-The Social Writer prompt is **platform-aware** — it knows each platform's character limits, hashtag rules, media requirements, and best practices. Platform specs are defined in `pipeline/prompts/social-writer.ts`.
+The Social Writer uses the generic `content-writer.ts` prompt builder with platform-specific content type definitions (e.g. `linkedin-post.json`). Each content type defines agent role, guidelines, and field constraints.
 
 Supported platforms: `linkedin` (3000 chars), `x` (280 chars), `instagram` (2200 chars, image required), `tiktok` (4000 chars, video required).
 
@@ -176,8 +176,7 @@ All agent prompts are in `pipeline/prompts/`:
 | `reviewer.ts` | Content/Brand Reviewer | Production Pipeline (Quality) |
 | `translator.ts` | Translator | Production Pipeline |
 | `enricher.ts` | Topic Enricher | Enrich Pipeline |
-| `social-writer.ts` | Social Writer | Social Pipeline |
-| `newsletter-writer.ts` | Newsletter Writer | Email Pipeline |
+| `content-writer.ts` | Generic Content Writer | Social + Email + Custom Pipelines |
 
 ## Monitoring
 

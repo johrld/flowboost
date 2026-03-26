@@ -42,9 +42,8 @@ export class PipelineContext {
     return `\n## Briefing Inputs\n${textInputs.join("\n\n")}`;
   }
 
-  /** Build full briefing context including inputs, research, chat, and notes */
+  /** Build full briefing context including inputs, chat, and notes */
   buildFullBriefingContext(options?: {
-    includeResearch?: boolean;
     includeChat?: boolean;
     maxInputChars?: number;
     maxChatMessages?: number;

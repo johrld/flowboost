@@ -1,27 +1,38 @@
 import { createLogger } from "../../utils/logger.js";
 import type { PipelineContext } from "../context.js";
 import type { ContentItemStatus, SocialVersionMeta } from "../../models/types.js";
+import { ContentTypeStore } from "../../models/content-type.js";
 import { runAgentTracked, type AgentConfig } from "../engine.js";
-import { buildSocialWriterPrompt } from "../prompts/social-writer.js";
+import { buildContentWriterPrompt } from "../prompts/content-writer.js";
 import { extractJson } from "../extract-json.js";
 
 const log = createLogger("social-production");
 
 interface SocialOutput {
-  text: string;
+  text?: string;
+  caption?: string;
   hashtags: string[];
-  format: string;
-  imagePrompt?: string | null;
+  format?: string;
+  image?: string | null;
   slides?: string[] | null;
+  [key: string]: unknown;
 }
+
+/** Map platform name to content type ID */
+const PLATFORM_CONTENT_TYPE: Record<string, string> = {
+  linkedin: "linkedin-post",
+  instagram: "instagram-post",
+  x: "x-post",
+  tiktok: "tiktok-post",
+};
 
 /**
  * Run the social post production pipeline.
  *
- * Flow: Generate → (optional) Image → Quality Check
+ * Flow: Generate → (optional) Image
  *
- * Much simpler than article production — a single agent call
- * produces the entire post.
+ * Uses the generic content writer prompt builder driven by
+ * the platform's content type (e.g. linkedin-post.json).
  */
 export async function runSocialPipeline(
   ctx: PipelineContext,
@@ -35,6 +46,16 @@ export async function runSocialPipeline(
   ctx.updateRun({ status: "running", startedAt: new Date().toISOString() });
   log.info({ topic: topic.title, platform, runId: ctx.run.id }, "starting social pipeline");
 
+  // ── Load content type ────────────────────────────────────
+  const ctStore = new ContentTypeStore(ctx.projectDir);
+  const contentTypeId = PLATFORM_CONTENT_TYPE[platform] ?? "linkedin-post";
+  const contentType = ctStore.get(contentTypeId);
+  if (!contentType) {
+    const msg = `Content type not found: ${contentTypeId}`;
+    ctx.updateRun({ status: "failed", error: msg, completedAt: new Date().toISOString() });
+    throw new Error(msg);
+  }
+
   // ── Phase 1: Generate ─────────────────────────────────────
   ctx.startPhase("generate");
 
@@ -42,10 +63,7 @@ export async function runSocialPipeline(
 
   try {
     const briefingContext = ctx.buildFullBriefingContext();
-    const prompt = buildSocialWriterPrompt(project, topic, platform, {
-      inputs: (topic.inputs ?? []).filter((i) => i.type === "text" || i.type === "transcript").map((i) => i.content),
-      researchAngle: topic.suggestedAngle,
-    }) + (briefingContext ? `\n${briefingContext}` : "");
+    const prompt = buildContentWriterPrompt(contentType, project, topic, briefingContext);
 
     const config: AgentConfig = {
       name: `social-writer-${platform}`,
@@ -59,10 +77,11 @@ export async function runSocialPipeline(
     socialOutput = extractJson<SocialOutput>(result.text);
 
     ctx.completePhase("generate");
+    const postText = socialOutput.text ?? socialOutput.caption ?? "";
     log.info({
       platform,
-      textLength: socialOutput.text.length,
-      hashtags: socialOutput.hashtags.length,
+      textLength: postText.length,
+      hashtags: socialOutput.hashtags?.length ?? 0,
       format: socialOutput.format,
     }, "social post generated");
   } catch (error) {
@@ -73,11 +92,11 @@ export async function runSocialPipeline(
   }
 
   // ── Phase 2: Image (optional, non-fatal) ──────────────────
-  if (socialOutput.imagePrompt) {
+  const imagePrompt = socialOutput.image;
+  if (imagePrompt) {
     ctx.startPhase("image");
     try {
       // Image generation would go here — skip for now, mark as completed
-      // Future: call Imagen API with socialOutput.imagePrompt
       ctx.completePhase("image");
       log.info("image phase skipped (not yet implemented for social)");
     } catch (error) {
@@ -88,8 +107,8 @@ export async function runSocialPipeline(
 
   // ── Create ContentVersion ─────────────────────────────────
   const now = new Date().toISOString();
+  const postText = socialOutput.text ?? socialOutput.caption ?? "";
 
-  // Find the ContentItem that was created for this run
   const outputIds = topic.outputIds ?? [];
   const contentItems = outputIds
     .map((id) => ctx.stores.content.get(id))
@@ -102,9 +121,9 @@ export async function runSocialPipeline(
   if (contentItem) {
     const socialMeta: SocialVersionMeta = {
       platform: platform as SocialVersionMeta["platform"],
-      characterCount: socialOutput.text.length,
-      hashtagCount: socialOutput.hashtags.length,
-      hasMedia: !!socialOutput.imagePrompt,
+      characterCount: postText.length,
+      hashtagCount: socialOutput.hashtags?.length ?? 0,
+      hasMedia: !!imagePrompt,
       format: socialOutput.format as SocialVersionMeta["format"],
       slideCount: socialOutput.slides?.length,
     };
@@ -115,9 +134,9 @@ export async function runSocialPipeline(
         lang: project.defaultLanguage,
         slug: topic.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60),
         title: topic.title,
-        description: socialOutput.text.slice(0, 160),
+        description: postText.slice(0, 160),
         contentPath: "",
-        wordCount: socialOutput.text.split(/\s+/).length,
+        wordCount: postText.split(/\s+/).length,
       }],
       assets: [],
       social: socialMeta,
@@ -126,23 +145,18 @@ export async function runSocialPipeline(
       createdBy: "pipeline",
     });
 
-    // Save the post text as a file
+    // Save the post as a file
     const versionDir = ctx.stores.content.getVersionDir(contentItem.id, version.id);
     const fs = await import("node:fs");
     const path = await import("node:path");
     const contentDir = path.join(versionDir, "content", project.defaultLanguage);
     fs.mkdirSync(contentDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(contentDir, "post.json"),
+      JSON.stringify(socialOutput, null, 2),
+      "utf-8",
+    );
 
-    const postContent = JSON.stringify({
-      text: socialOutput.text,
-      hashtags: socialOutput.hashtags,
-      format: socialOutput.format,
-      slides: socialOutput.slides,
-      imagePrompt: socialOutput.imagePrompt,
-    }, null, 2);
-    fs.writeFileSync(path.join(contentDir, "post.json"), postContent, "utf-8");
-
-    // Update content item status
     const status: ContentItemStatus = "draft";
     ctx.stores.content.update(contentItem.id, {
       status,
