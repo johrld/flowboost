@@ -434,6 +434,18 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
           {/* ── Sources Tab ───────────────────────── */}
           {bottomTab === "sources" && (
             <div className="space-y-3">
+              {/* + Add Source link (only when sources exist) */}
+              {inputs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddSource(true)}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Source
+                </button>
+              )}
+
               {inputs.length > 0 && (
                 <div className="space-y-1">
                   {inputs.map((input) => {
@@ -494,25 +506,27 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               )}
 
-              {/* Add Source Area */}
-              <div
-                className={`rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
-                  isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/15"
-                }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <div className="flex items-center justify-center gap-2 mb-3 text-muted-foreground/30">
-                  <Upload className="h-5 w-5" />
-                  <Paperclip className="h-5 w-5" />
+              {/* Empty state: big drop zone (only when no sources yet) */}
+              {inputs.length === 0 && (
+                <div
+                  className={`rounded-xl border-2 border-dashed p-14 text-center transition-colors ${
+                    isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/15"
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <div className="flex items-center justify-center gap-2 mb-3 text-muted-foreground/30">
+                    <Upload className="h-5 w-5" />
+                    <Paperclip className="h-5 w-5" />
+                  </div>
+                  <p className="text-sm font-medium mb-1">Add context for your content</p>
+                  <p className="text-xs text-muted-foreground mb-5">Upload files, paste URLs, or add notes to help the AI understand what you need.</p>
+                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowAddSource(true)}>
+                    Add Source
+                  </Button>
                 </div>
-                <p className="text-sm font-medium mb-1">Add more context</p>
-                <p className="text-xs text-muted-foreground mb-4">Drop files here or add sources to help the AI understand your content.</p>
-                <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowAddSource(true)}>
-                  Add Source
-                </Button>
-              </div>
+              )}
             </div>
           )}
 
