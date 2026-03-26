@@ -194,14 +194,14 @@ export function Sidebar() {
 
             if (isRenaming) {
               return (
-                <div key={flow.id} className="px-3 py-1">
+                <div key={flow.id} className="rounded-md bg-sidebar-accent px-3 py-1.5">
                   <input
                     value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}
                     onBlur={() => handleRenameFlow(flow.id)}
                     onKeyDown={(e) => { if (e.key === "Enter") handleRenameFlow(flow.id); if (e.key === "Escape") setRenamingId(null); }}
                     autoFocus
-                    className="w-full text-sm bg-transparent outline-none border-b border-primary py-0.5"
+                    className="w-full text-sm bg-transparent outline-none caret-primary"
                   />
                 </div>
               );
