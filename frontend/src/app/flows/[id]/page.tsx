@@ -302,22 +302,16 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="h-screen overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
-
-        {/* ── Flow Title + Create ───────────────────────── */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{topic.title}</h1>
-            {topic.suggestedAngle && (
-              <p className="text-sm text-muted-foreground mt-1">{topic.suggestedAngle}</p>
-            )}
-          </div>
+      {/* ── Sticky Header ─────────────────────────────── */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b">
+        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+          <h1 className="text-lg font-semibold truncate">{topic.title}</h1>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
+              <Button size="sm">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Create
-                <ChevronDown className="ml-2 h-3.5 w-3.5" />
+                <ChevronDown className="ml-1.5 h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -340,10 +334,13 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      </div>
 
-        {/* ── Chat Input (top, like ChatGPT) ────────────── */}
-        <div className="rounded-xl border bg-background shadow-sm p-4">
-          <div className="flex gap-2">
+      <div className="max-w-3xl mx-auto px-6 py-6 space-y-6">
+
+        {/* ── Chat Input (like ChatGPT) ─────────────────── */}
+        <div className="rounded-xl border bg-background shadow-sm p-3">
+          <div className="flex gap-2 items-center">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -367,7 +364,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
               disabled={sending}
               className="flex-1 border-0 shadow-none focus-visible:ring-0 px-0"
             />
-            <Button size="icon" variant="ghost" onClick={handleSendChat} disabled={!chatInput.trim() || sending}>
+            <Button size="icon" variant="ghost" className="shrink-0" onClick={handleSendChat} disabled={!chatInput.trim() || sending}>
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
             </Button>
           </div>
