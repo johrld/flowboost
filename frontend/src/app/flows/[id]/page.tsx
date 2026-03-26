@@ -392,7 +392,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   onClick={() => setBottomTab(tab)}
                   className={`px-4 py-1.5 text-sm font-medium rounded-full border transition-colors ${
                     isActive
-                      ? "bg-foreground text-background border-foreground"
+                      ? "bg-muted text-foreground border-border"
                       : "text-muted-foreground border-transparent hover:text-foreground"
                   }`}
                 >
@@ -433,13 +433,13 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* ── Sources Tab ───────────────────────── */}
           {bottomTab === "sources" && (
-            <div className="space-y-3">
-              {/* + Add Source link (only when sources exist) */}
+            <div>
+              {/* + Add Source as first row (only when sources exist) */}
               {inputs.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setShowAddSource(true)}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b"
                 >
                   <Plus className="h-4 w-4" />
                   Add Source
@@ -447,7 +447,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
               )}
 
               {inputs.length > 0 && (
-                <div className="space-y-1">
+                <div className="divide-y">
                   {inputs.map((input) => {
                     const status = input.processed?.status;
                     const isProcessing = status === "processing";
@@ -459,7 +459,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     return (
                       <div
                         key={input.id}
-                        className={`flex items-center gap-3 rounded-lg p-3 group transition-colors ${hasSummary ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30"}`}
+                        className={`flex items-center gap-3 py-3 group transition-colors ${hasSummary ? "cursor-pointer hover:bg-muted/30" : "hover:bg-muted/20"}`}
                         onClick={() => hasSummary && setSelectedInputId(input.id)}
                       >
                         <span className="text-muted-foreground shrink-0">{INPUT_ICONS[input.type] ?? <FileText className="h-4 w-4" />}</span>
