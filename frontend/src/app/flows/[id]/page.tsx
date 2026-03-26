@@ -183,10 +183,14 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
     return () => clearInterval(interval);
   }, [topic?.inputs, outputs, loadData]);
 
-  // Auto-scroll chat
+  // Auto-scroll chat only when new messages arrive (not on initial load)
+  const prevMsgCount = useRef(chatMessages.length);
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
+    if (chatMessages.length > prevMsgCount.current) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+    prevMsgCount.current = chatMessages.length;
+  }, [chatMessages.length]);
 
   // ── Handlers ──────────────────────────────────────────────
 
@@ -417,9 +421,13 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 ))
               )}
               <div ref={chatEndRef} />
+            </div>
+          )}
 
-              {/* Chat Input — bottom of chat tab */}
-              <div className="rounded-2xl border shadow-sm px-4 py-3 mt-4">
+          {/* Chat Input — sticky bottom, only in Chat tab */}
+          {bottomTab === ("chat" as string) && (
+            <div className="sticky bottom-0 pt-4 pb-2 bg-background">
+              <div className="rounded-2xl border shadow-sm px-4 py-3">
                 <div className="flex gap-3 items-center">
                   <Plus className="h-5 w-5 text-muted-foreground shrink-0" />
                   <input
