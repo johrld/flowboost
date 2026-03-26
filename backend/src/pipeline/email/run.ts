@@ -37,19 +37,16 @@ export async function runEmailPipeline(ctx: PipelineContext): Promise<void> {
   let output: NewsletterOutput;
 
   try {
-    const briefingInputs = (topic.inputs ?? [])
-      .filter((i) => i.type === "text" || i.type === "transcript")
-      .map((i) => i.content);
-
+    const briefingContext = ctx.buildFullBriefingContext();
     const prompt = buildNewsletterWriterPrompt(project, topic, {
-      inputs: briefingInputs,
+      inputs: (topic.inputs ?? []).filter((i) => i.type === "text" || i.type === "transcript").map((i) => i.content),
       researchAngle: topic.suggestedAngle,
-    });
+    }) + (briefingContext ? `\n${briefingContext}` : "");
 
     const config: AgentConfig = {
       name: "newsletter-writer",
       model,
-      maxTurns: 3,
+      maxTurns: 5,
       useMcpTools: true,
       tools: ["Read", "mcp__flowboost__flowboost_read_project_data"],
     };

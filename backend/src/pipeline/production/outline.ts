@@ -54,7 +54,8 @@ export async function runOutlinePhase(ctx: PipelineContext): Promise<Outline> {
       tools: ["Read", "Write", "mcp__flowboost__flowboost_read_project_data"],
     };
 
-    const prompt = buildOutlineArchitectPrompt(project, topic, scratchpadDir);
+    const briefingContext = ctx.buildFullBriefingContext();
+    const prompt = buildOutlineArchitectPrompt(project, topic, scratchpadDir, briefingContext);
     const result = await runAgentTracked(ctx, "outline", prompt, config);
 
     // Try reading from file first (agent may have written it), fallback to parsing output

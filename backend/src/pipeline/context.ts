@@ -2,8 +2,10 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
 import { simpleGit } from "simple-git";
-import type { Project, PipelineRun, Topic } from "../models/types.js";
+import type { Project, PipelineRun, Topic, ChatMessage } from "../models/types.js";
 import type { ConnectorSchema } from "../connectors/site/types.js";
+import { readChat } from "../models/chat.js";
+import { buildBriefingContext } from "./briefing-context.js";
 import type { CustomerStore } from "../models/customer.js";
 import type { ProjectStore } from "../models/project.js";
 import type { ArticleStore } from "../models/article.js";
@@ -38,6 +40,25 @@ export class PipelineContext {
       .map((i) => `[${i.type}]: ${i.content}`);
     if (textInputs.length === 0) return "";
     return `\n## Briefing Inputs\n${textInputs.join("\n\n")}`;
+  }
+
+  /** Build full briefing context including inputs, research, chat, and notes */
+  buildFullBriefingContext(options?: {
+    includeResearch?: boolean;
+    includeChat?: boolean;
+    maxInputChars?: number;
+    maxChatMessages?: number;
+  }): string {
+    if (!this.topic) return "";
+    // Load chat from disk
+    let chatMessages: ChatMessage[] = [];
+    try {
+      const topicDir = this.stores.topics.entityDir(this.topic.id);
+      chatMessages = readChat(topicDir);
+    } catch {
+      // No chat available
+    }
+    return buildBriefingContext(this.topic, chatMessages, options);
   }
 
   /** Build a prompt context string from connector schema slots */

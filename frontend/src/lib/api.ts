@@ -344,6 +344,54 @@ export function importConnectorSchemas(
   });
 }
 
+// ── Agent Skills ────────────────────────────────────────────────
+
+export function getSkillCategories(
+  customerId: string,
+  projectId: string,
+): Promise<{ categories: string[] }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/skills`);
+}
+
+export function getSkillsInCategory(
+  customerId: string,
+  projectId: string,
+  category: string,
+): Promise<{ category: string; skills: string[] }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/skills/${category}`);
+}
+
+export function getSkill(
+  customerId: string,
+  projectId: string,
+  category: string,
+  name: string,
+): Promise<{ category: string; name: string; content: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/skills/${category}/${name}`);
+}
+
+export function updateSkill(
+  customerId: string,
+  projectId: string,
+  category: string,
+  name: string,
+  content: string,
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/skills/${category}/${name}`, {
+    method: "PUT",
+    body: JSON.stringify({ content }),
+  });
+}
+
+export function resetSkills(
+  customerId: string,
+  projectId: string,
+): Promise<{ message: string; copied: number }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/skills/reset`, {
+    method: "POST",
+  });
+}
+
 // ── Pipeline ──────────────────────────────────────────────────────
 
 export function getPipelineRuns(customerId: string, projectId: string): Promise<PipelineRun[]> {

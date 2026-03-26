@@ -4,6 +4,7 @@ export function buildOutlineArchitectPrompt(
   project: Project,
   topic: Topic,
   scratchpadDir: string,
+  briefingContext?: string,
 ): string {
   const categories = project.categories.map((c) => `${c.id}: ${c.labels.en ?? c.labels.de}`).join(", ");
 
@@ -29,12 +30,11 @@ Create a detailed section-level outline for the following article topic. The out
 - **Project**: ${project.name}
 - **Default Language**: ${project.defaultLanguage}
 - **Categories**: ${categories}
-
+${briefingContext ? `\n${briefingContext}\n` : ""}
 ## Instructions
 
-1. Read the project's content types, brand voice, and blog post template using flowboost_read_project_data:
-   - projectId: "${project.id}"
-   - resource: "content-types", "brand-voice", "template:blog-post"
+1. Read the project's content types, brand voice, article skill, and blog post template using flowboost_read_project_data:
+   - resource: "content-types", "brand-voice", "skill:article/default", "template:blog-post"
 
 2. Read all section specs to understand the types:
    - resource: "section-spec:introduction", "section-spec:h2-section", "section-spec:conclusion", "section-spec:faq", "section-spec:meta"

@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Plus,
   LayoutTemplate,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const navItems = [
 const settingsItems = [
   { href: "/connectors", label: "Connectors", icon: Cable },
   { href: "/settings/content-types", label: "Content Types", icon: LayoutTemplate },
+  { href: "/settings/skills", label: "Agent Skills", icon: Sparkles },
   { href: "/settings", label: "Project", icon: Settings },
 ];
 

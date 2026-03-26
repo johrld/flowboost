@@ -41,20 +41,16 @@ export async function runSocialPipeline(
   let socialOutput: SocialOutput;
 
   try {
-    // Build context from briefing inputs
-    const briefingInputs = (topic.inputs ?? [])
-      .filter((i) => i.type === "text" || i.type === "transcript")
-      .map((i) => i.content);
-
+    const briefingContext = ctx.buildFullBriefingContext();
     const prompt = buildSocialWriterPrompt(project, topic, platform, {
-      inputs: briefingInputs,
+      inputs: (topic.inputs ?? []).filter((i) => i.type === "text" || i.type === "transcript").map((i) => i.content),
       researchAngle: topic.suggestedAngle,
-    });
+    }) + (briefingContext ? `\n${briefingContext}` : "");
 
     const config: AgentConfig = {
       name: `social-writer-${platform}`,
       model,
-      maxTurns: 3,
+      maxTurns: 5,
       useMcpTools: true,
       tools: ["Read", "mcp__flowboost__flowboost_read_project_data"],
     };

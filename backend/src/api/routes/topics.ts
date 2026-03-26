@@ -34,6 +34,21 @@ function buildSystemPrompt(topic: Topic): string {
   if (topic.reasoning) parts.push(`\n## AI Analysis\n${topic.reasoning}`);
   if (topic.userNotes) parts.push(`\n## User Notes\n${topic.userNotes}`);
 
+  // Briefing Inputs — so the chat knows what the user uploaded
+  const inputs = topic.inputs ?? [];
+  if (inputs.length > 0) {
+    parts.push("\n## Briefing Inputs (uploaded by user)");
+    for (const input of inputs) {
+      if (input.type === "text" || input.type === "transcript") {
+        parts.push(`\n### ${input.type === "transcript" ? "Voice Memo Transcript" : "Note"}\n${input.content.slice(0, 2000)}`);
+      } else if (input.type === "url") {
+        parts.push(`- **URL:** ${input.content}`);
+      } else if (input.type === "image" || input.type === "document") {
+        parts.push(`- **File:** ${input.fileName ?? input.type} (${input.mimeType ?? "unknown"})`);
+      }
+    }
+  }
+
   parts.push(
     "",
     "## Your Role",

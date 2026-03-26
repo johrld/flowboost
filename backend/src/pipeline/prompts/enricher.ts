@@ -4,6 +4,7 @@ export function buildEnricherPrompt(
   project: Project,
   topic: Topic,
   existingTopics: Topic[],
+  briefingContext?: string,
 ): string {
   const categories = project.categories
     .map((c) => `${c.id}: ${c.labels.en ?? c.labels.de}`)
@@ -35,7 +36,7 @@ Enrich this user-submitted topic with SEO research data. Research keywords, anal
 - **Title**: "${topic.title}"
 - **Category**: "${topic.category || "not specified"}"
 - **User Notes**: "${topic.userNotes || "none"}"
-
+${briefingContext ? `\n${briefingContext}` : ""}
 ## Existing Content (avoid overlap!)
 
 ### Published Articles
@@ -47,9 +48,8 @@ ${existing || "No planned topics yet."}
 
 ## Instructions
 
-1. Read the project's brand voice and SEO guidelines using flowboost_read_project_data:
-   - projectId: "${project.id}"
-   - resource: "brand-voice", "seo-guidelines"
+1. Read the project's brand voice, SEO guidelines, and research skill using flowboost_read_project_data:
+   - resource: "brand-voice", "seo-guidelines", "skill:research/default"
 
 2. Research the topic using WebSearch:
    - Find the **primary keyword** (highest search volume related to the title)

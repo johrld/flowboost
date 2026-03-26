@@ -116,9 +116,9 @@ server.tool(
 
 server.tool(
   "flowboost_read_project_data",
-  "Read project configuration, brand voice, style guide, SEO guidelines, templates, section specs, or other project resources. Brand voice and style guide use fallback: project-level > customer-level.",
+  "Read project configuration, brand voice, style guide, SEO guidelines, templates, section specs, agent skills, or other project resources. Brand voice and style guide use fallback: project-level > customer-level.",
   {
-    resource: z.string().describe("Resource to read: project, brand-voice, style-guide, seo-guidelines, content-types, content-plan, template:<name>, section-spec:<name>"),
+    resource: z.string().describe("Resource to read: project, brand-voice, style-guide, seo-guidelines, content-types, content-plan, template:<name>, section-spec:<name>, skill:<category/name> (e.g. skill:social/linkedin)"),
   },
   async (args) => {
     if (!projectDir) {
@@ -143,6 +143,8 @@ server.tool(
       filePath = path.join(projectDir, "templates", `${resource.slice(9)}.md`);
     } else if (resource.startsWith("section-spec:")) {
       filePath = path.join(projectDir, "section-specs", `${resource.slice(13)}.md`);
+    } else if (resource.startsWith("skill:")) {
+      filePath = path.join(projectDir, "skills", `${resource.slice(6)}.md`);
     } else if (fallbackResources.includes(resource)) {
       // Try project-level first, then customer-level
       const fileName = `${resource}.md`;
