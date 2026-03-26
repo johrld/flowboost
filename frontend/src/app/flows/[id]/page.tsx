@@ -58,6 +58,7 @@ import {
   getContent,
   getContentTypes,
   reprocessFlowInput,
+  updateTopic,
   type ContentTypeDefinition,
 } from "@/lib/api";
 import type { Topic, FlowInput, ChatMessage, ContentItem } from "@/lib/types";
@@ -186,6 +187,8 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const [selectedInputId, setSelectedInputId] = useState<string | null>(null);
   const [reanalyzeNote, setReanalyzeNote] = useState("");
   const [showReanalyzeNote, setShowReanalyzeNote] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -322,6 +325,17 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
   // ── Drag & Drop ───────────────────────────────────────────
 
+  const handleSaveTitle = async () => {
+    if (!titleDraft.trim() || !customerId || !projectId) return;
+    try {
+      await updateTopic(customerId, projectId, id, { title: titleDraft.trim() });
+      setTopic((t) => t ? { ...t, title: titleDraft.trim() } : t);
+      setEditingTitle(false);
+    } catch (err) {
+      console.error("Failed to update title:", err);
+    }
+  };
+
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);
   const handleDrop = (e: React.DragEvent) => {
@@ -377,7 +391,23 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
         {/* ── Flow Title ────────────────────────────────── */}
         <div className="flex items-start justify-between pt-8 pb-6">
-          <h1 className="text-2xl font-semibold">{topic.title}</h1>
+          {editingTitle ? (
+            <input
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={handleSaveTitle}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSaveTitle(); if (e.key === "Escape") setEditingTitle(false); }}
+              autoFocus
+              className="text-2xl font-semibold bg-transparent outline-none border-b-2 border-primary w-full"
+            />
+          ) : (
+            <h1
+              className="text-2xl font-semibold cursor-text hover:text-muted-foreground transition-colors"
+              onClick={() => { setTitleDraft(topic.title); setEditingTitle(true); }}
+            >
+              {topic.title}
+            </h1>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="shrink-0 ml-4">
