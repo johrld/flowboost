@@ -62,6 +62,7 @@ import {
 } from "@/lib/api";
 import type { Topic, FlowInput, ChatMessage, ContentItem } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
+import ReactMarkdown from "react-markdown";
 
 // ── Icons & Config ────────────────────────────────────────────
 
@@ -447,19 +448,34 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               ) : (
                 chatMessages.map((msg, i) => (
-                  <div key={i} className="flex gap-3">
-                    <div className={`shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center ${
-                      msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-                    }`}>
-                      {msg.role === "user" ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+                  msg.role === "user" ? (
+                    /* User: right-aligned bubble */
+                    <div key={i} className="flex justify-end">
+                      <div className="max-w-[80%]">
+                        <div className="bg-muted rounded-2xl rounded-br-sm px-4 py-2.5">
+                          <p className="text-sm">{msg.content}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 text-right">
+                          {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
-                      </p>
+                  ) : (
+                    /* AI: left-aligned, no bubble */
+                    <div key={i} className="flex gap-3">
+                      <div className="shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center bg-muted mt-0.5">
+                        <Bot className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-3 prose-blockquote:my-2 prose-a:text-primary">
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  )
                 ))
               )}
               {sending && <ThinkingIndicator />}
