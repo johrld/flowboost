@@ -17,7 +17,7 @@ services:
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-6101}}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:${PORT:-6100}/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${PORT:-6100}/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -40,7 +40,7 @@ services:
       - api
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:6001"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:6001"]
       interval: 30s
       timeout: 5s
       retries: 3
