@@ -765,7 +765,7 @@ function AssignDialog({
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" asChild>
-                  <Link href="/briefings">View Briefings</Link>
+                  <Link href="/flows">View Flows</Link>
                 </Button>
                 <Button variant="outline" size="sm" asChild>
                   <Link href="/connectors">Configure Connectors</Link>

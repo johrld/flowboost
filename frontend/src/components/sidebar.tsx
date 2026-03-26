@@ -29,7 +29,7 @@ import { CreateProjectWizard } from "@/components/create-project-wizard";
 
 const navItems = [
   { href: "/dashboard", label: "Plan", icon: CalendarDays },
-  { href: "/briefings", label: "Briefings", icon: Layers },
+  { href: "/flows", label: "Flows", icon: Layers },
   { href: "/monitor", label: "Monitor", icon: Activity },
   { href: "/team", label: "Team", icon: Users },
 ];
