@@ -307,7 +307,25 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const inputs = topic.inputs ?? [];
 
   return (
-    <div className="h-screen overflow-y-auto">
+    <div
+      className="h-screen overflow-y-auto relative"
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setIsDragging(false); }}
+      onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFileUpload(e.dataTransfer.files); }}
+    >
+      {/* Fullscreen drag overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center pointer-events-none">
+          <div className="flex items-center gap-4 mb-4 text-muted-foreground/50">
+            <FileText className="h-8 w-8" />
+            <ImageIcon className="h-8 w-8" />
+            <Paperclip className="h-8 w-8" />
+          </div>
+          <p className="text-lg font-medium">Drop files to add as source</p>
+          <p className="text-sm text-muted-foreground mt-1">Documents, images, and more</p>
+        </div>
+      )}
+
       <div className="max-w-3xl mx-auto px-6">
 
         {/* ── Flow Title ────────────────────────────────── */}
@@ -342,43 +360,13 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
           </DropdownMenu>
         </div>
 
-        {/* ── Chat Input (like ChatGPT) ─────────────────── */}
-        <div className="rounded-2xl border shadow-sm px-4 py-3 mb-8">
-          <div className="flex gap-3 items-center">
-            <Plus className="h-5 w-5 text-muted-foreground shrink-0" />
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              multiple
-              onChange={(e) => { handleFileUpload(e.target.files); e.target.value = ""; }}
-            />
-            <input
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
-              placeholder={`Message in ${topic.title.slice(0, 30)}...`}
-              disabled={sending}
-              className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="shrink-0 p-1.5 rounded-lg hover:bg-muted text-muted-foreground"
-              title="Attach file"
-            >
-              <Paperclip className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleSendChat}
-              disabled={!chatInput.trim() || sending}
-              className="shrink-0 p-1.5 rounded-lg bg-foreground text-background disabled:opacity-30"
-            >
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-            </button>
-          </div>
-        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          multiple
+          onChange={(e) => { handleFileUpload(e.target.files); e.target.value = ""; }}
+        />
 
         {/* ── Tabs: Chat | Sources | Content ────────────── */}
         <div className="pb-12">
@@ -409,7 +397,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
               {chatMessages.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-10 text-center">
                   <MessageCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">No messages yet. Start a conversation above.</p>
+                  <p className="text-sm text-muted-foreground">No messages yet. Start a conversation below.</p>
                 </div>
               ) : (
                 chatMessages.map((msg, i) => (
@@ -429,6 +417,37 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 ))
               )}
               <div ref={chatEndRef} />
+
+              {/* Chat Input — bottom of chat tab */}
+              <div className="rounded-2xl border shadow-sm px-4 py-3 mt-4">
+                <div className="flex gap-3 items-center">
+                  <Plus className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+                    placeholder={`Message in ${topic.title.slice(0, 30)}...`}
+                    disabled={sending}
+                    className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="shrink-0 p-1.5 rounded-lg hover:bg-muted text-muted-foreground"
+                    title="Attach file"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendChat}
+                    disabled={!chatInput.trim() || sending}
+                    className="shrink-0 p-1.5 rounded-lg bg-foreground text-background disabled:opacity-30"
+                  >
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
