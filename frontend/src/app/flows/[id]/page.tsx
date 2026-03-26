@@ -462,7 +462,8 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     return (
                       <div
                         key={input.id}
-                        className="flex items-center gap-3 py-3 group transition-colors hover:bg-muted/20"
+                        className="flex items-center gap-3 py-3 group transition-colors hover:bg-muted/20 cursor-pointer"
+                        onClick={() => hasSummary && setSelectedInputId(input.id)}
                       >
                         <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
                           {INPUT_ICONS[input.type] ?? <FileText className="h-4 w-4" />}
