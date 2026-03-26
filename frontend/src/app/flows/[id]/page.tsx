@@ -462,8 +462,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     return (
                       <div
                         key={input.id}
-                        className={`flex items-center gap-3 py-3 group transition-colors ${hasSummary ? "cursor-pointer hover:bg-muted/30" : "hover:bg-muted/20"}`}
-                        onClick={() => hasSummary && setSelectedInputId(input.id)}
+                        className="flex items-center gap-3 py-3 group transition-colors hover:bg-muted/20"
                       >
                         <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
                           {INPUT_ICONS[input.type] ?? <FileText className="h-4 w-4" />}
@@ -502,7 +501,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                           )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button type="button" onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button type="button" onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground">
                                 <MoreHorizontal className="h-4 w-4" />
                               </button>
                             </DropdownMenuTrigger>
