@@ -678,8 +678,8 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
             const p = input.processed;
             return (
               <>
-                {/* Header Card */}
-                <div className="rounded-xl bg-muted/50 p-4 space-y-1.5">
+                {/* Header Card + Actions */}
+                <div className="rounded-xl bg-muted/50 p-4 space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-background flex items-center justify-center text-muted-foreground shadow-sm">
                       {INPUT_ICONS[input.type]}
@@ -692,11 +692,28 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                         {p.status === "completed" && " · Analyzed"}
                       </p>
                     </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={() => { handleReanalyze(input.id); }}>Refine</Button>
+                      <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={() => setShowReanalyzeNote(!showReanalyzeNote)}>Refine with note</Button>
+                    </div>
                   </div>
                   {input.type === "url" && (
                     <a href={input.content} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1 ml-[52px]">
                       {input.content} <ExternalLink className="h-2.5 w-2.5" />
                     </a>
+                  )}
+                  {showReanalyzeNote && (
+                    <div className="flex gap-2 ml-[52px]">
+                      <Input
+                        value={reanalyzeNote}
+                        onChange={(e) => setReanalyzeNote(e.target.value)}
+                        placeholder="Focus on..."
+                        className="text-sm"
+                        autoFocus
+                        onKeyDown={(e) => { if (e.key === "Enter" && reanalyzeNote.trim()) handleReanalyze(input.id, reanalyzeNote); }}
+                      />
+                      <Button size="sm" onClick={() => reanalyzeNote.trim() && handleReanalyze(input.id, reanalyzeNote)}>Go</Button>
+                    </div>
                   )}
                 </div>
 
@@ -745,23 +762,6 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     </div>
                   )}
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 pt-2">
-                    <Button variant="outline" size="sm" className="rounded-full" onClick={() => { handleReanalyze(input.id); }}>Refine</Button>
-                    <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowReanalyzeNote(!showReanalyzeNote)}>Refine with note</Button>
-                  </div>
-                  {showReanalyzeNote && (
-                    <div className="flex gap-2">
-                      <Input
-                        value={reanalyzeNote}
-                        onChange={(e) => setReanalyzeNote(e.target.value)}
-                        placeholder="Focus on..."
-                        className="text-sm"
-                        onKeyDown={(e) => { if (e.key === "Enter" && reanalyzeNote.trim()) handleReanalyze(input.id, reanalyzeNote); }}
-                      />
-                      <Button size="sm" onClick={() => reanalyzeNote.trim() && handleReanalyze(input.id, reanalyzeNote)}>Go</Button>
-                    </div>
-                  )}
                 </div>
               </>
             );
