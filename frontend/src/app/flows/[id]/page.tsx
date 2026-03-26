@@ -132,7 +132,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [bottomTab, setBottomTab] = useState<"sources" | "content">("sources");
+  const [bottomTab, setBottomTab] = useState<"chat" | "sources" | "content">("sources");
   const [isDragging, setIsDragging] = useState(false);
   const [addingInput, setAddingInput] = useState(false);
   const [sourceText, setSourceText] = useState("");
@@ -301,81 +301,49 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const inputs = topic.inputs ?? [];
 
   return (
-    <div className="flex flex-col h-screen">
-      {/* ── Header ──────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-6 py-3 border-b shrink-0">
-        <div className="flex items-center gap-3">
-          <Link href="/flows" className="text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <h1 className="text-lg font-semibold">{topic.title}</h1>
-          {topic.status && (
-            <Badge variant="secondary" className="text-xs capitalize">{topic.status.replace("_", " ")}</Badge>
-          )}
-        </div>
+    <div className="h-screen overflow-y-auto">
+      <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
 
-        {/* Create Button */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create
-              <ChevronDown className="ml-2 h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {contentTypes.length > 0 ? contentTypes.map((ct) => {
-              let apiType = "article";
-              let platform: string | undefined;
-              if (ct.category === "social") { apiType = "social_post"; platform = ct.id.replace("-post", ""); }
-              else if (ct.category === "email") { apiType = "newsletter"; }
-              return (
-                <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(apiType, platform)}>
-                  {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
-                  {ct.label}
+        {/* ── Flow Title + Create ───────────────────────── */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">{topic.title}</h1>
+            {topic.suggestedAngle && (
+              <p className="text-sm text-muted-foreground mt-1">{topic.suggestedAngle}</p>
+            )}
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Create
+                <ChevronDown className="ml-2 h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {contentTypes.length > 0 ? contentTypes.map((ct) => {
+                let apiType = "article";
+                let platform: string | undefined;
+                if (ct.category === "social") { apiType = "social_post"; platform = ct.id.replace("-post", ""); }
+                else if (ct.category === "email") { apiType = "newsletter"; }
+                return (
+                  <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(apiType, platform)}>
+                    {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                    {ct.label}
+                  </DropdownMenuItem>
+                );
+              }) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                <DropdownMenuItem key={opt.platform ?? opt.type} className="gap-2" onClick={() => handleProduce(opt.type, opt.platform)}>
+                  {opt.icon}{opt.label}
                 </DropdownMenuItem>
-              );
-            }) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
-              <DropdownMenuItem key={opt.platform ?? opt.type} className="gap-2" onClick={() => handleProduce(opt.type, opt.platform)}>
-                {opt.icon}{opt.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* ── Chat Area ───────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {chatMessages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <MessageCircle className="h-8 w-8 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground mb-1">Start a conversation about your content.</p>
-              <p className="text-xs text-muted-foreground">Discuss angles, audience, tone — or click Create to generate content.</p>
-            </div>
-          ) : (
-            chatMessages.map((msg, i) => (
-              <div key={i} className="flex gap-3 max-w-2xl mx-auto w-full">
-                <div className={`shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center ${
-                  msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-                }`}>
-                  {msg.role === "user" ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-          <div ref={chatEndRef} />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        {/* Chat Input */}
-        <div className="px-6 pb-3 shrink-0">
-          <div className="flex gap-2 max-w-2xl mx-auto">
+        {/* ── Chat Input (top, like ChatGPT) ────────────── */}
+        <div className="rounded-xl border bg-background shadow-sm p-4">
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -397,49 +365,68 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
               placeholder="Message..."
               disabled={sending}
-              className="flex-1"
+              className="flex-1 border-0 shadow-none focus-visible:ring-0 px-0"
             />
-            <Button size="icon" onClick={handleSendChat} disabled={!chatInput.trim() || sending}>
+            <Button size="icon" variant="ghost" onClick={handleSendChat} disabled={!chatInput.trim() || sending}>
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
             </Button>
           </div>
         </div>
-      </div>
 
-      {/* ── Bottom Panel: Sources | Content ─────────────── */}
-      <div className="border-t shrink-0" style={{ height: "40vh", minHeight: "250px" }}>
-        {/* Tab Bar */}
-        <div className="flex items-center gap-1 px-6 pt-2 border-b">
-          <button
-            type="button"
-            onClick={() => setBottomTab("sources")}
-            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-              bottomTab === "sources"
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Sources{inputs.length > 0 && ` (${inputs.length})`}
-          </button>
-          <button
-            type="button"
-            onClick={() => setBottomTab("content")}
-            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-              bottomTab === "content"
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Content{outputs.length > 0 && ` (${outputs.length})`}
-          </button>
-        </div>
+        {/* ── Tabs: Chat | Sources | Content ────────────── */}
+        <div>
+          <div className="flex items-center gap-1 mb-4">
+            {(["chat", "sources", "content"] as const).map((tab) => {
+              const count = tab === "sources" ? inputs.length : tab === "content" ? outputs.length : chatMessages.length;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setBottomTab(tab as "sources" | "content")}
+                  className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
+                    bottomTab === tab
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}{count > 0 ? ` (${count})` : ""}
+                </button>
+              );
+            })}
+          </div>
 
-        {/* Tab Content */}
-        <div className="overflow-y-auto h-full p-4">
-          {/* ── Sources Tab ─────────────────────────── */}
+          {/* ── Chat Tab ──────────────────────────── */}
+          {bottomTab === ("chat" as string) && (
+            <div className="space-y-4">
+              {chatMessages.length === 0 ? (
+                <div className="rounded-xl border border-dashed p-10 text-center">
+                  <MessageCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">No messages yet. Start a conversation above.</p>
+                </div>
+              ) : (
+                chatMessages.map((msg, i) => (
+                  <div key={i} className="flex gap-3">
+                    <div className={`shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center ${
+                      msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
+                    }`}>
+                      {msg.role === "user" ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={chatEndRef} />
+            </div>
+          )}
+
+          {/* ── Sources Tab ───────────────────────── */}
           {bottomTab === "sources" && (
-            <div className="space-y-3 max-w-2xl mx-auto">
-              {/* Source List */}
+            <div className="space-y-3">
               {inputs.length > 0 && (
                 <div className="space-y-1">
                   {inputs.map((input) => {
@@ -500,21 +487,21 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               )}
 
-              {/* Drop Zone + Add Source */}
+              {/* Drop Zone */}
               <div
-                className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+                className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
                   isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/20"
                 }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                <div className="flex items-center justify-center gap-2 mb-3 text-muted-foreground/50">
+                <div className="flex items-center justify-center gap-3 mb-3 text-muted-foreground/40">
                   <Upload className="h-5 w-5" />
                   <ImageIcon className="h-5 w-5" />
                   <Paperclip className="h-5 w-5" />
                 </div>
-                <p className="text-sm text-muted-foreground mb-3">
+                <p className="text-sm text-muted-foreground mb-4">
                   Drop files here, or add a URL / text note
                 </p>
                 <div className="flex gap-2 max-w-md mx-auto">
@@ -536,14 +523,14 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           )}
 
-          {/* ── Content Tab ─────────────────────────── */}
+          {/* ── Content Tab ───────────────────────── */}
           {bottomTab === "content" && (
-            <div className="space-y-3 max-w-2xl mx-auto">
+            <div className="space-y-3">
               {outputs.length === 0 ? (
-                <div className="rounded-lg border border-dashed p-8 text-center">
+                <div className="rounded-xl border border-dashed p-10 text-center">
                   <Package className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
                   <p className="text-sm text-muted-foreground mb-1">No content yet.</p>
-                  <p className="text-xs text-muted-foreground">Click &quot;Create&quot; above to generate your first piece.</p>
+                  <p className="text-xs text-muted-foreground">Click &quot;Create&quot; to generate your first piece.</p>
                 </div>
               ) : (
                 <div className="space-y-1">
