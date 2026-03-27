@@ -15,6 +15,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -777,7 +778,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     const isProducing = item.status === "producing";
                     const isPlanned = item.status === "planned";
                     return (
-                      <div key={item.id} className="py-3 space-y-3">
+                      <Link key={item.id} href={`/content/${item.id}`} className="block py-3 hover:bg-muted/30 -mx-2 px-2 rounded-lg transition-colors">
                         {/* Header row */}
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0">
@@ -793,39 +794,37 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                           </div>
                           {isProducing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
                           <Badge variant={status.variant} className="text-xs shrink-0">{status.label}</Badge>
-                          {/* Action icons */}
-                          {!isProducing && (
-                            <button
-                              type="button"
-                              title="Generate with AI"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                let apiType = "article";
-                                let platform: string | undefined;
-                                if (item.type === "social_post") {
-                                  apiType = "social_post";
-                                  platform = item.category ?? "linkedin";
-                                } else if (item.type === "newsletter") apiType = "newsletter";
-                                handleProduce(apiType, platform);
-                              }}
-                              className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground shrink-0"
-                            >
-                              <Sparkles className="h-4 w-4" />
-                            </button>
-                          )}
-                          <Link href={`/content/${item.id}`} className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground shrink-0" title="Edit">
-                            <Pencil className="h-4 w-4" />
-                          </Link>
-                          <button
-                            type="button"
-                            title="Delete"
-                            onClick={(e) => { e.stopPropagation(); handleDeleteContent(item.id); }}
-                            className="p-2 rounded-full hover:bg-destructive/10 transition-colors text-destructive/60 hover:text-destructive shrink-0"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
+                              <button type="button" className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground shrink-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link href={`/content/${item.id}`}>
+                                  <Pencil className="mr-2 h-3.5 w-3.5" />Edit
+                                </Link>
+                              </DropdownMenuItem>
+                              {!isProducing && (
+                                <DropdownMenuItem onClick={(e) => { e.preventDefault();
+                                  let apiType = "article";
+                                  let platform: string | undefined;
+                                  if (item.type === "social_post") { apiType = "social_post"; platform = item.category ?? "linkedin"; }
+                                  else if (item.type === "newsletter") apiType = "newsletter";
+                                  handleProduce(apiType, platform);
+                                }}>
+                                  <Sparkles className="mr-2 h-3.5 w-3.5" />Generate with AI
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive" onClick={(e) => { e.preventDefault(); handleDeleteContent(item.id); }}>
+                                <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                      </div>
+                      </Link>
                     );
                   })}
                   </div>
