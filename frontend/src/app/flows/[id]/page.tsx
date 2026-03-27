@@ -40,6 +40,7 @@ import {
   Trash2,
   MoreHorizontal,
   Sparkles,
+  Check,
   ArrowUp,
   RefreshCw,
   Copy,
@@ -71,7 +72,6 @@ import {
 import type { Topic, FlowInput, ChatMessage, ContentItem } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 import ReactMarkdown from "react-markdown";
-import { ChatOnboarding } from "@/components/chat-onboarding";
 
 // ── Icons & Config ────────────────────────────────────────────
 
@@ -196,12 +196,6 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const [reanalyzeNote, setReanalyzeNote] = useState("");
   const [showReanalyzeNote, setShowReanalyzeNote] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
-  const [onboardingContentType, setOnboardingContentType] = useState<ContentTypeDefinition | null>(null);
-  const [onboardingDone, setOnboardingDone] = useState(false);
-  const [onboardingStep, setOnboardingStep] = useState(0);
-  const [onboardingAnswers, setOnboardingAnswers] = useState<Record<string, string>>({});
-  const [onboardingShowUpload, setOnboardingShowUpload] = useState(false);
-  const [onboardingUploadedFiles, setOnboardingUploadedFiles] = useState<string[]>([]);
   const [titleDraft, setTitleDraft] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -478,66 +472,11 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
           {/* ── Chat Tab ──────────────────────────── */}
           {bottomTab === ("chat" as string) && (
             <div className="space-y-4 pb-20">
-              {onboardingContentType ? (
-                <ChatOnboarding
-                  contentType={onboardingContentType}
-                  step={onboardingStep}
-                  answers={onboardingAnswers}
-                  onStepChange={setOnboardingStep}
-                  onAnswersChange={setOnboardingAnswers}
-                  showUpload={onboardingShowUpload}
-                  onShowUploadChange={setOnboardingShowUpload}
-                  uploadedFiles={onboardingUploadedFiles}
-                  onUploadedFilesChange={setOnboardingUploadedFiles}
-                  sources={inputs}
-                  onComplete={(answers, summary) => {
-                    if (!onboardingContentType) return;
-                    setOnboardingContentType(null);
-                    setOnboardingDone(true);
-                    setBottomTab("chat");
-                    handleSendMessage(summary);
-                  }}
-                  onFileUpload={async (files) => { await handleFileUpload(files); }}
-                  onAddTextSource={async (content) => {
-                    if (!customerId || !projectId) return;
-                    const isUrl = /^https?:\/\/.+/.test(content);
-                    await addFlowInput(customerId, projectId, id, { type: isUrl ? "url" : "text", content });
-                    await loadData();
-                  }}
-                  onCancel={() => setOnboardingContentType(null)}
-                />
-              ) : chatMessages.length === 0 && !onboardingDone ? (
-                <div className="space-y-6">
-                  {/* AI Welcome */}
-                  <div className="flex gap-3">
-                    <div className="shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center bg-muted mt-0.5">
-                      <Bot className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm mb-4">What would you like to create? Pick a format or just tell me your idea.</p>
-                      <p className="text-xs text-muted-foreground mb-4">Have URLs, documents, or images? Add them under <button type="button" onClick={() => setBottomTab("sources")} className="text-primary hover:underline">Sources</button> — I'll analyze them automatically.</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(contentTypes.length > 0 ? contentTypes : [
-                          { id: "article", label: "Article", category: "site" },
-                          { id: "linkedin-post", label: "LinkedIn", category: "social" },
-                          { id: "instagram-post", label: "Instagram", category: "social" },
-                          { id: "x-post", label: "X Post", category: "social" },
-                          { id: "newsletter", label: "Newsletter", category: "email" },
-                          { id: "tiktok-post", label: "TikTok", category: "social" },
-                        ] as ContentTypeDefinition[]).map((ct) => (
-                          <button
-                            key={ct.id}
-                            type="button"
-                            onClick={() => { setOnboardingContentType(ct); setOnboardingStep(0); setOnboardingAnswers({}); setOnboardingShowUpload(false); setOnboardingUploadedFiles([]); }}
-                            className="flex flex-col items-center gap-1.5 rounded-xl border p-3 hover:bg-muted/50 transition-colors text-center"
-                          >
-                            <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category] ?? OUTPUT_ICONS[ct.id] ?? <FileText className="h-4 w-4" />}</span>
-                            <span className="text-xs font-medium">{ct.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+              {chatMessages.length === 0 ? (
+                <div className="rounded-xl border border-dashed p-10 text-center">
+                  <MessageCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm font-medium mb-1">Chat with AI</p>
+                  <p className="text-xs text-muted-foreground">Brainstorm ideas, get feedback on your content, or ask for help.</p>
                 </div>
               ) : (
                 chatMessages.map((msg, i) => (
@@ -710,6 +649,31 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
           {/* ── Content Tab ───────────────────────── */}
           {bottomTab === "content" && (
             <div>
+              {/* Onboarding Checklist */}
+              {(outputs.length === 0 || inputs.length === 0) && (
+                <div className="rounded-xl bg-muted/30 p-4 mb-4">
+                  <p className="text-sm font-medium mb-3">Get started</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2.5 text-sm">
+                      <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 ${inputs.length > 0 ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/30"}`}>
+                        {inputs.length > 0 && <Check className="h-3 w-3" />}
+                      </div>
+                      <button type="button" onClick={() => setBottomTab("sources")} className={`hover:underline ${inputs.length > 0 ? "text-muted-foreground line-through" : ""}`}>
+                        Add sources (URLs, documents, images)
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-sm">
+                      <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 ${outputs.length > 0 ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/30"}`}>
+                        {outputs.length > 0 && <Check className="h-3 w-3" />}
+                      </div>
+                      <span className={outputs.length > 0 ? "text-muted-foreground line-through" : ""}>
+                        Create your first content piece
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {outputs.length === 0 ? (
                 <div className="rounded-xl border-2 border-dashed p-10 text-center">
                   <Package className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
