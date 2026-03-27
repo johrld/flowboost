@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Bot, ArrowRight, Check } from "lucide-react";
+import { useState, useRef } from "react";
+import { Bot, ArrowRight, Check, Upload, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ContentTypeDefinition } from "@/lib/api";
@@ -19,13 +19,17 @@ interface ChatOnboardingProps {
   contentType: ContentTypeDefinition;
   onComplete: (answers: Record<string, string>, summary: string) => void;
   onCancel: () => void;
+  onFileUpload?: (files: FileList) => Promise<void>;
 }
 
-export function ChatOnboarding({ contentType, onComplete, onCancel }: ChatOnboardingProps) {
+export function ChatOnboarding({ contentType, onComplete, onCancel, onFileUpload }: ChatOnboardingProps) {
   const questions = contentType.agent?.onboarding ?? [];
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [textValue, setTextValue] = useState("");
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadedCount, setUploadedCount] = useState(0);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // No onboarding questions → show simple confirmation
   if (questions.length === 0) {
@@ -58,6 +62,12 @@ export function ChatOnboarding({ contentType, onComplete, onCancel }: ChatOnboar
   const isLastStep = step >= questions.length;
 
   const handleAnswer = (value: string) => {
+    // If this is a sources question and user wants to upload now, show upload UI
+    if (currentQuestion.id === "sources" && value.includes("add them now")) {
+      setShowUpload(true);
+      setAnswers({ ...answers, [currentQuestion.id]: value });
+      return;
+    }
     const updated = { ...answers, [currentQuestion.id]: value };
     setAnswers(updated);
     setTextValue("");
@@ -134,7 +144,7 @@ export function ChatOnboarding({ contentType, onComplete, onCancel }: ChatOnboar
             </div>
           )}
 
-          {(currentQuestion.type === "choice" || currentQuestion.type === "multi-choice") && currentQuestion.options && (
+          {(currentQuestion.type === "choice" || currentQuestion.type === "multi-choice") && currentQuestion.options && !showUpload && (
             <div className="ml-10 flex flex-wrap gap-2">
               {currentQuestion.options.map((opt) => (
                 <button
@@ -155,6 +165,39 @@ export function ChatOnboarding({ contentType, onComplete, onCancel }: ChatOnboar
                   Skip
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Upload area for sources */}
+          {showUpload && (
+            <div className="ml-10 space-y-3">
+              <input
+                ref={fileRef}
+                type="file"
+                className="hidden"
+                multiple
+                onChange={async (e) => {
+                  if (e.target.files && onFileUpload) {
+                    await onFileUpload(e.target.files);
+                    setUploadedCount((c) => c + e.target.files!.length);
+                  }
+                  e.target.value = "";
+                }}
+              />
+              <div className="rounded-xl border-2 border-dashed p-6 text-center">
+                <Upload className="h-5 w-5 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground mb-3">
+                  {uploadedCount > 0 ? `${uploadedCount} file${uploadedCount !== 1 ? "s" : ""} added` : "Drop files here or click to upload"}
+                </p>
+                <div className="flex gap-2 justify-center">
+                  <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+                    <Paperclip className="mr-1.5 h-3.5 w-3.5" />Upload Files
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => { setShowUpload(false); setStep(step + 1); }}>
+                    {uploadedCount > 0 ? "Done" : "Skip"}
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </div>

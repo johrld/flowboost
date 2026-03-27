@@ -507,6 +507,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                       setTimeout(() => setBottomTab("sources"), 500);
                     }
                   }}
+                  onFileUpload={async (files) => { await handleFileUpload(files); }}
                   onCancel={() => setOnboardingContentType(null)}
                 />
               ) : chatMessages.length === 0 && !onboardingDone ? (
