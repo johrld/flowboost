@@ -792,49 +792,38 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                             </p>
                           </div>
                           {isProducing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
-                          <input
-                            type="date"
-                            value={item.scheduledDate?.split("T")[0] ?? ""}
-                            onChange={async (e) => {
-                              if (!customerId || !projectId) return;
-                              const val = e.target.value || undefined;
-                              try {
-                                await updateContent(customerId, projectId, item.id, { scheduledDate: val ? `${val}T09:00` : undefined });
-                                await loadData();
-                              } catch (err) { console.error("Schedule failed:", err); }
-                            }}
-                            className="text-xs text-muted-foreground bg-transparent border rounded px-2 py-0.5 w-[120px] shrink-0"
-                            title="Schedule date"
-                          />
                           <Badge variant={status.variant} className="text-xs shrink-0">{status.label}</Badge>
-                        </div>
-                        {/* Action buttons */}
-                        <div className="flex items-center gap-2 pl-[52px]">
+                          {/* Action icons */}
                           {!isProducing && (
-                            <Button size="sm" variant="outline" className="rounded-full text-xs" onClick={() => {
-                              let apiType = "article";
-                              let platform: string | undefined;
-                              if (item.type === "social_post") {
-                                apiType = "social_post";
-                                const t = item.title.toLowerCase();
-                                if (t.includes("linkedin")) platform = "linkedin";
-                                else if (t.includes("instagram")) platform = "instagram";
-                                else if (t.includes("tiktok")) platform = "tiktok";
-                                else platform = "x";
-                              } else if (item.type === "newsletter") apiType = "newsletter";
-                              handleProduce(apiType, platform);
-                            }}>
-                              <Sparkles className="mr-1.5 h-3.5 w-3.5" />Generate with AI
-                            </Button>
+                            <button
+                              type="button"
+                              title="Generate with AI"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                let apiType = "article";
+                                let platform: string | undefined;
+                                if (item.type === "social_post") {
+                                  apiType = "social_post";
+                                  platform = item.category ?? "linkedin";
+                                } else if (item.type === "newsletter") apiType = "newsletter";
+                                handleProduce(apiType, platform);
+                              }}
+                              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground shrink-0"
+                            >
+                              <Sparkles className="h-4 w-4" />
+                            </button>
                           )}
-                          <Button size="sm" variant="outline" className="rounded-full text-xs" asChild>
-                            <Link href={`/content/${item.id}`}>
-                              <Pencil className="mr-1.5 h-3.5 w-3.5" />Edit
-                            </Link>
-                          </Button>
-                          <Button size="sm" variant="ghost" className="rounded-full text-xs text-destructive" onClick={() => handleDeleteContent(item.id)}>
-                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />Delete
-                          </Button>
+                          <Link href={`/content/${item.id}`} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground shrink-0" title="Edit">
+                            <Pencil className="h-4 w-4" />
+                          </Link>
+                          <button
+                            type="button"
+                            title="Delete"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteContent(item.id); }}
+                            className="p-1.5 rounded-md hover:bg-muted text-destructive/60 hover:text-destructive shrink-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
                     );
