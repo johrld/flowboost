@@ -670,6 +670,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                               <DropdownMenuItem onClick={() => handleReanalyze(input.id)}>
                                 <RefreshCw className="mr-2 h-3.5 w-3.5" />Refine
                               </DropdownMenuItem>
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteInput(input.id)}>
                                 <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
                               </DropdownMenuItem>
