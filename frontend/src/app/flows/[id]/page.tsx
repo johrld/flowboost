@@ -808,19 +808,19 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                                 } else if (item.type === "newsletter") apiType = "newsletter";
                                 handleProduce(apiType, platform);
                               }}
-                              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground shrink-0"
+                              className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground shrink-0"
                             >
                               <Sparkles className="h-4 w-4" />
                             </button>
                           )}
-                          <Link href={`/content/${item.id}`} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground shrink-0" title="Edit">
+                          <Link href={`/content/${item.id}`} className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground shrink-0" title="Edit">
                             <Pencil className="h-4 w-4" />
                           </Link>
                           <button
                             type="button"
                             title="Delete"
                             onClick={(e) => { e.stopPropagation(); handleDeleteContent(item.id); }}
-                            className="p-1.5 rounded-md hover:bg-muted text-destructive/60 hover:text-destructive shrink-0"
+                            className="p-2 rounded-full hover:bg-destructive/10 transition-colors text-destructive/60 hover:text-destructive shrink-0"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
