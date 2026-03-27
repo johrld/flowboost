@@ -348,6 +348,23 @@ export async function topicRoutes(app: FastifyInstance) {
         const assistantMsg: ChatMessage = { role: "assistant", content: assistantText, ts: new Date().toISOString() };
         appendChat(dir, assistantMsg);
 
+        // Auto-generate title if still "Untitled Flow"
+        if (topic.title === "Untitled Flow" && message.trim().length > 5) {
+          try {
+            const { callClaude } = await import("../../pipeline/ingest/process-input.js");
+            const titleResponse = await callClaude([{
+              type: "text",
+              text: `Generate a short, descriptive title (max 6 words, no quotes) for a content flow about:\n\nUser said: "${message.trim().slice(0, 200)}"\n\nAI responded: "${assistantText.slice(0, 200)}"\n\nReturn ONLY the title, nothing else.`,
+            }]);
+            const newTitle = titleResponse.trim().replace(/^["']|["']$/g, "").slice(0, 60);
+            if (newTitle && newTitle.length > 2) {
+              topics.update(topicId, { title: newTitle });
+            }
+          } catch {
+            // Auto-title failed, not critical
+          }
+        }
+
         // Check if response contains field updates
         const jsonMatch = assistantText.match(/```(?:json)?\s*\r?\n?([\s\S]*?)\r?\n?\s*```/i);
         if (jsonMatch) {

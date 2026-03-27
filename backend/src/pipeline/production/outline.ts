@@ -50,9 +50,9 @@ export async function runOutlinePhase(ctx: PipelineContext): Promise<Outline> {
     const config: AgentConfig = {
       name: "outline-architect",
       model,
-      maxTurns: 10,
+      maxTurns: 15,
       useMcpTools: true,
-      tools: ["Read", "Write", "mcp__flowboost__flowboost_read_project_data"],
+      tools: ["Read", "Write", "WebSearch", "mcp__flowboost__flowboost_read_project_data"],
     };
 
     const briefingContext = ctx.buildFullFlowContext();

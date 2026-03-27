@@ -488,9 +488,42 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
           {bottomTab === ("chat" as string) && (
             <div className="space-y-4 pb-20">
               {chatMessages.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-10 text-center">
-                  <MessageCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">No messages yet. Start a conversation below.</p>
+                <div className="space-y-6">
+                  {/* AI Welcome */}
+                  <div className="flex gap-3">
+                    <div className="shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center bg-muted mt-0.5">
+                      <Bot className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm mb-4">What would you like to create? Pick a format or just tell me your idea.</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(contentTypes.length > 0 ? contentTypes : [
+                          { id: "article", label: "Article", category: "site" },
+                          { id: "linkedin-post", label: "LinkedIn", category: "social" },
+                          { id: "instagram-post", label: "Instagram", category: "social" },
+                          { id: "x-post", label: "X Post", category: "social" },
+                          { id: "newsletter", label: "Newsletter", category: "email" },
+                          { id: "tiktok-post", label: "TikTok", category: "social" },
+                        ] as ContentTypeDefinition[]).map((ct) => {
+                          let apiType = "article";
+                          let platform: string | undefined;
+                          if (ct.category === "social") { apiType = "social_post"; platform = ct.id.replace("-post", ""); }
+                          else if (ct.category === "email") { apiType = "newsletter"; }
+                          return (
+                            <button
+                              key={ct.id}
+                              type="button"
+                              onClick={() => handleProduce(apiType, platform)}
+                              className="flex flex-col items-center gap-1.5 rounded-xl border p-3 hover:bg-muted/50 transition-colors text-center"
+                            >
+                              <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category] ?? OUTPUT_ICONS[ct.id] ?? <FileText className="h-4 w-4" />}</span>
+                              <span className="text-xs font-medium">{ct.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 chatMessages.map((msg, i) => (
