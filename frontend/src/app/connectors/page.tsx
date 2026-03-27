@@ -52,7 +52,7 @@ import {
 // ── Types ────────────────────────────────────────────────────────
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
-type ConnectorCategory = "site" | "social" | "media";
+type ConnectorCategory = "site" | "ecommerce" | "social" | "media";
 type Framework = "astro" | "hugo" | "nextjs" | "custom";
 
 interface ConnectorDef {
@@ -84,9 +84,11 @@ const FRAMEWORKS: FrameworkDef[] = [
 
 const CONNECTORS: ConnectorDef[] = [
   { id: "git", name: "Git Repository", category: "site", icon: GitBranch, description: "Push content to a Git repository", comingSoon: false },
-  { id: "shopware", name: "Shopware 6", category: "site", icon: ShoppingBag, description: "Read Shopping Experiences, write CMS slots", comingSoon: false },
   { id: "wordpress", name: "WordPress", category: "site", icon: Globe, description: "Publish directly via WordPress API", comingSoon: true },
   { id: "webflow", name: "Webflow", category: "site", icon: Aperture, description: "Publish to Webflow CMS", comingSoon: true },
+  { id: "shopware", name: "Shopware 6", category: "ecommerce", icon: ShoppingBag, description: "Read Shopping Experiences, write CMS slots", comingSoon: false },
+  { id: "shopify", name: "Shopify", category: "ecommerce", icon: ShoppingBag, description: "Publish to Shopify blog and pages", comingSoon: true },
+  { id: "woocommerce", name: "WooCommerce", category: "ecommerce", icon: ShoppingBag, description: "Publish via WooCommerce REST API", comingSoon: true },
   { id: "linkedin", name: "LinkedIn", category: "social", icon: Linkedin, description: "Post to LinkedIn", comingSoon: true },
   { id: "instagram", name: "Instagram", category: "social", icon: Instagram, description: "Post to Instagram", comingSoon: true },
   { id: "tiktok", name: "TikTok", category: "social", icon: Music2, description: "Post to TikTok", comingSoon: true },
@@ -97,6 +99,7 @@ const CONNECTORS: ConnectorDef[] = [
 
 const CATEGORY_LABELS: Record<ConnectorCategory, { title: string; description: string }> = {
   site: { title: "Site Delivery", description: "Publish articles, guides, and landing pages" },
+  ecommerce: { title: "E-Commerce", description: "Connect shop platforms for content and product data" },
   social: { title: "Social Channels", description: "Distribute social media posts" },
   media: { title: "Media Platforms", description: "Upload video and audio content" },
 };
@@ -884,7 +887,7 @@ function ConnectorsPageContent() {
 
         {/* ── Connections Tab ──────────────────────────────────────── */}
         <TabsContent value="connections" className="mt-6 space-y-8">
-          {(["site", "social", "media"] as ConnectorCategory[]).map((cat) => {
+          {(["site", "ecommerce", "social", "media"] as ConnectorCategory[]).map((cat) => {
             const items = CONNECTORS.filter((c) => c.category === cat);
             return (
               <div key={cat} className="space-y-1">
