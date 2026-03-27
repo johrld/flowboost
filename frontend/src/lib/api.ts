@@ -103,10 +103,6 @@ export function approveTopic(customerId: string, projectId: string, topicId: str
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/approve`, { method: "POST" });
 }
 
-export function scheduleTopic(customerId: string, projectId: string, topicId: string, scheduledDate: string | null): Promise<{ message: string; topic: Topic }> {
-  return updateTopic(customerId, projectId, topicId, { scheduledDate } as Partial<Topic>);
-}
-
 export function rejectTopic(customerId: string, projectId: string, topicId: string, reason?: string): Promise<{ message: string; topic: Topic }> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/reject`, {
     method: "POST",
@@ -121,7 +117,7 @@ export function restoreTopic(customerId: string, projectId: string, topicId: str
 export function createTopic(
   customerId: string,
   projectId: string,
-  data: { title: string; category?: string; userNotes?: string; format?: string },
+  data: { title: string; category?: string; userNotes?: string; direction?: string },
 ): Promise<Topic> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics`, {
     method: "POST",
@@ -169,17 +165,6 @@ export function deleteTopic(
 ): Promise<{ message: string }> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}`, {
     method: "DELETE",
-  });
-}
-
-export function enrichTopic(
-  customerId: string,
-  projectId: string,
-  topicId: string,
-): Promise<{ message: string; runId: string }> {
-  return fetchJson(`/customers/${customerId}/projects/${projectId}/pipeline/enrich`, {
-    method: "POST",
-    body: JSON.stringify({ topicId }),
   });
 }
 
@@ -301,8 +286,8 @@ export function produceFlowOutput(
   customerId: string,
   projectId: string,
   topicId: string,
-  data: { type: string; platform?: string },
-): Promise<{ message: string; contentItemId: string; briefingId: string; runId: string; type: string; platform?: string }> {
+  data: { contentTypeId: string } | { type: string; platform?: string },
+): Promise<{ message: string; contentItemId: string; contentTypeId?: string; flowId: string; runId: string; type: string; platform?: string }> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/produce`, {
     method: "POST",
     body: JSON.stringify(data),
@@ -331,14 +316,6 @@ export interface ContentTypeDefinition {
   agent?: {
     role: string;
     guidelines: string;
-    onboarding?: Array<{
-      id: string;
-      question: string;
-      type: "text" | "choice" | "multi-choice";
-      placeholder?: string;
-      options?: string[];
-      optional?: boolean;
-    }>;
   };
 }
 

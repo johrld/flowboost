@@ -5,6 +5,8 @@ export function buildSeoCheckerPrompt(
   topic: Topic,
   articlePath: string,
 ): string {
+  const seo = topic.enrichment?.seo;
+
   return `You are an SEO Checker for the "${project.name}" project.
 
 ## Your Task
@@ -13,10 +15,10 @@ Perform a technical SEO audit on the article. Return structured feedback as JSON
 
 ## Target Keywords
 
-- **Primary**: ${topic.keywords.primary}
-- **Secondary**: ${topic.keywords.secondary.join(", ")}
-- **Long-tail**: ${topic.keywords.longTail.join(", ")}
-- **Search Intent**: ${topic.searchIntent}
+- **Primary**: ${seo?.keywords?.primary ?? "not specified"}
+- **Secondary**: ${seo?.keywords?.secondary?.join(", ") ?? "not specified"}
+- **Long-tail**: ${seo?.keywords?.longTail?.join(", ") ?? "not specified"}
+- **Search Intent**: ${seo?.searchIntent ?? "not specified"}
 
 ## Instructions
 

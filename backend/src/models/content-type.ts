@@ -39,22 +39,22 @@ export interface CustomFieldDefinition {
   };
 }
 
-export interface OnboardingQuestion {
-  id: string;
-  question: string;
-  type: "text" | "choice" | "multi-choice";
-  placeholder?: string;
-  options?: string[];
-  optional?: boolean;
-}
-
 export interface ContentTypeAgent {
   /** Agent role/identity — injected as first line of system prompt */
   role: string;
   /** Markdown guidelines — tone, structure, do/don'ts, examples */
   guidelines: string;
-  /** Onboarding questions shown in chat when user selects this content type */
-  onboarding?: OnboardingQuestion[];
+}
+
+export interface ContentTypePipeline {
+  /** Pipeline execution mode */
+  mode: "single-phase" | "multi-phase";
+  /** Ordered list of phase names (e.g. ["write", "image"] or ["research", "outline", "write", "quality", "image", "translate"]) */
+  phases: string[];
+  /** Whether this content type benefits from SEO enrichment before production */
+  requiresEnrichment?: boolean;
+  /** Model override for this content type */
+  defaultModel?: string;
 }
 
 export interface CustomContentType {
@@ -69,6 +69,7 @@ export interface CustomContentType {
   icon?: string;
   fields: CustomFieldDefinition[];
   agent?: ContentTypeAgent;
+  pipeline?: ContentTypePipeline;
   createdAt: string;
   updatedAt: string;
 }

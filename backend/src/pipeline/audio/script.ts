@@ -33,12 +33,17 @@ export async function runAudioScriptPhase(ctx: PipelineContext): Promise<AudioSc
 
   const brandVoice = ctx.getBrandVoice() ?? "";
 
+  const seo = topic.enrichment?.seo;
+  const keywords = seo?.keywords?.primary
+    ? [seo.keywords.primary, ...(seo.keywords.secondary ?? [])].join(", ")
+    : "not specified";
+
   const prompt = `You are a podcast/audio scriptwriter. Create an audio script for the following topic.
 
 Topic: ${topic.title}
 Category: ${topic.category}
-Keywords: ${topic.keywords.primary}, ${topic.keywords.secondary.join(", ")}
-Angle: ${topic.suggestedAngle}
+Keywords: ${keywords}
+Angle: ${topic.direction ?? ""}
 Language: ${project.defaultLanguage}
 ${brandVoice ? `Brand Voice:\n${brandVoice}` : ""}
 

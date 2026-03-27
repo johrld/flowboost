@@ -8,6 +8,7 @@ export function buildOutlineArchitectPrompt(
   articleGuidelines?: string,
 ): string {
   const categories = project.categories.map((c) => `${c.id}: ${c.labels.en ?? c.labels.de}`).join(", ");
+  const seo = topic.enrichment?.seo;
 
   return `<role>
 You are a senior Outline Architect for the "${project.name}" project. You design detailed, SEO-optimized article structures.
@@ -28,12 +29,12 @@ Create a detailed section-level outline for the following article topic. The out
 
 - **Title**: ${topic.title}
 - **Category**: ${topic.category || "general"}
-${topic.keywords?.primary ? `- **Primary Keyword**: ${topic.keywords.primary}
-- **Secondary Keywords**: ${topic.keywords.secondary.join(", ")}
-- **Long-tail Keywords**: ${topic.keywords.longTail.join(", ")}` : `- **Keywords**: Not provided — research appropriate keywords for this topic using WebSearch before creating the outline.`}
-${topic.searchIntent ? `- **Search Intent**: ${topic.searchIntent}` : ""}
-${topic.suggestedAngle ? `- **Suggested Angle**: ${topic.suggestedAngle}` : ""}
-${topic.estimatedSections ? `- **Estimated Sections**: ${topic.estimatedSections}` : "- **Estimated Sections**: Determine based on topic complexity (typically 3-6)"}
+${seo?.keywords?.primary ? `- **Primary Keyword**: ${seo.keywords.primary}
+- **Secondary Keywords**: ${seo.keywords.secondary?.join(", ") ?? ""}
+- **Long-tail Keywords**: ${seo.keywords.longTail?.join(", ") ?? ""}` : `- **Keywords**: Not provided — research appropriate keywords for this topic using WebSearch before creating the outline.`}
+${seo?.searchIntent ? `- **Search Intent**: ${seo.searchIntent}` : ""}
+${topic.direction ? `- **Suggested Angle**: ${topic.direction}` : ""}
+${seo?.suggestedSections ? `- **Estimated Sections**: ${seo.suggestedSections}` : "- **Estimated Sections**: Determine based on topic complexity (typically 3-6)"}
 ${briefingContext ? `\n${briefingContext}` : ""}
 </briefing>
 
@@ -49,7 +50,7 @@ ${articleGuidelines ? `<guidelines>\n${articleGuidelines}\n</guidelines>\n` : ""
 
    a) **meta** section: Frontmatter fields (title, description, author, category, tags, keywords, etc.)
    b) **introduction** section: H1 + Answer Capsule + opening paragraphs
-   c) **h2_section** sections (${topic.estimatedSections - 2} sections): Main body content
+   c) **h2_section** sections (${(seo?.suggestedSections ?? 5) - 2} sections): Main body content
    d) **conclusion** section: Summary + CTA
    e) **faq** section: 3-5 FAQ items for frontmatter
 
@@ -73,11 +74,11 @@ Output the outline as JSON with this EXACT structure:
   "topic": {
     "title": "${topic.title}",
     "category": "${topic.category}",
-    "primaryKeyword": "${topic.keywords.primary}",
-    "secondaryKeywords": ${JSON.stringify(topic.keywords.secondary)},
-    "longTailKeywords": ${JSON.stringify(topic.keywords.longTail)},
-    "searchIntent": "${topic.searchIntent}",
-    "suggestedAngle": "${topic.suggestedAngle}"
+    "primaryKeyword": "${seo?.keywords?.primary ?? ""}",
+    "secondaryKeywords": ${JSON.stringify(seo?.keywords?.secondary ?? [])},
+    "longTailKeywords": ${JSON.stringify(seo?.keywords?.longTail ?? [])},
+    "searchIntent": "${seo?.searchIntent ?? ""}",
+    "suggestedAngle": "${topic.direction ?? ""}"
   },
   "sections": [
     {

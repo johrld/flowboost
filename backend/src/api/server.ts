@@ -5,7 +5,6 @@ import multipart from "@fastify/multipart";
 import { createLogger } from "../utils/logger.js";
 import { CustomerStore } from "../models/customer.js";
 import { ProjectStore } from "../models/project.js";
-import { ArticleStore } from "../models/article.js";
 import { ContentStore, MediaAssetStore } from "../models/content.js";
 import { ContentMediaStore } from "../models/content-media.js";
 import { PipelineRunStore } from "../models/pipeline-run.js";
@@ -15,7 +14,6 @@ import { customerRoutes } from "./routes/customers.js";
 import { projectRoutes } from "./routes/projects.js";
 import { topicRoutes } from "./routes/topics.js";
 import { contentPlanRoutes } from "./routes/content-plan.js";
-import { articleRoutes } from "./routes/articles.js";
 import { pipelineRoutes } from "./routes/pipeline.js";
 import { githubAuthRoutes, githubApiRoutes, githubWebhookRoutes } from "./routes/github.js";
 import { webhookRoutes } from "./routes/webhooks.js";
@@ -31,7 +29,6 @@ export interface AppContext {
   dataDir: string;
   customers: CustomerStore;
   projectsFor(customerId: string): ProjectStore;
-  articlesFor(customerId: string, projectId: string): ArticleStore;
   contentFor(customerId: string, projectId: string): ContentStore;
   contentMediaFor(customerId: string, projectId: string, contentId: string): ContentMediaStore;
   mediaFor(customerId: string, projectId: string): MediaAssetStore;
@@ -57,9 +54,6 @@ export async function buildServer(dataDir: string) {
     customers: new CustomerStore(dataDir),
     projectsFor(customerId: string) {
       return new ProjectStore(path.join(dataDir, "customers", customerId, "projects"));
-    },
-    articlesFor(customerId: string, projectId: string) {
-      return new ArticleStore(path.join(dataDir, "customers", customerId, "projects", projectId, "articles"));
     },
     contentFor(customerId: string, projectId: string) {
       return new ContentStore(path.join(dataDir, "customers", customerId, "projects", projectId, "content"));
@@ -87,7 +81,6 @@ export async function buildServer(dataDir: string) {
   await app.register(projectRoutes, { prefix: "/customers/:customerId/projects" });
   await app.register(topicRoutes, { prefix: "/customers/:customerId/projects/:projectId/topics" });
   await app.register(contentPlanRoutes, { prefix: "/customers/:customerId/projects/:projectId" });
-  await app.register(articleRoutes, { prefix: "/customers/:customerId/projects/:projectId/articles" });
   await app.register(pipelineRoutes, { prefix: "/customers/:customerId/projects/:projectId/pipeline" });
   await app.register(githubAuthRoutes, { prefix: "/auth" });
   await app.register(githubApiRoutes, { prefix: "/github" });

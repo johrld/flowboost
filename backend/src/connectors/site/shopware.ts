@@ -1,7 +1,7 @@
 import { createLogger } from "../../utils/logger.js";
 import type { ContentReader } from "../../services/sync.js";
 import type { SiteConnector, ConnectorSchema, ConnectorSlot, WriteResult } from "./types.js";
-import type { Article, ArticleVersion, ContentItem, ContentVersion, Project } from "../../models/types.js";
+import type { ContentItem, ContentVersion, LanguageVariant, Project } from "../../models/types.js";
 
 const log = createLogger("connector:shopware");
 
@@ -109,8 +109,8 @@ export class ShopwareSiteConnector implements SiteConnector {
 
   async write(
     _project: Project,
-    _article: Article,
-    _versions: ArticleVersion[],
+    _contentItem: ContentItem,
+    _languages: LanguageVariant[],
     _versionDir: string,
   ): Promise<WriteResult> {
     throw new Error("Shopware connector uses writeStructured(), not write()");

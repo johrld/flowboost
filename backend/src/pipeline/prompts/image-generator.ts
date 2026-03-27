@@ -16,8 +16,8 @@ Create a hero image for a blog article by analyzing its content and generating a
 
 - **Title**: ${topic.title}
 - **Category**: ${topic.category}
-- **Primary Keyword**: ${topic.keywords.primary}
-- **Angle**: ${topic.suggestedAngle}
+- **Primary Keyword**: ${topic.enrichment?.seo?.keywords?.primary ?? topic.title}
+- **Angle**: ${topic.direction ?? ""}
 
 ## Instructions
 

@@ -1,11 +1,12 @@
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { runSimpleAgent } from "../../pipeline/engine.js";
 import { readChat, appendChat } from "../../models/chat.js";
 import { PipelineContext } from "../../pipeline/context.js";
 import { runProductionPipeline } from "../../pipeline/production/run.js";
-import { runSocialPipeline } from "../../pipeline/social/run.js";
-import { runEmailPipeline } from "../../pipeline/email/run.js";
-import type { ChatMessage, Topic, FlowInputType } from "../../models/types.js";
+import { runContentPipeline } from "../../pipeline/content/run.js";
+import { ContentTypeStore } from "../../models/content-type.js";
+import type { ChatMessage, Topic, FlowInputType, ContentItem } from "../../models/types.js";
 import { processInput } from "../../pipeline/ingest/process-input.js";
 import { distillChat } from "../../pipeline/ingest/distill-chat.js";
 import { createLogger } from "../../utils/logger.js";
@@ -13,27 +14,30 @@ import { createLogger } from "../../utils/logger.js";
 const log = createLogger("topic-chat");
 
 function buildSystemPrompt(topic: Topic): string {
+  const seo = topic.enrichment?.seo;
   const parts = [
     "You are a content strategist helping refine a content brief. Be concise and actionable.",
     "",
     `## Current Brief`,
     `- **Title:** ${topic.title}`,
-    `- **Format:** ${topic.format ?? "article"}`,
     `- **Category:** ${topic.category || "not set"}`,
-    `- **Search Intent:** ${topic.searchIntent}`,
   ];
 
-  if (topic.keywords?.primary) {
-    parts.push(`- **Primary Keyword:** ${topic.keywords.primary}`);
-    if (topic.keywords.secondary?.length > 0)
-      parts.push(`- **Secondary Keywords:** ${topic.keywords.secondary.join(", ")}`);
-    if (topic.keywords.longTail?.length > 0)
-      parts.push(`- **Long-tail Keywords:** ${topic.keywords.longTail.join(", ")}`);
+  if (seo?.searchIntent) {
+    parts.push(`- **Search Intent:** ${seo.searchIntent}`);
   }
 
-  if (topic.suggestedAngle) parts.push(`- **Angle:** ${topic.suggestedAngle}`);
-  if (topic.competitorInsights) parts.push(`\n## Competitor Insights\n${topic.competitorInsights}`);
-  if (topic.reasoning) parts.push(`\n## AI Analysis\n${topic.reasoning}`);
+  if (seo?.keywords?.primary) {
+    parts.push(`- **Primary Keyword:** ${seo.keywords.primary}`);
+    if (seo.keywords.secondary?.length > 0)
+      parts.push(`- **Secondary Keywords:** ${seo.keywords.secondary.join(", ")}`);
+    if (seo.keywords.longTail?.length > 0)
+      parts.push(`- **Long-tail Keywords:** ${seo.keywords.longTail.join(", ")}`);
+  }
+
+  if (topic.direction) parts.push(`- **Angle:** ${topic.direction}`);
+  if (seo?.competitorInsights) parts.push(`\n## Competitor Insights\n${seo.competitorInsights}`);
+  if (topic.enrichment?.reasoning) parts.push(`\n## AI Analysis\n${topic.enrichment.reasoning}`);
   if (topic.userNotes) parts.push(`\n## User Notes\n${topic.userNotes}`);
 
   // Flow Inputs — uses processed summaries when available
@@ -78,7 +82,7 @@ function buildSystemPrompt(topic: Topic): string {
     "Help the user refine this topic. Suggest better angles, keywords, titles, or structure.",
     "If the user asks you to change the title, keywords, or angle, include a JSON block at the end of your response:",
     "```json",
-    '{"updates": {"title": "...", "suggestedAngle": "...", "keywords": {"primary": "...", "secondary": [...]}}}',
+    '{"updates": {"title": "...", "direction": "...", "category": "..."}}',
     "```",
     "Only include fields that should change. The user will confirm before applying.",
   );
@@ -96,39 +100,27 @@ export async function topicRoutes(app: FastifyInstance) {
   // POST /customers/:customerId/projects/:projectId/topics
   app.post<{
     Params: { customerId: string; projectId: string };
-    Body: { title: string; category?: string; userNotes?: string; format?: string };
+    Body: { title: string; category?: string; userNotes?: string; direction?: string };
   }>("/", async (request, reply) => {
     const { customerId, projectId } = request.params;
-    const { title, category, userNotes, format } = (request.body ?? {}) as {
+    const { title, category, userNotes, direction } = (request.body ?? {}) as {
       title?: string;
       category?: string;
       userNotes?: string;
-      format?: string;
+      direction?: string;
     };
 
     if (!title?.trim()) {
       return reply.status(400).send({ error: "Title is required" });
     }
 
-    const validFormats = ["article", "guide", "landing_page", "social_post"] as const;
-    const topicFormat = validFormats.includes(format as typeof validFormats[number])
-      ? (format as typeof validFormats[number])
-      : "article";
-
     const topic = app.ctx.topicsFor(customerId, projectId).create({
       status: "proposed",
       title: title.trim(),
       category: category || "",
       priority: 0,
-      keywords: { primary: "", secondary: [], longTail: [] },
-      searchIntent: "informational",
-      competitorInsights: "",
-      suggestedAngle: "",
-      estimatedSections: 0,
-      reasoning: "",
-      format: topicFormat,
       source: "user",
-      enriched: false,
+      direction: direction?.trim() || undefined,
       userNotes: userNotes?.trim() || undefined,
       createdAt: new Date().toISOString(),
     });
@@ -141,10 +133,22 @@ export async function topicRoutes(app: FastifyInstance) {
     "/:topicId",
     async (request, reply) => {
       const { customerId, projectId, topicId } = request.params;
-      const topic = app.ctx.topicsFor(customerId, projectId).get(topicId);
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
       if (!topic) {
         return reply.status(404).send({ error: "Topic not found" });
       }
+
+      // Cleanup stale outputIds on read
+      if (topic.outputIds && topic.outputIds.length > 0) {
+        const content = app.ctx.contentFor(customerId, projectId);
+        const valid = topic.outputIds.filter((id) => content.get(id) != null);
+        if (valid.length !== topic.outputIds.length) {
+          topics.update(topicId, { outputIds: valid } as Partial<Topic>);
+          topic.outputIds = valid;
+        }
+      }
+
       return topic;
     },
   );
@@ -165,8 +169,7 @@ export async function topicRoutes(app: FastifyInstance) {
 
       const body = (request.body ?? {}) as Record<string, unknown>;
       const safeFields = [
-        "title", "category", "keywords", "suggestedAngle", "searchIntent",
-        "estimatedSections", "format", "userNotes", "scheduledDate", "status",
+        "title", "category", "direction", "userNotes", "status",
       ];
       const updates: Record<string, unknown> = {};
 
@@ -181,13 +184,6 @@ export async function topicRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Title cannot be empty" });
       }
 
-      // Validate scheduledDate format if present
-      if (updates.scheduledDate !== undefined && updates.scheduledDate !== null) {
-        if (!/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/.test(String(updates.scheduledDate))) {
-          return reply.status(400).send({ error: "Invalid scheduledDate format. Use YYYY-MM-DD or YYYY-MM-DDTHH:mm" });
-        }
-      }
-
       if (Object.keys(updates).length === 0) {
         return { message: "No changes", topic };
       }
@@ -198,8 +194,75 @@ export async function topicRoutes(app: FastifyInstance) {
   );
 
   // DELETE /customers/:customerId/projects/:projectId/topics/:topicId
-  app.delete<{ Params: { customerId: string; projectId: string; topicId: string } }>(
+  // Default: Archive (soft-delete). ?hard=true for permanent deletion.
+  app.delete<{
+    Params: { customerId: string; projectId: string; topicId: string };
+    Querystring: { hard?: string };
+  }>(
     "/:topicId",
+    async (request, reply) => {
+      const { customerId, projectId, topicId } = request.params;
+      const hard = (request.query as { hard?: string }).hard === "true";
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
+      if (!topic) {
+        return reply.status(404).send({ error: "Topic not found" });
+      }
+
+      const content = app.ctx.contentFor(customerId, projectId);
+      const linked = content.list().filter(
+        (item) => item.topicId === topicId || item.briefingId === topicId || item.flowId === topicId,
+      );
+
+      if (hard) {
+        // Hard delete: refuse if published content exists
+        const published = linked.filter((item) =>
+          ["published", "delivered", "approved"].includes(item.status),
+        );
+        if (published.length > 0) {
+          return reply.status(400).send({
+            error: `Cannot hard-delete: ${published.length} published/approved content piece(s) exist. Archive instead, or remove published content first.`,
+          });
+        }
+        // Delete all linked content + flow
+        for (const item of linked) content.delete(item.id);
+        topics.delete(topicId);
+        return { message: "Flow and content permanently deleted", deleted: linked.length };
+      }
+
+      // Soft delete (archive): content-status-aware
+      const now = new Date().toISOString();
+      let contentDetached = 0;
+      let contentArchived = 0;
+
+      for (const item of linked) {
+        if (["published", "delivered", "approved"].includes(item.status)) {
+          // Detach published content — clear flow reference but keep content
+          content.update(item.id, { topicId: undefined, briefingId: undefined, flowId: undefined, updatedAt: now });
+          contentDetached++;
+        } else if (["planned", "producing", "draft", "review"].includes(item.status)) {
+          // Archive in-progress content along with the flow
+          content.update(item.id, { status: "archived" as ContentItem["status"], updatedAt: now });
+          contentArchived++;
+        }
+      }
+
+      // Archive the flow itself
+      topics.update(topicId, { status: "archived" as Topic["status"] });
+
+      return {
+        message: "Flow archived",
+        archived: true,
+        contentDetached,
+        contentArchived,
+      };
+    },
+  );
+
+  // POST /customers/:customerId/projects/:projectId/topics/:topicId/restore
+  // Handles both archived flows and rejected topics
+  app.post<{ Params: { customerId: string; projectId: string; topicId: string } }>(
+    "/:topicId/restore",
     async (request, reply) => {
       const { customerId, projectId, topicId } = request.params;
       const topics = app.ctx.topicsFor(customerId, projectId);
@@ -207,17 +270,35 @@ export async function topicRoutes(app: FastifyInstance) {
       if (!topic) {
         return reply.status(404).send({ error: "Topic not found" });
       }
-      // Delete all content pieces linked to this flow
-      const content = app.ctx.contentFor(customerId, projectId);
-      const allContent = content.list();
-      for (const item of allContent) {
-        if (item.topicId === topicId || item.briefingId === topicId) {
-          content.delete(item.id);
+
+      if (topic.status === "archived") {
+        // Restore archived flow
+        topics.update(topicId, { status: "proposed" as Topic["status"] });
+
+        // Restore archived content pieces linked to this flow
+        const content = app.ctx.contentFor(customerId, projectId);
+        const linked = content.list().filter(
+          (item) => (item.topicId === topicId || item.briefingId === topicId || item.flowId === topicId) && item.status === "archived",
+        );
+        for (const item of linked) {
+          content.update(item.id, { status: "draft" as ContentItem["status"], updatedAt: new Date().toISOString() });
         }
+
+        return { message: "Flow restored", contentRestored: linked.length };
       }
 
-      topics.delete(topicId);
-      return { message: "Flow and content deleted" };
+      if (topic.status === "rejected") {
+        // Restore rejected topic
+        topics.update(topicId, {
+          status: "proposed",
+          rejectedAt: undefined,
+          rejectionReason: undefined,
+        });
+
+        return { message: "Topic restored", topic: topics.get(topicId) };
+      }
+
+      return reply.status(400).send({ error: `Cannot restore from '${topic.status}' (must be 'archived' or 'rejected')` });
     },
   );
 
@@ -263,31 +344,6 @@ export async function topicRoutes(app: FastifyInstance) {
       });
 
       return { message: "Topic rejected", topic: topics.get(topicId) };
-    },
-  );
-
-  // POST /customers/:customerId/projects/:projectId/topics/:topicId/restore
-  app.post<{ Params: { customerId: string; projectId: string; topicId: string } }>(
-    "/:topicId/restore",
-    async (request, reply) => {
-      const { customerId, projectId, topicId } = request.params;
-      const topics = app.ctx.topicsFor(customerId, projectId);
-      const topic = topics.get(topicId);
-      if (!topic) {
-        return reply.status(404).send({ error: "Topic not found" });
-      }
-
-      if (topic.status !== "rejected") {
-        return reply.status(400).send({ error: "Only rejected topics can be restored" });
-      }
-
-      topics.update(topicId, {
-        status: "proposed",
-        rejectedAt: undefined,
-        rejectionReason: undefined,
-      });
-
-      return { message: "Topic restored", topic: topics.get(topicId) };
     },
   );
 
@@ -416,7 +472,7 @@ export async function topicRoutes(app: FastifyInstance) {
       }
 
       // Only allow safe fields to be updated via chat
-      const safeFields = ["title", "suggestedAngle", "keywords", "searchIntent", "estimatedSections"];
+      const safeFields = ["title", "direction", "category"];
       const safeUpdates: Record<string, unknown> = {};
       for (const key of Object.keys(updates)) {
         if (safeFields.includes(key)) {
@@ -625,28 +681,48 @@ export async function topicRoutes(app: FastifyInstance) {
 
   // ── Flow Produce Endpoint ─────────────────────────────
 
-  // POST /topics/:topicId/produce — Create output from briefing
+  // POST /topics/:topicId/produce — Create content output from flow
+  // Accepts either { contentTypeId } (new) or { type, platform } (legacy compat)
   app.post<{
     Params: { customerId: string; projectId: string; topicId: string };
-    Body: { type: string; platform?: string };
+    Body: { contentTypeId?: string; type?: string; platform?: string };
   }>(
     "/:topicId/produce",
     async (request, reply) => {
       const { customerId, projectId, topicId } = request.params;
-      const { type, platform } = (request.body ?? {}) as { type?: string; platform?: string };
+      const body = (request.body ?? {}) as { contentTypeId?: string; type?: string; platform?: string };
 
-      if (!type) {
-        return reply.status(400).send({ error: "type is required (article, social_post, newsletter)" });
+      // Resolve contentTypeId — from body directly, or from legacy type+platform
+      const ctStore = new ContentTypeStore(
+        path.join(app.ctx.dataDir, "customers", customerId, "projects", projectId),
+      );
+
+      let contentTypeId = body.contentTypeId;
+      let platform = body.platform;
+
+      // Legacy compat: map type+platform to contentTypeId
+      if (!contentTypeId && body.type) {
+        const legacyMap: Record<string, string> = {
+          article: "blog-post",
+          guide: "blog-post",
+          social_post: platform ? `${platform}-post` : "linkedin-post",
+          newsletter: "newsletter",
+        };
+        contentTypeId = legacyMap[body.type];
       }
 
-      const validTypes = ["article", "guide", "social_post", "newsletter"] as const;
-      if (!validTypes.includes(type as typeof validTypes[number])) {
-        return reply.status(400).send({ error: `Invalid type. Must be one of: ${validTypes.join(", ")}` });
+      if (!contentTypeId) {
+        return reply.status(400).send({ error: "contentTypeId is required (e.g. 'blog-post', 'linkedin-post', 'newsletter')" });
       }
 
-      const validPlatforms = ["linkedin", "instagram", "x", "tiktok"] as const;
-      if (type === "social_post" && platform && !validPlatforms.includes(platform as typeof validPlatforms[number])) {
-        return reply.status(400).send({ error: `Invalid platform. Must be one of: ${validPlatforms.join(", ")}` });
+      const contentType = ctStore.get(contentTypeId);
+      if (!contentType) {
+        return reply.status(400).send({ error: `Content type not found: ${contentTypeId}` });
+      }
+
+      // Derive platform from content type ID for social types
+      if (contentType.category === "social" && !platform) {
+        platform = contentTypeId.replace("-post", "");
       }
 
       const topics = app.ctx.topicsFor(customerId, projectId);
@@ -683,29 +759,30 @@ export async function topicRoutes(app: FastifyInstance) {
 
       // Create ContentItem linked to this flow
       const now = new Date().toISOString();
-      // Build a descriptive title based on platform
-      const platformLabels: Record<string, string> = {
-        linkedin: "LinkedIn Post",
-        instagram: "Instagram Post",
-        x: "X Post",
-        tiktok: "TikTok Post",
-      };
-      const contentTitle = type === "social_post" && platform
-        ? `${topic.title} — ${platformLabels[platform] ?? platform}`
-        : type === "newsletter"
-        ? `${topic.title} — Newsletter`
+      const contentTitle = contentType.category === "social" && platform
+        ? `${topic.title} — ${contentType.label}`
+        : contentType.category === "email"
+        ? `${topic.title} — ${contentType.label}`
         : topic.title;
+
+      // Map content type category to ContentItem type
+      const itemType = contentType.category === "social" ? "social_post" as const
+        : contentType.category === "email" ? "newsletter" as const
+        : "article" as const;
 
       const contentItem = app.ctx.contentFor(customerId, projectId).create({
         customerId,
         projectId,
-        type: type as "article" | "social_post" | "newsletter",
+        type: itemType,
         status: "planned",
         title: contentTitle,
         category: platform ?? topic.category,
-        keywords: topic.keywords ? [topic.keywords.primary, ...topic.keywords.secondary] : undefined,
-        topicId,
-        briefingId: topicId,
+        keywords: topic.enrichment?.seo?.keywords
+          ? [topic.enrichment.seo.keywords.primary, ...topic.enrichment.seo.keywords.secondary]
+          : undefined,
+        flowId: topicId,
+        originFlowId: topicId,
+        topicId, // @deprecated — kept for backward compat
         createdAt: now,
         updatedAt: now,
       });
@@ -713,24 +790,21 @@ export async function topicRoutes(app: FastifyInstance) {
       // Add to flow outputs
       topics.addOutput(topicId, contentItem.id);
 
-      // Determine pipeline type and start asynchronously
-      const pipelineType = type === "social_post" ? "social_production" as const
-        : type === "newsletter" ? "email_production" as const
-        : "production" as const;
+      // Determine pipeline config from ContentType
+      const pipelineMode = contentType.pipeline?.mode ?? "single-phase";
+      const pipelinePhases = contentType.pipeline?.phases ?? ["write"];
+      const pipelineType = pipelineMode === "multi-phase"
+        ? "production" as const
+        : contentType.category === "email"
+        ? "email_production" as const
+        : "social_production" as const;
 
-      // Create pipeline run
-      const phases = type === "social_post"
-        ? [{ name: "generate", status: "pending" as const, agentCalls: [] }, { name: "image", status: "pending" as const, agentCalls: [] }]
-        : type === "newsletter"
-        ? [{ name: "generate", status: "pending" as const, agentCalls: [] }]
-        : [
-            { name: "outline", status: "pending" as const, agentCalls: [] },
-            { name: "writing", status: "pending" as const, agentCalls: [] },
-            { name: "assembly", status: "pending" as const, agentCalls: [] },
-            { name: "image", status: "pending" as const, agentCalls: [] },
-            { name: "quality", status: "pending" as const, agentCalls: [] },
-            { name: "translation", status: "pending" as const, agentCalls: [] },
-          ];
+      // Create pipeline run with phases from ContentType
+      const phases = pipelinePhases.map((name) => ({
+        name,
+        status: "pending" as const,
+        agentCalls: [],
+      }));
 
       const run = app.ctx.pipelineRunsFor(customerId, projectId).create({
         customerId,
@@ -738,6 +812,8 @@ export async function topicRoutes(app: FastifyInstance) {
         type: pipelineType,
         status: "pending",
         topicId,
+        flowId: topicId,
+        contentId: contentItem.id,
         phases,
         totalCostUsd: 0,
         totalTokens: { input: 0, output: 0 },
@@ -752,7 +828,6 @@ export async function topicRoutes(app: FastifyInstance) {
         {
           customers: app.ctx.customers,
           projects: app.ctx.projectsFor(customerId),
-          articles: app.ctx.articlesFor(customerId, projectId),
           content: app.ctx.contentFor(customerId, projectId),
           pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
           topics: app.ctx.topicsFor(customerId, projectId),
@@ -762,30 +837,28 @@ export async function topicRoutes(app: FastifyInstance) {
       );
 
       // Fire and forget — start the appropriate pipeline
-      if (type === "article" || type === "guide") {
-        // Mark topic as in production (required by production pipeline)
+      if (pipelineMode === "multi-phase") {
+        // Multi-phase: article production (outline → write → quality → translate)
         if (topic.status === "approved") {
           topics.update(topicId, { status: "in_production" });
         }
         runProductionPipeline(ctx).catch((err) => {
           log.error({ runId: run.id, err }, "production pipeline failed");
         });
-      } else if (type === "social_post") {
-        runSocialPipeline(ctx, platform ?? "linkedin").catch((err) => {
-          log.error({ runId: run.id, err }, "social pipeline failed");
-        });
-      } else if (type === "newsletter") {
-        runEmailPipeline(ctx).catch((err) => {
-          log.error({ runId: run.id, err }, "email pipeline failed");
+      } else {
+        // Single-phase: generic content pipeline (social, email, etc.)
+        runContentPipeline(ctx, contentTypeId).catch((err) => {
+          log.error({ runId: run.id, err }, "content pipeline failed");
         });
       }
 
       return reply.status(201).send({
-        message: `${type} pipeline started`,
+        message: `${contentType.label} pipeline started`,
         contentItemId: contentItem.id,
-        briefingId: topicId,
+        contentTypeId,
+        flowId: topicId,
         runId: run.id,
-        type,
+        type: itemType,
         platform,
       });
     },

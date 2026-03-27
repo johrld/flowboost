@@ -35,6 +35,8 @@ export interface ContentItem {
   tags?: string[];
   keywords?: string[];
   author?: string;
+  flowId?: string;
+  originFlowId?: string;
   topicId?: string;
   briefingId?: string;
   translationKey?: string;
@@ -282,33 +284,37 @@ export interface Topic {
   status: TopicStatus;
   title: string;
   category: string;
-  priority: number;
-  keywords: {
-    primary: string;
-    secondary: string[];
-    longTail: string[];
-  };
-  searchIntent: string;
-  competitorInsights: string;
-  suggestedAngle: string;
-  estimatedSections: number;
-  reasoning: string;
-  format?: "article" | "guide" | "landing_page" | "social_post";
-  source?: "pipeline" | "user";
-  enriched?: boolean;
+  direction?: string;
   userNotes?: string;
-  createdAt?: string;
-  runId?: string;
-  scheduledDate?: string;
-  articleId?: string;
-  approvedAt?: string;
-  rejectedAt?: string;
-  rejectionReason?: string;
+  priority: number;
+  source?: "pipeline" | "user";
 
   // Flow extensions
   inputs?: FlowInput[];
   outputIds?: string[];
   chatDistillation?: ChatDistillation;
+
+  // Optional cached research
+  enrichment?: FlowEnrichment;
+
+  // Lifecycle
+  createdAt?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+}
+
+export interface FlowEnrichment {
+  seo?: {
+    keywords: { primary: string; secondary: string[]; longTail: string[] };
+    searchIntent: string;
+    competitorInsights: string;
+    suggestedSections?: number;
+  };
+  reasoning?: string;
+  targetAudience?: string;
+  enrichedAt: string;
+  enrichedBy: "pipeline" | "user" | "agent";
 }
 
 export type FlowInputType = "text" | "transcript" | "image" | "url" | "document";
@@ -357,6 +363,8 @@ export interface PipelineRun {
   type: "strategy" | "production" | "video_production" | "audio_production" | "social_production" | "email_production" | "update" | "translation";
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
   topicId?: string;
+  flowId?: string;
+  contentId?: string;
   phases: PipelinePhase[];
   totalCostUsd: number;
   totalTokens: { input: number; output: number };
@@ -454,24 +462,4 @@ export interface ContentIndex {
   entries: ContentIndexEntry[];
 }
 
-// ── Brief ─────────────────────────────────────────────────────────
-
-export interface Brief {
-  id: string;
-  projectId: string;
-  topicId: string;
-  topicTitle: string;
-  status: "draft" | "ready" | "in_production" | "completed";
-  createdAt: string;
-  targetKeyword: string;
-  secondaryKeywords: string[];
-  wordCountTarget: { min: number; max: number };
-  contentType: "blog" | "guide" | "landing";
-  serpIntent: "informational" | "transactional" | "navigational" | "commercial";
-  featuredSnippetTarget: boolean;
-  suggestedStructure: { heading: string; level: "h2" | "h3" }[];
-  questionsToAnswer: string[];
-  internalLinks: { url: string; anchor: string }[];
-  competitors: { domain: string; position: number; wordCount: number; score: number }[];
-}
 

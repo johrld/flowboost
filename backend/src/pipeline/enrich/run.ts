@@ -1,9 +1,20 @@
 import { createLogger } from "../../utils/logger.js";
 import { runAgentTracked, type AgentConfig } from "../engine.js";
 import type { PipelineContext } from "../context.js";
-import type { Topic } from "../../models/types.js";
 import { buildEnricherPrompt } from "../prompts/enricher.js";
 import { extractJson } from "../extract-json.js";
+
+/** Shape returned by the enricher agent (flat, pre-structured) */
+interface EnricherOutput {
+  title?: string;
+  category?: string;
+  keywords?: { primary: string; secondary: string[]; longTail: string[] };
+  searchIntent?: "informational" | "how-to" | "transactional" | "navigational";
+  competitorInsights?: string;
+  suggestedAngle?: string;
+  estimatedSections?: number;
+  reasoning?: string;
+}
 
 const log = createLogger("enrich");
 
@@ -43,13 +54,30 @@ export async function runEnrichPipeline(
     const briefingContext = ctx.buildFullFlowContext();
     const prompt = buildEnricherPrompt(project, topic, existingTopics, briefingContext);
     const result = await runAgentTracked(ctx, "enrich", prompt, config);
-    const enriched = extractJson<Partial<Topic>>(result.text);
+    const enriched = extractJson<EnricherOutput>(result.text);
 
-    // Merge enrichment data into existing topic, preserving source
+    // Build the seo block only if we have keyword data
+    const seo = (enriched.keywords && enriched.searchIntent && enriched.competitorInsights)
+      ? {
+          keywords: enriched.keywords!,
+          searchIntent: enriched.searchIntent!,
+          competitorInsights: enriched.competitorInsights!,
+          suggestedSections: enriched.estimatedSections,
+        }
+      : undefined;
+
+    // Write enrichment data to the new structured format
     ctx.stores.topics.update(topicId, {
-      ...enriched,
-      enriched: true,
-      source: topic.source, // Keep original source
+      ...(enriched.title ? { title: enriched.title } : {}),
+      ...(enriched.category ? { category: enriched.category } : {}),
+      enrichment: {
+        ...(seo ? { seo } : {}),
+        reasoning: enriched.reasoning,
+        enrichedAt: new Date().toISOString(),
+        enrichedBy: "agent",
+      },
+      direction: enriched.suggestedAngle ?? topic.direction,
+      source: topic.source,
     });
 
     ctx.completePhase("enrich");

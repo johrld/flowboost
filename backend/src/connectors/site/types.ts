@@ -1,5 +1,5 @@
 import type { ContentReader } from "../../services/sync.js";
-import type { Article, ArticleVersion, ContentItem, ContentVersion, Project } from "../../models/types.js";
+import type { ContentItem, ContentVersion, LanguageVariant, Project } from "../../models/types.js";
 import type { TransformResult } from "../templates/types.js";
 
 // ─── Connector Schema (discovered from external platforms) ───
@@ -102,8 +102,8 @@ export interface SiteConnector {
    */
   write(
     project: Project,
-    article: Article,
-    versions: ArticleVersion[],
+    contentItem: ContentItem,
+    languages: LanguageVariant[],
     versionDir: string,
   ): Promise<WriteResult>;
 
@@ -119,8 +119,8 @@ export interface SiteConnector {
    */
   update?(
     project: Project,
-    article: Article,
-    versions: ArticleVersion[],
+    contentItem: ContentItem,
+    languages: LanguageVariant[],
     versionDir: string,
     previousRef?: string,
   ): Promise<WriteResult>;

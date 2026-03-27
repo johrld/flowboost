@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useProject } from "@/lib/project-context";
-import { createTopic, enrichTopic, startStrategy } from "@/lib/api";
+import { createTopic, startStrategy } from "@/lib/api";
 import type { Topic } from "@/lib/types";
 import {
   FileText,
@@ -141,13 +141,6 @@ export function NewContentWizard({
         userNotes: notes.trim() || undefined,
         format,
       });
-
-      // Auto-enrich
-      try {
-        await enrichTopic(customerId, projectId, topic.id);
-      } catch {
-        // Enrichment failed silently — user can retry
-      }
 
       handleOpenChange(false);
       onTopicCreated?.(topic);

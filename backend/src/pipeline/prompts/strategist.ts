@@ -1,7 +1,7 @@
 import type { Project } from "../../models/types.js";
 
 interface AuditResult {
-  totalArticles: number;
+  totalContent: number;
   byCategory: Record<string, number>;
   byLanguage: Record<string, number>;
   categoryGaps: string[];
@@ -34,7 +34,7 @@ Create a prioritized content plan based on the audit and research data. This pla
 
 ## Audit Summary
 
-- Total articles: ${audit.totalArticles}
+- Total content pieces: ${audit.totalContent}
 - By category: ${JSON.stringify(audit.byCategory)}
 - By language: ${JSON.stringify(audit.byLanguage)}
 - Category gaps: ${audit.categoryGaps.join(", ") || "none"}
@@ -77,16 +77,22 @@ ${JSON.stringify(research.topics, null, 2)}
       "title": "Article Title",
       "category": "category_id",
       "priority": 1,
-      "keywords": {
-        "primary": "main keyword",
-        "secondary": ["kw2", "kw3"],
-        "longTail": ["long tail 1"]
-      },
-      "searchIntent": "how-to",
-      "competitorInsights": "...",
-      "suggestedAngle": "...",
-      "estimatedSections": 5,
-      "reasoning": "Why this topic at this priority"
+      "direction": "Suggested angle or creative direction",
+      "enrichment": {
+        "seo": {
+          "keywords": {
+            "primary": "main keyword",
+            "secondary": ["kw2", "kw3"],
+            "longTail": ["long tail 1"]
+          },
+          "searchIntent": "how-to",
+          "competitorInsights": "...",
+          "suggestedSections": 5
+        },
+        "reasoning": "Why this topic at this priority",
+        "enrichedAt": "${new Date().toISOString()}",
+        "enrichedBy": "pipeline"
+      }
     }
   ]
 }

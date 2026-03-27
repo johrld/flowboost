@@ -35,12 +35,17 @@ export async function runScriptPhase(ctx: PipelineContext): Promise<VideoScript>
   const brandVoice = ctx.getBrandVoice() ?? "";
   const lang = project.defaultLanguage;
 
+  const seo = topic.enrichment?.seo;
+  const keywords = seo?.keywords?.primary
+    ? [seo.keywords.primary, ...(seo.keywords.secondary ?? [])].join(", ")
+    : "not specified";
+
   const prompt = `You are a video scriptwriter. Create a video script for the following topic.
 
 Topic: ${topic.title}
 Category: ${topic.category}
-Keywords: ${topic.keywords.primary}, ${topic.keywords.secondary.join(", ")}
-Angle: ${topic.suggestedAngle}
+Keywords: ${keywords}
+Angle: ${topic.direction ?? ""}
 Language: ${lang}
 ${brandVoice ? `Brand Voice:\n${brandVoice}` : ""}
 

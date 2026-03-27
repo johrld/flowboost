@@ -153,7 +153,7 @@ export interface ContentPlan {
 }
 
 export interface ContentAudit {
-  totalArticles: number;
+  totalContent: number;
   byCategory: Record<string, number>;
   byLanguage: Record<string, number>;
   gaps: string[];
@@ -164,47 +164,44 @@ export interface Topic {
   status: "proposed" | "approved" | "rejected" | "in_production" | "produced" | "archived";
   title: string;
   category: string;
-  priority: number;
-
-  keywords: {
-    primary: string;
-    secondary: string[];
-    longTail: string[];
-  };
-
-  searchIntent: "informational" | "how-to" | "transactional" | "navigational";
-  competitorInsights: string;
-  suggestedAngle: string;
-  estimatedSections: number;
-  reasoning: string;
-
-  // Content format
-  format?: "article" | "guide" | "landing_page" | "social_post";
-
-  // Origin tracking
-  source?: "pipeline" | "user";
-  enriched?: boolean;
+  direction?: string;         // Creative direction / angle (generic, applies to any content type)
   userNotes?: string;
+  priority: number;
+  source?: "pipeline" | "user";
 
+  // Flow extensions — sources, chat, outputs
+  inputs?: FlowInput[];
+  outputIds?: string[];
+  chatDistillation?: ChatDistillation;
+
+  // Optional cached research (from strategy pipeline or enricher agent)
+  enrichment?: FlowEnrichment;
+
+  // Lifecycle timestamps
   createdAt?: string;
-  runId?: string;
-
-  // Scheduling
-  scheduledDate?: string; // ISO: "2025-02-14T09:00" or "2025-02-14" (legacy)
-
-  // Set after production
-  articleId?: string;
   approvedAt?: string;
   rejectedAt?: string;
   rejectionReason?: string;
+}
 
-  // ── Flow extensions ────────────────────────────────────
-  // Inputs: source material (text, files, URLs, transcripts)
-  inputs?: FlowInput[];
-  // Output references: ContentItem IDs produced from this flow
-  outputIds?: string[];
-  // Distilled chat decisions (extracted from brainstorm chat)
-  chatDistillation?: ChatDistillation;
+// ─── Flow Enrichment (optional research cache) ────────────────
+
+export interface FlowEnrichment {
+  // SEO research — relevant for articles, guides, landing pages
+  seo?: {
+    keywords: { primary: string; secondary: string[]; longTail: string[] };
+    searchIntent: "informational" | "how-to" | "transactional" | "navigational";
+    competitorInsights: string;
+    suggestedSections?: number;
+  };
+
+  // AI analysis — generically useful
+  reasoning?: string;
+  targetAudience?: string;
+
+  // Metadata
+  enrichedAt: string;
+  enrichedBy: "pipeline" | "user" | "agent";
 }
 
 // ─── Flow Input ─────────────────────────────────────────────
@@ -249,33 +246,7 @@ export interface ChatDistillation {
   distilledAt: string;
 }
 
-// ─── Articles (V2 — kept for backward compat, use ContentItem for new code) ──
-
-export interface Article {
-  id: string;
-  customerId: string;
-  projectId: string;
-  topicId: string;
-  translationKey: string;
-  status: "draft" | "review" | "approved" | "delivered" | "published";
-  createdAt: string;
-  updatedAt: string;
-  deliveredAt?: string;
-}
-
-export interface ArticleVersion {
-  id: string;
-  articleId: string;
-  lang: string;
-  slug: string;
-  wordCount: number;
-  seoScore?: number;
-  contentPath: string;  // relative path within version dir
-  assetsPath?: string;  // hero image path
-  createdAt: string;
-}
-
-// ─── Content Items (V3 — universal content model) ───────────────
+// ─── Content Items ──────────────────────────────────────────────
 
 export type ContentType =
   | "article"
@@ -313,9 +284,11 @@ export interface ContentItem {
   keywords?: string[];
   author?: string;
 
-  // Links
-  topicId?: string;
-  briefingId?: string;
+  // Flow references
+  flowId?: string;              // Active link to originating flow (nullable — cleared when flow archived + content published)
+  originFlowId?: string;        // Immutable provenance (set once at creation, never cleared)
+  topicId?: string;             // @deprecated — use flowId
+  briefingId?: string;          // @deprecated — use flowId
   translationKey?: string;
   parentId?: string;
 
@@ -524,7 +497,9 @@ export interface PipelineRun {
   projectId: string;
   type: PipelineType;
   status: RunStatus;
-  topicId?: string; // only for production runs
+  topicId?: string;     // @deprecated — use flowId
+  flowId?: string;      // Flow that triggered this run
+  contentId?: string;   // Content piece produced by this run
 
   phases: PipelinePhase[];
   totalCostUsd: number;
