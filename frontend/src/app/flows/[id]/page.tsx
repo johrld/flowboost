@@ -57,6 +57,7 @@ import {
   addFlowInput,
   uploadFlowFile,
   deleteFlowInput,
+  deleteContent,
   produceFlowOutput,
   getContent,
   getContentTypes,
@@ -338,6 +339,16 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
       window.dispatchEvent(new Event("flows-updated"));
     } catch (err) {
       console.error("Failed to update title:", err);
+    }
+  };
+
+  const handleDeleteContent = async (contentId: string) => {
+    if (!customerId || !projectId) return;
+    try {
+      await deleteContent(customerId, projectId, contentId, true);
+      await loadData();
+    } catch (err) {
+      console.error("Failed to delete content:", err);
     }
   };
 
@@ -663,21 +674,36 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     const status = STATUS_BADGE[item.status] ?? { label: item.status, variant: "secondary" as const };
                     const isProducing = item.status === "producing";
                     return (
-                      <Link
-                        key={item.id}
-                        href={`/content/${item.id}`}
-                        className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted/50 transition-colors"
-                      >
-                        <span className="text-muted-foreground shrink-0">
-                          {OUTPUT_ICONS[item.type] ?? <FileText className="h-4 w-4" />}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{item.title}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{item.type.replace("_", " ")}</p>
-                        </div>
+                      <div key={item.id} className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted/50 transition-colors group">
+                        <Link href={`/content/${item.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className="text-muted-foreground shrink-0">
+                            {OUTPUT_ICONS[item.type] ?? <FileText className="h-4 w-4" />}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{item.title}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{item.type.replace("_", " ")}</p>
+                          </div>
+                        </Link>
                         {isProducing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
                         <Badge variant={status.variant} className="text-xs shrink-0">{status.label}</Badge>
-                      </Link>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="p-1.5 rounded-md hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity shrink-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/content/${item.id}`}>
+                                <Pencil className="mr-2 h-3.5 w-3.5" />Edit
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteContent(item.id)}>
+                              <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     );
                   })}
                 </div>
