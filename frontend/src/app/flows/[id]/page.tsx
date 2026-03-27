@@ -181,7 +181,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [bottomTab, setBottomTab] = useState<"chat" | "sources" | "content">("sources");
+  const [bottomTab, setBottomTab] = useState<"chat" | "sources" | "content">("chat");
   const [isDragging, setIsDragging] = useState(false);
   const [addingInput, setAddingInput] = useState(false);
   const [sourceText, setSourceText] = useState("");
@@ -500,6 +500,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     </div>
                     <div className="flex-1">
                       <p className="text-sm mb-4">What would you like to create? Pick a format or just tell me your idea.</p>
+                      <p className="text-xs text-muted-foreground mb-4">Have URLs, documents, or images? Add them under <button type="button" onClick={() => setBottomTab("sources")} className="text-primary hover:underline">Sources</button> — I'll analyze them automatically.</p>
                       <div className="grid grid-cols-3 gap-2">
                         {(contentTypes.length > 0 ? contentTypes : [
                           { id: "article", label: "Article", category: "site" },
