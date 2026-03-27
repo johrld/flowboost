@@ -210,7 +210,6 @@ export function Sidebar() {
         <div className="flex-1 overflow-y-auto space-y-0.5">
           {activeFlows.map((flow) => {
             const isActive = pathname === `/flows/${flow.id}`;
-            const outputCount = flow.outputIds?.length ?? 0;
             const isRenaming = renamingId === flow.id;
 
             if (isRenaming) {
@@ -240,11 +239,6 @@ export function Sidebar() {
                   )}
                 >
                   <span className="flex-1 truncate">{flow.title}</span>
-                  {outputCount > 0 && (
-                    <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
-                      {outputCount}
-                    </span>
-                  )}
                 </Link>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
