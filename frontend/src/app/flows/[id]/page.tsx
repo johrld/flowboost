@@ -661,7 +661,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 <div className="space-y-1">
                   {outputs.map((item) => {
                     const status = STATUS_BADGE[item.status] ?? { label: item.status, variant: "secondary" as const };
-                    const isProducing = item.status === "planned" || item.status === "producing";
+                    const isProducing = item.status === "producing";
                     return (
                       <Link
                         key={item.id}
