@@ -68,6 +68,7 @@ import {
 import type { Topic, FlowInput, ChatMessage, ContentItem } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 import ReactMarkdown from "react-markdown";
+import { ChatOnboarding } from "@/components/chat-onboarding";
 
 // ── Icons & Config ────────────────────────────────────────────
 
@@ -192,6 +193,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const [reanalyzeNote, setReanalyzeNote] = useState("");
   const [showReanalyzeNote, setShowReanalyzeNote] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
+  const [onboardingContentType, setOnboardingContentType] = useState<ContentTypeDefinition | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -491,7 +493,23 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
           {/* ── Chat Tab ──────────────────────────── */}
           {bottomTab === ("chat" as string) && (
             <div className="space-y-4 pb-20">
-              {chatMessages.length === 0 ? (
+              {onboardingContentType ? (
+                <ChatOnboarding
+                  contentType={onboardingContentType}
+                  onComplete={async (answers, summary) => {
+                    setOnboardingContentType(null);
+                    // Send summary as chat message
+                    await handleSendMessage(summary);
+                    // Then produce
+                    let apiType = "article";
+                    let platform: string | undefined;
+                    if (onboardingContentType.category === "social") { apiType = "social_post"; platform = onboardingContentType.id.replace("-post", ""); }
+                    else if (onboardingContentType.category === "email") { apiType = "newsletter"; }
+                    await handleProduce(apiType, platform);
+                  }}
+                  onCancel={() => setOnboardingContentType(null)}
+                />
+              ) : chatMessages.length === 0 ? (
                 <div className="space-y-6">
                   {/* AI Welcome */}
                   <div className="flex gap-3">
@@ -513,7 +531,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                           <button
                             key={ct.id}
                             type="button"
-                            onClick={() => handleSendMessage(`I want to create a ${ct.label} about this topic. What do you need from me to get started?`)}
+                            onClick={() => setOnboardingContentType(ct)}
                             className="flex flex-col items-center gap-1.5 rounded-xl border p-3 hover:bg-muted/50 transition-colors text-center"
                           >
                             <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category] ?? OUTPUT_ICONS[ct.id] ?? <FileText className="h-4 w-4" />}</span>

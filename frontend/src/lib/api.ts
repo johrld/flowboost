@@ -331,6 +331,14 @@ export interface ContentTypeDefinition {
   agent?: {
     role: string;
     guidelines: string;
+    onboarding?: Array<{
+      id: string;
+      question: string;
+      type: "text" | "choice" | "multi-choice";
+      placeholder?: string;
+      options?: string[];
+      optional?: boolean;
+    }>;
   };
 }
 

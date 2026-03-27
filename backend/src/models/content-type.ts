@@ -39,11 +39,22 @@ export interface CustomFieldDefinition {
   };
 }
 
+export interface OnboardingQuestion {
+  id: string;
+  question: string;
+  type: "text" | "choice" | "multi-choice";
+  placeholder?: string;
+  options?: string[];
+  optional?: boolean;
+}
+
 export interface ContentTypeAgent {
   /** Agent role/identity — injected as first line of system prompt */
   role: string;
   /** Markdown guidelines — tone, structure, do/don'ts, examples */
   guidelines: string;
+  /** Onboarding questions shown in chat when user selects this content type */
+  onboarding?: OnboardingQuestion[];
 }
 
 export interface CustomContentType {
