@@ -66,6 +66,7 @@ import {
   getContent,
   getPipelineRuns,
   scheduleTopic,
+  updateContent,
   approveTopic,
   startProduction,
 } from "@/lib/api";
@@ -124,35 +125,42 @@ function buildCalendarItems(
   topics: Topic[]
 ): CalendarItem[] {
   const items: CalendarItem[] = [];
-  const contentByTopicId = new Map<string, ContentItem>();
-  for (const c of contentItems) {
-    if (c.topicId) contentByTopicId.set(c.topicId, c);
-  }
+  const topicMap = new Map<string, Topic>();
+  for (const t of topics) topicMap.set(t.id, t);
 
-  for (const t of topics) {
-    if (!t.scheduledDate) continue;
-    const content = contentByTopicId.get(t.id);
-    if (content) {
+  // 1. Content items with their own scheduledDate
+  for (const c of contentItems) {
+    if (c.scheduledDate) {
+      const platformLabels: Record<string, string> = { linkedin: "LinkedIn", instagram: "Instagram", x: "X", tiktok: "TikTok" };
+      const subtitle = c.type === "social_post" && c.category
+        ? platformLabels[c.category] ?? c.category
+        : c.type.replace("_", " ");
       items.push({
-        id: content.id,
-        title: content.title,
-        subtitle: `${content.category ?? content.type} · ${t.category}`,
+        id: c.id,
+        title: c.title,
+        subtitle,
         type: "content",
-        scheduledDate: t.scheduledDate,
-        contentStatus: content.status,
-        topicId: t.id,
-      });
-    } else {
-      items.push({
-        id: t.id,
-        title: t.title,
-        subtitle: t.category,
-        type: "topic",
-        scheduledDate: t.scheduledDate,
-        topicStatus: t.status,
-        topicId: t.id,
+        scheduledDate: c.scheduledDate,
+        contentStatus: c.status,
+        topicId: c.topicId,
       });
     }
+  }
+
+  // 2. Topics without content pieces but with a scheduledDate (legacy / standalone topics)
+  const topicsWithContent = new Set(contentItems.map((c) => c.topicId).filter(Boolean));
+  for (const t of topics) {
+    if (!t.scheduledDate) continue;
+    if (topicsWithContent.has(t.id)) continue; // skip — content items handle this
+    items.push({
+      id: t.id,
+      title: t.title,
+      subtitle: t.category,
+      type: "topic",
+      scheduledDate: t.scheduledDate,
+      topicStatus: t.status,
+      topicId: t.id,
+    });
   }
 
   return items;
@@ -886,23 +894,39 @@ export default function DashboardPage() {
     const originalTime = item.scheduledDate.includes("T") ? item.scheduledDate.split("T")[1] : defaultTime;
     const newScheduledDate = `${targetDateStr}T${originalTime}`;
 
-    const topicId = item.type === "topic"
-      ? item.id
-      : contentData.find((c) => c.id === item.id)?.topicId;
-
-    if (topicId && customerId && projectId) {
-      setTopicData((prev) =>
-        prev.map((t) =>
-          t.id === topicId ? { ...t, scheduledDate: newScheduledDate } : t
-        )
-      );
-      scheduleTopic(customerId, projectId, topicId, newScheduledDate).catch(() => {
-        setTopicData((prev) =>
-          prev.map((t) =>
-            t.id === topicId ? { ...t, scheduledDate: item.scheduledDate } : t
+    if (item.type === "content") {
+      // Update content item's scheduledDate
+      if (customerId && projectId) {
+        setContentData((prev) =>
+          prev.map((c) =>
+            c.id === item.id ? { ...c, scheduledDate: newScheduledDate } : c
           )
         );
-      });
+        updateContent(customerId, projectId, item.id, { scheduledDate: newScheduledDate }).catch(() => {
+          setContentData((prev) =>
+            prev.map((c) =>
+              c.id === item.id ? { ...c, scheduledDate: item.scheduledDate } : c
+            )
+          );
+        });
+      }
+    } else {
+      // Legacy: update topic's scheduledDate
+      const topicId = item.id;
+      if (topicId && customerId && projectId) {
+        setTopicData((prev) =>
+          prev.map((t) =>
+            t.id === topicId ? { ...t, scheduledDate: newScheduledDate } : t
+          )
+        );
+        scheduleTopic(customerId, projectId, topicId, newScheduledDate).catch(() => {
+          setTopicData((prev) =>
+            prev.map((t) =>
+              t.id === topicId ? { ...t, scheduledDate: item.scheduledDate } : t
+            )
+          );
+        });
+      }
     }
   }
 
