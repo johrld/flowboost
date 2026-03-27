@@ -229,21 +229,10 @@ export async function contentRoutes(app: FastifyInstance) {
         stageHeroImageForDelivery(contentMedia, freshItem.heroImageId, versionDir, latestVersion.languages);
       }
 
-      // Build ArticleVersion-compatible objects for SiteConnector
-      const articleVersions = latestVersion.languages.map((lang) => ({
-        id: latestVersion.id,
-        articleId: contentId,
-        lang: lang.lang,
-        slug: lang.slug,
-        wordCount: lang.wordCount ?? 0,
-        contentPath: lang.contentPath,
-        createdAt: latestVersion.createdAt,
-      }));
-
       const result = await connector.write(
         project,
-        { ...freshItem, topicId: freshItem.topicId ?? "", translationKey: freshItem.translationKey ?? "" } as import("../../models/types.js").Article,
-        articleVersions,
+        freshItem,
+        latestVersion.languages,
         versionDir,
       );
 
@@ -404,29 +393,20 @@ export async function contentRoutes(app: FastifyInstance) {
 
     const connector = createSiteConnector(project);
     const versionDir = content.getVersionDir(contentId, latestVersion.id);
-    const articleVersions = latestVersion.languages.map((lang) => ({
-      id: latestVersion.id,
-      articleId: contentId,
-      lang: lang.lang,
-      slug: lang.slug,
-      wordCount: lang.wordCount ?? 0,
-      contentPath: lang.contentPath,
-      createdAt: latestVersion.createdAt,
-    }));
 
     // Use update() if available, otherwise fallback to write()
     const result = connector.update
       ? await connector.update(
           project,
-          { ...item, topicId: item.topicId ?? "", translationKey: item.translationKey ?? "" } as import("../../models/types.js").Article,
-          articleVersions,
+          item,
+          latestVersion.languages,
           versionDir,
           item.deliveryRef,
         )
       : await connector.write(
           project,
-          { ...item, topicId: item.topicId ?? "", translationKey: item.translationKey ?? "" } as import("../../models/types.js").Article,
-          articleVersions,
+          item,
+          latestVersion.languages,
           versionDir,
         );
 

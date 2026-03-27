@@ -66,7 +66,6 @@ import {
   getTopics,
   getContent,
   getPipelineRuns,
-  scheduleTopic,
   updateContent,
   approveTopic,
   startProduction,
@@ -143,25 +142,9 @@ function buildCalendarItems(
         type: "content",
         scheduledDate: c.scheduledDate,
         contentStatus: c.status,
-        topicId: c.topicId,
+        topicId: c.flowId ?? c.topicId,
       });
     }
-  }
-
-  // 2. Topics without content pieces but with a scheduledDate (legacy / standalone topics)
-  const topicsWithContent = new Set(contentItems.map((c) => c.topicId).filter(Boolean));
-  for (const t of topics) {
-    if (!t.scheduledDate) continue;
-    if (topicsWithContent.has(t.id)) continue; // skip — content items handle this
-    items.push({
-      id: t.id,
-      title: t.title,
-      subtitle: t.category,
-      type: "topic",
-      scheduledDate: t.scheduledDate,
-      topicStatus: t.status,
-      topicId: t.id,
-    });
   }
 
   return items;
@@ -310,8 +293,8 @@ function DraggableCard({
           )}
         </div>
         <p className="text-sm font-medium line-clamp-2">{item.title}</p>
-        {topic?.suggestedAngle && (
-          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{topic.suggestedAngle}</p>
+        {topic?.direction && (
+          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{topic.direction}</p>
         )}
         <div className="flex flex-wrap items-center gap-1.5 mt-2">
           {item.contentStatus && <ContentStatusBadge status={item.contentStatus} />}
@@ -373,9 +356,10 @@ function DetailDialog({
     return c?.labels.de ?? c?.labels.en ?? catId;
   };
 
+  const seoKeywords = topic?.enrichment?.seo?.keywords;
   const keywords = content?.keywords
-    ?? (topic?.keywords
-      ? [topic.keywords.primary, ...topic.keywords.secondary, ...topic.keywords.longTail]
+    ?? (seoKeywords
+      ? [seoKeywords.primary, ...seoKeywords.secondary, ...seoKeywords.longTail]
       : []);
 
   const datePrefix = item.scheduledDate.split("T")[0];
@@ -383,7 +367,7 @@ function DetailDialog({
     ? item.scheduledDate.split("T")[1]
     : null;
   const isLocked = item.contentStatus && LOCKED_STATUSES.includes(item.contentStatus);
-  const hasAnalysis = topic?.reasoning || topic?.competitorInsights;
+  const hasAnalysis = topic?.enrichment?.reasoning || topic?.enrichment?.seo?.competitorInsights;
 
   return (
     <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
@@ -399,9 +383,9 @@ function DetailDialog({
           <DialogTitle className="text-lg leading-snug pr-6">
             {item.title}
           </DialogTitle>
-          {(content?.description || topic?.suggestedAngle) && (
+          {(content?.description || topic?.direction) && (
             <DialogDescription>
-              {content?.description ?? topic?.suggestedAngle}
+              {content?.description ?? topic?.direction}
             </DialogDescription>
           )}
         </DialogHeader>
@@ -413,16 +397,16 @@ function DetailDialog({
               <span className="font-medium">{catLabel(topic.category)}</span>
             </div>
           )}
-          {topic?.searchIntent && (
+          {topic?.enrichment?.seo?.searchIntent && (
             <div className="flex items-center justify-between py-2">
               <span className="text-muted-foreground">Search Intent</span>
-              <span className="font-medium capitalize">{topic.searchIntent}</span>
+              <span className="font-medium capitalize">{topic.enrichment.seo.searchIntent}</span>
             </div>
           )}
-{topic?.estimatedSections && (
+          {topic?.enrichment?.seo?.suggestedSections && (
             <div className="flex items-center justify-between py-2">
               <span className="text-muted-foreground">Sections</span>
-              <span className="font-medium">~{topic.estimatedSections}</span>
+              <span className="font-medium">~{topic.enrichment.seo.suggestedSections}</span>
             </div>
           )}
           <div className="flex items-center justify-between py-2">
@@ -474,16 +458,16 @@ function DetailDialog({
               AI Analysis
             </summary>
             <div className="space-y-3 pt-2 pl-5">
-              {topic?.reasoning && (
+              {topic?.enrichment?.reasoning && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Agent Reasoning</p>
-                  <p className="text-sm text-foreground/80 leading-relaxed">{topic.reasoning}</p>
+                  <p className="text-sm text-foreground/80 leading-relaxed">{topic.enrichment.reasoning}</p>
                 </div>
               )}
-              {topic?.competitorInsights && (
+              {topic?.enrichment?.seo?.competitorInsights && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Competitor Insights</p>
-                  <p className="text-sm text-foreground/80 leading-relaxed">{topic.competitorInsights}</p>
+                  <p className="text-sm text-foreground/80 leading-relaxed">{topic.enrichment.seo.competitorInsights}</p>
                 </div>
               )}
             </div>
@@ -535,7 +519,7 @@ function DetailDialog({
             </Link>
           )}
           {item.type === "topic" && (
-            <Link href={`/briefings/${item.topicId}`} className="flex-1">
+            <Link href={`/flows/${item.topicId}`} className="flex-1">
               <Button variant="outline" className="w-full gap-1.5">
                 View Details
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -789,12 +773,12 @@ export default function DashboardPage() {
   const calendarItems = buildCalendarItems(contentData, topicData);
   const topicById = new Map(topicData.map((t) => [t.id, t]));
 
+  // Topics that have at least one scheduled content item
   const scheduledTopicIds = new Set(
-    topicData.filter((t) => t.scheduledDate).map((t) => t.id),
+    contentData.filter((c) => c.scheduledDate && (c.flowId ?? c.topicId)).map((c) => c.flowId ?? c.topicId!),
   );
   const unscheduled = topicData.filter(
     (t) =>
-      !t.scheduledDate &&
       !scheduledTopicIds.has(t.id) &&
       (["proposed", "approved"] as string[]).includes(t.status)
   );
@@ -873,74 +857,31 @@ export default function DashboardPage() {
           );
         });
       }
-    } else {
-      // Legacy: update topic's scheduledDate
-      const topicId = item.id;
-      if (topicId && customerId && projectId) {
-        setTopicData((prev) =>
-          prev.map((t) =>
-            t.id === topicId ? { ...t, scheduledDate: newScheduledDate } : t
-          )
-        );
-        scheduleTopic(customerId, projectId, topicId, newScheduledDate).catch(() => {
-          setTopicData((prev) =>
-            prev.map((t) =>
-              t.id === topicId ? { ...t, scheduledDate: item.scheduledDate } : t
-            )
-          );
-        });
-      }
     }
   }
 
   function handleUnschedule(item: CalendarItem) {
-    if (!customerId || !projectId) return;
-    const topicId = item.type === "topic"
-      ? item.id
-      : contentData.find((c) => c.id === item.id)?.topicId;
-    if (!topicId) return;
+    if (!customerId || !projectId || item.type !== "content") return;
     const oldDate = item.scheduledDate;
-    setTopicData((prev) =>
-      prev.map((t) => (t.id === topicId ? { ...t, scheduledDate: undefined } : t))
+    setContentData((prev) =>
+      prev.map((c) => (c.id === item.id ? { ...c, scheduledDate: undefined } : c))
     );
-    scheduleTopic(customerId, projectId, topicId, null).catch(() => {
-      setTopicData((prev) =>
-        prev.map((t) => (t.id === topicId ? { ...t, scheduledDate: oldDate } : t))
+    updateContent(customerId, projectId, item.id, { scheduledDate: null as unknown as string }).catch(() => {
+      setContentData((prev) =>
+        prev.map((c) => (c.id === item.id ? { ...c, scheduledDate: oldDate } : c))
       );
     });
   }
 
   function handleTimeChange(item: CalendarItem, newScheduledDate: string) {
-    if (!customerId || !projectId) return;
-    const topicId = item.type === "topic"
-      ? item.id
-      : contentData.find((c) => c.id === item.id)?.topicId;
-    if (!topicId) return;
+    if (!customerId || !projectId || item.type !== "content") return;
     const oldDate = item.scheduledDate;
-    setTopicData((prev) =>
-      prev.map((t) => (t.id === topicId ? { ...t, scheduledDate: newScheduledDate } : t))
+    setContentData((prev) =>
+      prev.map((c) => (c.id === item.id ? { ...c, scheduledDate: newScheduledDate } : c))
     );
-    scheduleTopic(customerId, projectId, topicId, newScheduledDate).catch(() => {
-      setTopicData((prev) =>
-        prev.map((t) => (t.id === topicId ? { ...t, scheduledDate: oldDate } : t))
-      );
-    });
-  }
-
-  function handleAssign(topicId: string, dateStr: string) {
-    if (!customerId || !projectId) return;
-    setTopicData((prev) =>
-      prev.map((t) =>
-        t.id === topicId
-          ? { ...t, scheduledDate: dateStr, status: "approved" as const }
-          : t
-      )
-    );
-    scheduleTopic(customerId, projectId, topicId, dateStr).catch(() => {
-      setTopicData((prev) =>
-        prev.map((t) =>
-          t.id === topicId ? { ...t, scheduledDate: undefined } : t
-        )
+    updateContent(customerId, projectId, item.id, { scheduledDate: newScheduledDate }).catch(() => {
+      setContentData((prev) =>
+        prev.map((c) => (c.id === item.id ? { ...c, scheduledDate: oldDate } : c))
       );
     });
   }

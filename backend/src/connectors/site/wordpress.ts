@@ -1,7 +1,7 @@
 import { createLogger } from "../../utils/logger.js";
 import type { ContentReader } from "../../services/sync.js";
 import type { SiteConnector, ConnectorSchema, ConnectorSlot, WriteResult } from "./types.js";
-import type { Article, ArticleVersion, ContentItem, ContentVersion, Project } from "../../models/types.js";
+import type { ContentItem, ContentVersion, LanguageVariant, Project } from "../../models/types.js";
 
 const log = createLogger("connector:wordpress");
 
@@ -58,19 +58,19 @@ export class WordPressSiteConnector implements SiteConnector {
 
   async write(
     _project: Project,
-    article: Article,
-    versions: ArticleVersion[],
+    contentItem: ContentItem,
+    languages: LanguageVariant[],
     versionDir: string,
   ): Promise<WriteResult> {
     const fs = await import("node:fs");
     const path = await import("node:path");
 
-    const version = versions[0];
-    if (!version) {
-      return { success: false, ref: "", published: false, filesWritten: [], error: "No version" };
+    const lang = languages[0];
+    if (!lang) {
+      return { success: false, ref: "", published: false, filesWritten: [], error: "No language variant" };
     }
 
-    const contentPath = path.join(versionDir, "content", version.lang, `${version.slug}.md`);
+    const contentPath = path.join(versionDir, "content", lang.lang, `${lang.slug}.md`);
     if (!fs.existsSync(contentPath)) {
       return { success: false, ref: "", published: false, filesWritten: [], error: "Content file not found" };
     }
@@ -79,7 +79,7 @@ export class WordPressSiteConnector implements SiteConnector {
 
     try {
       const post = await this.apiPost<{ id: number; link: string }>("/wp/v2/posts", {
-        title: article.translationKey,
+        title: contentItem.translationKey ?? contentItem.title,
         content: markdown,
         status: "draft",
       });

@@ -8,7 +8,6 @@ import { readChat } from "../models/chat.js";
 import { buildFlowContext } from "./flow-context.js";
 import type { CustomerStore } from "../models/customer.js";
 import type { ProjectStore } from "../models/project.js";
-import type { ArticleStore } from "../models/article.js";
 import type { ContentStore } from "../models/content.js";
 import type { PipelineRunStore } from "../models/pipeline-run.js";
 import type { TopicStore } from "../models/topic.js";
@@ -22,7 +21,6 @@ export class PipelineContext {
     public readonly stores: {
       customers: CustomerStore;
       projects: ProjectStore;
-      articles: ArticleStore;
       content: ContentStore;
       pipelineRuns: PipelineRunStore;
       topics: TopicStore;

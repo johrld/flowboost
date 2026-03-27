@@ -3,7 +3,7 @@ import path from "node:path";
 import { createLogger } from "../../utils/logger.js";
 import type { ContentReader } from "../../services/sync.js";
 import type { SiteConnector, WriteResult, UnpublishResult } from "./types.js";
-import type { Article, ArticleVersion, Project } from "../../models/types.js";
+import type { ContentItem, LanguageVariant, Project } from "../../models/types.js";
 
 const log = createLogger("connector:filesystem");
 
@@ -24,8 +24,8 @@ export class FilesystemSiteConnector implements SiteConnector {
 
   async write(
     project: Project,
-    article: Article,
-    versions: ArticleVersion[],
+    contentItem: ContentItem,
+    languages: LanguageVariant[],
     versionDir: string,
   ): Promise<WriteResult> {
     const filesWritten: string[] = [];
@@ -37,9 +37,9 @@ export class FilesystemSiteConnector implements SiteConnector {
       ?? "src/assets/posts";
 
     try {
-      for (const version of versions) {
-        const sourceContent = path.join(versionDir, "content", version.lang, `${version.slug}.md`);
-        const targetContent = path.join(this.outputDir, contentPath, version.lang, `${version.slug}.md`);
+      for (const lang of languages) {
+        const sourceContent = path.join(versionDir, "content", lang.lang, `${lang.slug}.md`);
+        const targetContent = path.join(this.outputDir, contentPath, lang.lang, `${lang.slug}.md`);
 
         if (fs.existsSync(sourceContent)) {
           fs.mkdirSync(path.dirname(targetContent), { recursive: true });
@@ -47,9 +47,9 @@ export class FilesystemSiteConnector implements SiteConnector {
           filesWritten.push(targetContent);
         }
 
-        const sourceAssetsDir = path.join(versionDir, "assets", version.lang);
+        const sourceAssetsDir = path.join(versionDir, "assets", lang.lang);
         if (fs.existsSync(sourceAssetsDir)) {
-          const targetAssetsDir = path.join(this.outputDir, assetsPath, version.lang);
+          const targetAssetsDir = path.join(this.outputDir, assetsPath, lang.lang);
           fs.mkdirSync(targetAssetsDir, { recursive: true });
           for (const file of fs.readdirSync(sourceAssetsDir)) {
             fs.copyFileSync(
@@ -61,11 +61,11 @@ export class FilesystemSiteConnector implements SiteConnector {
         }
       }
 
-      log.info({ articleId: article.id, files: filesWritten.length }, "filesystem write complete");
+      log.info({ contentId: contentItem.id, files: filesWritten.length }, "filesystem write complete");
 
       return {
         success: true,
-        ref: article.id,
+        ref: contentItem.id,
         published: true, // Filesystem: write = publish
         filesWritten,
       };
@@ -78,13 +78,13 @@ export class FilesystemSiteConnector implements SiteConnector {
 
   async update(
     project: Project,
-    article: Article,
-    versions: ArticleVersion[],
+    contentItem: ContentItem,
+    languages: LanguageVariant[],
     versionDir: string,
     _previousRef?: string,
   ): Promise<WriteResult> {
     // Filesystem update = overwrite (same as write)
-    return this.write(project, article, versions, versionDir);
+    return this.write(project, contentItem, languages, versionDir);
   }
 
   async unpublish(ref: string, _options?: { soft?: boolean }): Promise<UnpublishResult> {

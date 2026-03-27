@@ -39,7 +39,6 @@ import {
   archiveContent,
   restoreContent,
   getTopics,
-  scheduleTopic,
   getContentMedia,
   getContentMediaUrl,
   generateHeroImage,
@@ -402,22 +401,22 @@ export default function ContentEditorPage({
       setItem(data);
       setVersions(data.versions ?? []);
 
-      // Load topic for scheduling info
+      // Load topic
       if (data.topicId) {
         try {
           const topics = await getTopics(customerId, projectId);
           const t = topics.find((tp) => tp.id === data.topicId);
-          if (t) {
-            setTopic(t);
-            if (t.scheduledDate) {
-              const [d, time] = t.scheduledDate.includes("T")
-                ? t.scheduledDate.split("T")
-                : [t.scheduledDate, ""];
-              setSchedDate(d);
-              setSchedTime(time);
-            }
-          }
+          if (t) setTopic(t);
         } catch { /* ignore */ }
+      }
+
+      // Use content item's own scheduledDate
+      if (data.scheduledDate) {
+        const [d, time] = data.scheduledDate.includes("T")
+          ? data.scheduledDate.split("T")
+          : [data.scheduledDate, ""];
+        setSchedDate(d);
+        setSchedTime(time);
       }
 
       // Load media assets
@@ -1019,9 +1018,9 @@ export default function ContentEditorPage({
                     value={schedDate}
                     onChange={(e) => {
                       setSchedDate(e.target.value);
-                      if (e.target.value && customerId && projectId && topic) {
+                      if (e.target.value && customerId && projectId && item) {
                         const newVal = schedTime ? `${e.target.value}T${schedTime}` : e.target.value;
-                        scheduleTopic(customerId, projectId, topic.id, newVal);
+                        updateContent(customerId, projectId, item.id, { scheduledDate: newVal });
                       }
                     }}
                   />
@@ -1034,9 +1033,9 @@ export default function ContentEditorPage({
                     value={schedTime}
                     onChange={(e) => {
                       setSchedTime(e.target.value);
-                      if (schedDate && customerId && projectId && topic) {
+                      if (schedDate && customerId && projectId && item) {
                         const newVal = e.target.value ? `${schedDate}T${e.target.value}` : schedDate;
-                        scheduleTopic(customerId, projectId, topic.id, newVal);
+                        updateContent(customerId, projectId, item.id, { scheduledDate: newVal });
                       }
                     }}
                   />

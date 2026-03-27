@@ -43,7 +43,6 @@ export async function pipelineRoutes(app: FastifyInstance) {
       {
         customers: app.ctx.customers,
         projects: app.ctx.projectsFor(customerId),
-        articles: app.ctx.articlesFor(customerId, projectId),
         content: app.ctx.contentFor(customerId, projectId),
         pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
         topics: app.ctx.topicsFor(customerId, projectId),
@@ -112,7 +111,6 @@ export async function pipelineRoutes(app: FastifyInstance) {
       {
         customers: app.ctx.customers,
         projects: app.ctx.projectsFor(customerId),
-        articles: app.ctx.articlesFor(customerId, projectId),
         content: app.ctx.contentFor(customerId, projectId),
         pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
         topics: app.ctx.topicsFor(customerId, projectId),
@@ -174,7 +172,6 @@ export async function pipelineRoutes(app: FastifyInstance) {
       {
         customers: app.ctx.customers,
         projects: app.ctx.projectsFor(customerId),
-        articles: app.ctx.articlesFor(customerId, projectId),
         content: app.ctx.contentFor(customerId, projectId),
         pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
         topics: app.ctx.topicsFor(customerId, projectId),
@@ -233,7 +230,6 @@ export async function pipelineRoutes(app: FastifyInstance) {
       {
         customers: app.ctx.customers,
         projects: app.ctx.projectsFor(customerId),
-        articles: app.ctx.articlesFor(customerId, projectId),
         content: app.ctx.contentFor(customerId, projectId),
         pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
         topics: app.ctx.topicsFor(customerId, projectId),
@@ -292,7 +288,6 @@ export async function pipelineRoutes(app: FastifyInstance) {
       {
         customers: app.ctx.customers,
         projects: app.ctx.projectsFor(customerId),
-        articles: app.ctx.articlesFor(customerId, projectId),
         content: app.ctx.contentFor(customerId, projectId),
         pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
         topics: app.ctx.topicsFor(customerId, projectId),

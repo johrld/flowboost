@@ -2,155 +2,172 @@
 
 ## Overview
 
-FlowBoost is an AI-powered content pipeline that researches, writes, reviews, and publishes content across multiple formats and platforms.
+FlowBoost is an AI-powered content pipeline. Users create **Flows** (creative workspaces), add sources, brainstorm with AI, then produce any type of content — blog posts, social media, newsletters, and platform-specific formats (Shopware, WordPress ACF).
 
 ```
 ┌──────────────────────┐    REST API    ┌──────────────────────┐
-│   Next.js Dashboard  │ ◄────────────► │   Fastify Backend    │
+│   Next.js Frontend   │ <────────────> │   Fastify Backend    │
 │   (React 19, Shadcn) │                │   (TypeScript, ESM)  │
 └──────────────────────┘                └──────────┬───────────┘
                                                    │
                                         ┌──────────▼───────────┐
                                         │  Claude Agent SDK    │
-                                        │  query() → CLI       │
+                                        │  Agents + MCP Tools  │
                                         └──────────┬───────────┘
-                                                   │ MCP
+                                                   │
                                         ┌──────────▼───────────┐
-                                        │  MCP Tools (stdio)   │
-                                        │  validate, assemble  │
-                                        │  read project data   │
+                                        │  Connectors          │
+                                        │  GitHub, WordPress,  │
+                                        │  Shopware, Filesystem│
                                         └──────────────────────┘
 ```
 
-## Core Entities
-
-### Flow (= Topic)
-
-The central workspace. A Flow bundles everything around one content theme. Flows extend the existing `Topic` entity with additional fields.
+## User Flow
 
 ```
-Topic (= Flow)
-├── title, status, category, priority
-├── keywords                — { primary, secondary[], longTail[] }
-├── searchIntent            — "informational" | "how-to" | "transactional" | "navigational"
-├── competitorInsights      — string (flat field, not nested)
-├── suggestedAngle          — string (flat field, not nested)
-├── userNotes?              — free-form notes
-├── inputs?                 — FlowInput[] (text, files, URLs, transcripts)
-├── outputIds?              — string[] (ContentItem IDs)
-├── chat                    — ChatMessage[] (stored as chat.jsonl)
-├── format?                 — "article" | "guide" | "landing_page" | "social_post"
-├── source?                 — "pipeline" | "user"
-└── scheduledDate?
+1. CREATE FLOW         User creates a Flow with a title ("Atemtechnik für Einsteiger")
+       │
+2. ADD SOURCES         Upload PDFs, paste URLs, record voice memos, add images
+       │               Each source is auto-processed (summarized, transcribed, described)
+       │
+3. BRAINSTORM          Chat with AI about direction, tone, key points
+       │               Chat distillation extracts decisions automatically
+       │
+4. SELECT CONTENT      Choose what to produce: Blog Post, LinkedIn, Newsletter, etc.
+       │               Each is a ContentType — defines fields, agent, pipeline
+       │
+5. CREATE WITH AI      Click "Create with AI" on any content type
+       │               ├── LinkedIn/Instagram/Newsletter → 1 agent, instant
+       │               └── Blog Post → 6 agents, multi-phase (research → publish)
+       │
+6. EDIT + REFINE       Review AI output in editor, chat for refinement
+       │
+7. APPROVE + DELIVER   Connector writes to platform (GitHub PR, WordPress, etc.)
 ```
 
-Topics from the Strategy Pipeline become Flows when the user creates them. The `inputs` and `outputIds` fields are optional — existing topics without them continue to work.
+## Core Principles
 
-### ContentItem
+1. **ContentType-driven** — The ContentType (JSON definition) drives everything: what the agent writes, how it writes, which pipeline phases run. No hardcoded content logic.
+2. **Flow = neutral workspace** — A Flow has a title, sources, and chat. No article-specific fields. SEO data lives in optional `enrichment`.
+3. **Flat content model** — ContentItems are not nested under Flows. Connected via `flowId` reference (like Contentful).
+4. **Safe references** — `flowId` (active, nullable) + `originFlowId` (immutable provenance). Broken references don't crash.
 
-A produced piece of content. Universal model for all content types.
-
-```
-ContentItem
-├── type              — "article" | "guide" | "landing_page" | "video" | "audio" | "social_post" | "newsletter"
-├── status            — planned | producing | draft | review | approved | delivered | published | updating | archived
-├── title, description?, category?, tags?, keywords?, author?
-├── topicId?          — Link to originating Topic
-├── flowId (briefingId in data)?       — Link to Flow
-├── parentId?         — Link to parent ContentItem
-├── currentVersionId?, lastPublishedVersionId?
-├── deliveryRef?      — Platform-specific reference (PR number, post ID, category ID)
-├── deliveryUrl?      — URL to published content
-├── heroImageId?
-└── timestamps        — createdAt, updatedAt, approvedAt?, deliveredAt?, publishedAt?, archivedAt?
-```
-
-### ContentVersion
-
-A version of a ContentItem. Stores typed metadata per content type.
+## Entity Hierarchy
 
 ```
-ContentVersion
-├── languages[]       — LanguageVariant { lang, slug, title, description, contentPath, wordCount? }
-├── assets[]          — MediaAssetRef { assetId, role, lang? }
-├── text?             — TextVersionMeta { wordCount, headingCount, hasFaq, hasAnswerCapsule, readabilityScore? }
-├── video?            — VideoVersionMeta { durationSeconds, resolution, format, hasSubtitles }
-├── audio?            — AudioVersionMeta { durationSeconds, format, sampleRate, hasTranscript }
-├── social?           — SocialVersionMeta { platform, characterCount, hashtagCount, hasMedia, format?, slideCount? }
-├── newsletter?       — NewsletterVersionMeta { subject, previewText, wordCount, sectionCount }
-├── customFields?     — Record<string, unknown> (connector-specific slot data)
-├── connectorSchemaId? — Reference to imported connector schema
-├── pipelineRunId?    — Which pipeline run produced this
-├── seoScore?, qualityScore?
-└── createdBy         — "pipeline" | "user" | "sync"
+Customer
+  ├── brand-voice.md
+  └── Project (1:N)
+       ├── languages[], categories[], keywords{}
+       ├── connector (delivery platform config)
+       ├── pipeline (AI model settings)
+       ├── content-types/ (JSON definitions)
+       │
+       ├── Flow (1:N)  ← "Topic" in code
+       │    ├── title, category, direction
+       │    ├── inputs[] (sources: text, URLs, PDFs, audio, images)
+       │    ├── chat + chatDistillation
+       │    ├── enrichment? (optional SEO research cache)
+       │    └── outputIds[] → refs to ContentItems
+       │
+       ├── ContentItem (1:N)  ← flat, not nested under Flow
+       │    ├── type: article | social_post | newsletter | guide | ...
+       │    ├── flowId → active ref to Flow (nullable)
+       │    ├── originFlowId → immutable provenance
+       │    └── ContentVersion (1:N)
+       │         ├── languages[] (lang, slug, title, contentPath)
+       │         ├── text? | social? | newsletter? (type-specific meta)
+       │         └── customFields? (connector slot data)
+       │
+       ├── MediaAsset (1:N)  ← project-wide library
+       ├── PipelineRun (1:N)  ← flowId + contentId refs
+       └── ContentIndex (sync state with platforms)
 ```
 
-### ContentTypeDefinition (CustomContentType)
+## ContentType System
 
-Defines fields and constraints for a content format. Stored as JSON files in `content-types/` directory per project.
+ContentTypes define **what** gets produced and **how** the AI agent works. Stored as JSON files per project.
 
-Built-in types (shipped with FlowBoost): `blog-post`, `linkedin-post`, `x-post`, `instagram-post`, `newsletter`.
-Connector-imported types: Created via `discoverSchemas()` (e.g. Shopware CMS layouts, WordPress ACF field groups).
-Custom types: User-defined via Template Builder (planned).
+```
+content-types/
+  blog-post.json          ← multi-phase, SEO-optimized articles
+  linkedin-post.json      ← single-phase, thought leadership
+  instagram-post.json     ← single-phase, visual-first
+  x-post.json             ← single-phase, 280 chars
+  tiktok-post.json        ← single-phase, hook-driven
+  newsletter.json         ← single-phase, email
+  shopware-landing.json   ← imported from connector schema
+```
+
+Each ContentType defines:
+
+| Field | Purpose |
+|-------|---------|
+| `fields[]` | Content fields with types and constraints (charLimit, wordCount, maxItems) |
+| `agent.role` | Agent identity — first line of system prompt |
+| `agent.guidelines` | Markdown: tone, structure, dos/don'ts |
+| `pipeline.mode` | `"single-phase"` or `"multi-phase"` |
+| `pipeline.phases` | Ordered phase list: `["write", "image"]` or `["research", "outline", "write", "quality", "image", "translate"]` |
+| `category` | `"site"` / `"social"` / `"email"` / `"media"` |
+
+**Adding a new content type requires zero code changes** — just create a JSON file.
 
 ## Data Flow
 
 ```
-1. BRIEFING
-   User creates a Flow, adds inputs (text, files, URLs).
-   Optionally brainstorms with AI via chat, runs Research (enrich).
+1. CREATE FLOW
+   User creates Flow with title + direction.
+   Optionally uploads sources (URLs, PDFs, audio, images, text).
+   Each source is auto-processed (summarized, transcribed, described).
 
-2. PRODUCE
-   User clicks "Create" → selects content type
-   → POST /customers/:cid/projects/:pid/topics/:tid/produce { type, platform? }
-   → Creates ContentItem with flowId (briefingId in data)
-   → Starts appropriate pipeline (production, social_production, email_production)
+2. BRAINSTORM (optional)
+   User chats with AI about direction, tone, structure.
+   Chat distillation extracts key decisions, must-includes, rejected ideas.
 
-3. PIPELINE
-   AI agents generate content. Each content type has its own pipeline.
-   Output: ContentVersion with typed metadata.
+3. PRODUCE
+   User selects ContentType (e.g. "LinkedIn Post") → clicks "Create with AI".
+   POST /topics/:id/produce { contentTypeId: "linkedin-post" }
+   → ContentItem created (status: planned)
+   → Pipeline dispatched based on ContentType.pipeline.mode
 
-4. DELIVERY
-   Connector writes content to target platform.
-   GitHub: Markdown → Clone → Commit → PR
-   Shopware: Slot content → PATCH /api/category (slotConfig merge)
-   WordPress: HTML → POST /wp/v2/posts (+ ACF fields)
-   Filesystem: File copy
+4. PIPELINE
+   Single-phase: Write (+ optional Image) → ContentVersion created
+   Multi-phase: Research → Outline → Write → Quality → Image → Translate
+
+5. REVIEW + EDIT
+   User sees result in editor, edits fields, chats for refinement.
+
+6. DELIVERY
+   Approve → Connector writes to platform (GitHub PR, WordPress post, Shopware slot, filesystem).
+```
+
+## Pipeline Architecture
+
+```
+ContentType.pipeline.mode
+  │
+  ├── "single-phase" → runContentPipeline(ctx, contentTypeId)
+  │   Generic pipeline for ANY ContentType.
+  │   Loads ContentType → builds prompt → runs agent → creates version.
+  │   Agent has: WebSearch, WebFetch, Read, MCP tools.
+  │   Works for: social, email, any future single-phase type.
+  │
+  └── "multi-phase" → runProductionPipeline(ctx)
+      Blog-post specific (6 specialized agents).
+      Research → Outline → Write → Assembly → Quality → Image → Translate.
+      Each phase has a dedicated agent with focused tools.
 ```
 
 ## Connectors
 
-### Site Connectors (`connectors/site/`)
+| Connector | Write | Publish | Schema Discovery |
+|-----------|-------|---------|-----------------|
+| **GitHub** | Clone → Branch → Commit → PR | Merge PR | No |
+| **WordPress** | POST /wp/v2/posts (+ ACF) | Update status | Yes (ACF field groups) |
+| **Shopware** | PATCH slotConfig on category | Direct | Yes (CMS layouts) |
+| **Filesystem** | File copy | Immediate | No |
 
-| Connector | Write | Schema Discovery | Status |
-|---|---|---|---|
-| **GitHub** | Clone → Branch → Commit → PR | No (uses built-in blog-post type) | Implemented |
-| **Filesystem** | File copy | No | Implemented |
-| **Shopware** | PATCH slotConfig on category | Yes — CMS layouts via Admin API | Implemented |
-| **WordPress** | POST /wp/v2/posts (+ ACF) | Yes — ACF field groups via REST | Implemented |
-
-Note: `createReader()` for sync is only implemented for GitHub. Shopware and WordPress throw "not yet implemented" for read operations.
-
-### Social Connectors (`connectors/social/`)
-
-Interface defined (`SocialConnector`) with `publish()`, `schedule()`, `delete()`, `getMetrics()`. Implementations planned for LinkedIn, Instagram, TikTok, X, Facebook.
-
-### Media Connectors (`connectors/media/`)
-
-Interface defined (`MediaConnector`) with `upload()`, `updateMetadata()`, `replace()`, `setVisibility()`, `delete()`. Implementations planned for YouTube, Vimeo, Spotify, Apple Podcasts, SoundCloud.
-
-### Schema Discovery
-
-Connectors with API access can discover the target platform's content structure:
-
-```typescript
-interface SiteConnector {
-  discoverSchemas?(): Promise<ConnectorSchema[]>;
-  writeStructured?(project, contentItem, version, schema): Promise<WriteResult>;
-}
-```
-
-Discovered schemas are imported as `CustomContentType` entries via `POST /content-types/import`.
+Connector interface: `write(project, contentItem, languages, versionDir)` → `WriteResult`.
 
 ## Filesystem Layout
 
@@ -158,37 +175,30 @@ Discovered schemas are imported as `CustomContentType` entries via `POST /conten
 data/customers/{customerId}/
 ├── customer.json
 ├── brand-voice.md
-├── style-guide.md          (optional, customer-level)
 └── projects/{projectId}/
     ├── project.json
     ├── project-brief.md
-    ├── brand-voice.md      (optional, project-level override)
-    ├── style-guide.md      (optional, project-level override)
-    ├── seo-guidelines.md
-    ├── seo-ai-strategy.md
-    ├── content-types.md    (content type documentation)
-    ├── content-types/      (ContentTypeDefinition JSON files, created on demand)
-    ├── section-specs/      (agent writing specs per section type)
-    ├── templates/          (article templates)
-    ├── topics/{topicId}/   (Flows)
-    │   ├── topic.json      (Flow data incl. inputs[], outputIds[])
-    │   ├── chat.jsonl      (Brainstorm chat history)
-    │   └── inputs/         (Uploaded files)
-    ├── content/{contentId}/
-    │   ├── content.json    (ContentItem)
-    │   ├── versions/{versionId}/
-    │   │   ├── version.json
-    │   │   ├── content/{lang}/{slug}.md
-    │   │   └── assets/{lang}/
-    │   └── media/          (ContentMediaAssets)
+    ├── content-types/*.json       ← ContentType definitions
+    ├── topics/{topicId}/          ← Flows
+    │   ├── topic.json
+    │   ├── chat.jsonl
+    │   └── inputs/
+    ├── content/{contentId}/       ← Content Items
+    │   ├── content.json
+    │   ├── media/
+    │   └── versions/{versionId}/
+    │       ├── version.json
+    │       ├── content/{lang}/{slug}.md
+    │       └── assets/{lang}/
+    ├── media/                     ← Project media library
     └── pipeline-runs/{runId}/
-        └── run.json        (PipelineRun with phases + agent calls + events)
+        └── run.json
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
-|---|---|
+|-------|-----------|
 | Frontend | Next.js 16 (App Router), React 19, Tailwind 4, Shadcn/Radix |
 | Backend | Fastify 5, TypeScript (ESM), Pino logging |
 | AI Engine | Claude Agent SDK, MCP Protocol |

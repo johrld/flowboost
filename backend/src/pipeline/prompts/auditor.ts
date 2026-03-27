@@ -37,7 +37,7 @@ Analyze existing content and identify gaps. Output a structured JSON audit.
 
 \`\`\`json
 {
-  "totalArticles": <number>,
+  "totalContent": <number>,
   "byCategory": { "<categoryId>": <count>, ... },
   "byLanguage": { "<langCode>": <count>, ... },
   "existingArticles": [

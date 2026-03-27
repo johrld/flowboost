@@ -41,24 +41,25 @@ export function buildContentWriterPrompt(
     .join("\n");
 
   // ── Topic section ──────────────────────────────────────────
+  const seo = topic.enrichment?.seo;
   const topicParts: string[] = [
     `- **Title:** ${topic.title}`,
     `- **Category:** ${topic.category || "general"}`,
   ];
-  if (topic.keywords?.primary) {
-    topicParts.push(`- **Primary Keyword:** ${topic.keywords.primary}`);
-    if (topic.keywords.secondary.length > 0) {
-      topicParts.push(`- **Secondary Keywords:** ${topic.keywords.secondary.join(", ")}`);
+  if (seo?.keywords?.primary) {
+    topicParts.push(`- **Primary Keyword:** ${seo.keywords.primary}`);
+    if (seo.keywords.secondary?.length > 0) {
+      topicParts.push(`- **Secondary Keywords:** ${seo.keywords.secondary.join(", ")}`);
     }
   }
-  if (topic.suggestedAngle) {
-    topicParts.push(`- **Angle:** ${topic.suggestedAngle}`);
+  if (topic.direction) {
+    topicParts.push(`- **Angle:** ${topic.direction}`);
   }
-  if (topic.searchIntent) {
-    topicParts.push(`- **Search Intent:** ${topic.searchIntent}`);
+  if (seo?.searchIntent) {
+    topicParts.push(`- **Search Intent:** ${seo.searchIntent}`);
   }
-  if (topic.competitorInsights) {
-    topicParts.push(`- **Competitor Insights:** ${topic.competitorInsights}`);
+  if (seo?.competitorInsights) {
+    topicParts.push(`- **Competitor Insights:** ${seo.competitorInsights}`);
   }
 
   // ── Brand voice ────────────────────────────────────────────

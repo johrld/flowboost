@@ -40,7 +40,7 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
   ctx.startPhase("audit");
 
   let auditResult: {
-    totalArticles: number;
+    totalContent: number;
     byCategory: Record<string, number>;
     byLanguage: Record<string, number>;
     existingArticles: Array<{ title: string; keywords: string[] }>;
@@ -64,7 +64,7 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
     const result = await runAgentTracked(ctx, "audit", prompt, auditorConfig);
     auditResult = extractJson(result.text);
     ctx.completePhase("audit");
-    log.info({ totalArticles: auditResult.totalArticles, gaps: auditResult.categoryGaps }, "audit complete");
+    log.info({ totalContent: auditResult.totalContent, gaps: auditResult.categoryGaps }, "audit complete");
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     ctx.failPhase("audit", msg);
@@ -130,7 +130,7 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
     };
 
     const prompt = buildStrategistPrompt(project, {
-      totalArticles: auditResult.totalArticles,
+      totalContent: auditResult.totalContent,
       byCategory: auditResult.byCategory,
       byLanguage: auditResult.byLanguage,
       categoryGaps: auditResult.categoryGaps,
@@ -141,17 +141,22 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
     const strategyOutput = extractJson<ContentPlan & { topics?: Topic[] }>(result.text);
 
     // Extract topics and save individually to TopicStore
-    const topics = strategyOutput.topics ?? [];
+    const topics = ((strategyOutput as unknown as Record<string, unknown>).topics ?? []) as Array<Record<string, unknown>>;
     const now = new Date().toISOString();
-    for (const topic of topics) {
-      if (!topic.status) topic.status = "proposed";
-      topic.createdAt = now;
-      topic.runId = ctx.run.id;
-      // Strip agent-provided id (e.g. "topic-1") so Store.create() generates
-      // a UUID that matches the directory name. Otherwise get("topic-1") fails
-      // because no directory "topic-1/" exists.
-      const { id: _agentId, ...topicData } = topic;
-      ctx.stores.topics.create(topicData as Omit<Topic, "id">);
+    for (const rawTopic of topics) {
+      // Strip agent-provided id (e.g. "topic-1") — Store.create() generates UUID
+      const { id: _agentId, ...topicFields } = rawTopic;
+      const topicData: Omit<Topic, "id"> = {
+        status: (topicFields.status as Topic["status"]) ?? "proposed",
+        title: (topicFields.title as string) ?? "Untitled",
+        category: (topicFields.category as string) ?? "",
+        priority: (topicFields.priority as number) ?? 0,
+        direction: topicFields.direction as string | undefined,
+        source: "pipeline",
+        enrichment: topicFields.enrichment as Topic["enrichment"],
+        createdAt: now,
+      };
+      ctx.stores.topics.create(topicData);
     }
 
     // Save content plan (audit data only, no topics)
@@ -161,7 +166,7 @@ export async function runStrategyPipeline(ctx: PipelineContext): Promise<Content
       updatedAt: new Date().toISOString(),
       runId: ctx.run.id,
       audit: strategyOutput.audit ?? {
-        totalArticles: auditResult.totalArticles,
+        totalContent: auditResult.totalContent,
         byCategory: auditResult.byCategory,
         byLanguage: auditResult.byLanguage,
         gaps: auditResult.categoryGaps,

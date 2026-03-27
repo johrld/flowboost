@@ -1,194 +1,179 @@
 # FlowBoost AI Agents
 
-## How Agents Work
+## The Key Concept
 
-FlowBoost uses the [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents/agent-sdk) to run AI agents. Each agent is a Claude subprocess with specific tools and a focused prompt.
+FlowBoost has **one generic Content Writer agent** that works for every content type. It gets its personality, writing rules, and output format from the **ContentType JSON definition** — not from code.
+
+When you produce a LinkedIn Post, the agent becomes a "Senior LinkedIn strategist". When you produce a Newsletter, the same agent becomes a "Newsletter writer". The difference is entirely in the configuration (role, guidelines, fields), not in the code.
+
+The only exception: **Blog Posts** use a specialized 6-agent pipeline because articles need research, outlining, section-by-section writing, quality checks, and translation — tasks too complex for a single agent call.
+
+## Which Agent Handles What?
 
 ```
-Pipeline
-  └── Phase (e.g. "writing")
-       └── Agent Call
-            ├── Prompt (built from project context + phase-specific instructions)
-            ├── Model (from project pipeline settings)
-            ├── Tools (Read, Write, WebSearch, MCP tools)
-            └── Result (text + cost + tokens + events)
+LinkedIn Post     → Content Writer (1 agent, 1 call)
+Instagram Post    → Content Writer (1 agent, 1 call)
+X Post            → Content Writer (1 agent, 1 call)
+TikTok Post       → Content Writer (1 agent, 1 call)
+Newsletter        → Content Writer (1 agent, 1 call)
+Any custom type   → Content Writer (1 agent, 1 call)
+
+Blog Post         → 6 specialized agents (research, outline, write, quality, image, translate)
 ```
 
-### Engine Functions (`pipeline/engine.ts`)
+## Single-Phase Pipeline: Content Writer
+
+Used for **all** content types except blog posts. One agent generates the complete output in a single call.
+
+```
+Flow Context (title, sources, chat)
+  +
+ContentType Definition (role, guidelines, fields)
+  │
+  ▼
+Content Writer Agent
+  ├── Identity: ContentType.agent.role
+  │   e.g. "Senior LinkedIn content strategist"
+  │
+  ├── Rules: ContentType.agent.guidelines
+  │   e.g. "Hook in first line, max 5 hashtags, 800-1500 chars"
+  │
+  ├── Output: auto-generated from ContentType.fields
+  │   e.g. { "text": "...", "hashtags": [...], "image": "..." }
+  │
+  ├── Context: Flow sources + chat distillation + enrichment (if available)
+  │
+  └── Tools: Read, WebSearch, WebFetch, Brand Voice (MCP)
+```
+
+The agent can research on-demand via WebSearch if no sources were provided. The prompt is built by `pipeline/prompts/content-writer.ts` — fully data-driven from the ContentType.
+
+**To add a new content type, you only create a JSON file.** No agent code changes needed.
+
+## Multi-Phase Pipeline: Blog Post Production
+
+Used exclusively for blog posts (`pipeline.mode: "multi-phase"`). Six specialized agents run in sequence, each with a focused task and dedicated tools.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 1: RESEARCH                                              │
+│  Agent: SEO Researcher                                          │
+│  Task: Find keywords, analyze competitors, determine structure  │
+│  Tools: WebSearch, WebFetch                                     │
+│  Skipped if: Flow already has enrichment.seo data              │
+├─────────────────────────────────────────────────────────────────┤
+│  Phase 2: OUTLINE                                               │
+│  Agent: Outline Architect                                       │
+│  Task: Design article structure (H1, H2s, FAQ, meta)           │
+│  Tools: Read, MCP (brand voice, templates, section specs)      │
+│  Output: JSON outline with sections, word targets, keywords     │
+├─────────────────────────────────────────────────────────────────┤
+│  Phase 3: WRITE (parallel)                                      │
+│  Agent: Section Writer (x N, one per section)                   │
+│  Task: Write one section following the outline                  │
+│  Tools: Read, Write, MCP (validate_section)                    │
+│  Output: Individual markdown files per section                  │
+├─────────────────────────────────────────────────────────────────┤
+│  Phase 4: QUALITY (with retry)                                  │
+│  Agents: SEO Checker + Content Reviewer (parallel)             │
+│  Task: Validate SEO, structure, brand voice compliance         │
+│  Tools: Read, MCP (validate_article)                           │
+│  Retry: If fail → re-run assembly + quality (up to N retries)  │
+├─────────────────────────────────────────────────────────────────┤
+│  Phase 5: IMAGE (non-fatal)                                     │
+│  Agent: Image Generator                                         │
+│  Task: Generate hero image based on article content            │
+│  Tools: Read, MCP (generate_image via Imagen 4)                │
+│  Failure: Pipeline continues without image                      │
+├─────────────────────────────────────────────────────────────────┤
+│  Phase 6: TRANSLATE (parallel)                                  │
+│  Agent: Translator (x N, one per target language)              │
+│  Task: Translate article preserving structure and SEO          │
+│  Tools: Read, Write, MCP (validate_article)                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Strategy Pipeline: Content Planning
+
+Discovers content opportunities. Generates Flow proposals with SEO enrichment data. Not tied to any specific content type.
+
+```
+Audit Agent → Research Agent → Strategy Agent
+```
+
+| Agent | Task | Tools |
+|-------|------|-------|
+| Content Auditor | Analyze existing content, find gaps | MCP (content index) |
+| Topic Researcher | Research topics, keywords, competition | WebSearch, WebFetch |
+| Content Strategist | Prioritize topics, assign categories | MCP (brand voice, content types) |
+
+Output: Flows with `enrichment.seo` (keywords, search intent, competitor insights).
+
+## Enrichment Pipeline
+
+Optional single-agent pipeline. Enriches a Flow with SEO research data. Useful when:
+- Strategy pipeline generated a topic without full research
+- User created a Flow manually and wants keyword data before producing a blog post
+
+Not needed when the user provides sufficient sources — the Content Writer agent can research on-demand via WebSearch during production.
+
+## How Agents Work (Technical)
+
+### Engine
+
+FlowBoost uses the [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents/agent-sdk). Each agent is a Claude subprocess with specific tools.
 
 | Function | MCP Tools | Tracking | Used For |
-|---|---|---|---|
-| `runAgent()` | Yes | No | Pipeline phases (internal) |
-| `runAgentTracked()` | Yes | Yes (persists events to disk) | All pipeline phases (wraps runAgent) |
-| `runSimpleAgent()` | No | No | Topic chat (brainstorm) |
+|----------|-----------|----------|----------|
+| `runAgentTracked()` | Yes | Yes (events to disk) | All pipeline phases |
+| `runSimpleAgent()` | No | No | Flow chat (brainstorm) |
 
-## MCP Tools
+### MCP Tools
 
-Agents access FlowBoost-specific tools via a stdio MCP server (`tools/mcp-stdio-server.ts`):
+Agents access FlowBoost tools via a stdio MCP server (`tools/mcp-stdio-server.ts`):
 
-| Tool | Purpose |
-|---|---|
-| `flowboost_validate_section` | Validate a content section against type-specific rules |
-| `flowboost_validate_article` | Validate a complete markdown article (SEO, structure) |
-| `flowboost_assemble_article` | Merge section files into a complete article |
-| `flowboost_generate_image` | Generate image via Google Imagen 4 |
-| `flowboost_read_project_data` | Read project config, brand voice, style guide, SEO guidelines, templates, section specs |
-| `flowboost_read_content_index` | Read existing content for audit/gap analysis |
-| `flowboost_read_article` | Read article content from GitHub repo |
+| Tool | Purpose | Used By |
+|------|---------|---------|
+| `flowboost_read_project_data` | Brand voice, style guide, templates | All agents |
+| `flowboost_read_content_index` | Existing content for audit | Strategy, Enricher |
+| `flowboost_validate_article` | Validate markdown (SEO, structure) | Blog post pipeline |
+| `flowboost_validate_section` | Validate a single section | Blog post pipeline |
+| `flowboost_assemble_article` | Merge section files | Blog post pipeline |
+| `flowboost_generate_image` | Generate via Imagen 4 | Blog post pipeline |
+| `flowboost_read_article` | Read from repo | Blog post pipeline |
 
-### Resources available via `read_project_data`
+### Context Layers
 
-`project`, `brand-voice`, `style-guide`, `seo-guidelines`, `seo-ai-strategy`, `content-types`, `content-plan`, `template:<name>`, `section-spec:<name>`
-
-Brand voice and style guide use fallback: project-level → customer-level.
-
-## Pipelines
-
-### Strategy Pipeline
-
-Discovers content opportunities. Three agents run sequentially.
-
-```
-Audit → Research → Strategy
-```
-
-| Phase | Agent | Model | Tools | Output |
-|---|---|---|---|---|
-| **Audit** | Content Auditor | project default | Read, MCP: read_project_data, read_content_index | Content gaps, coverage by category/language |
-| **Research** | Topic Researcher | project default | WebSearch, WebFetch, Read, MCP: read_project_data | Topic proposals with keywords, intent, competitors |
-| **Strategy** | Content Strategist | project default | Read, Write, MCP: read_project_data | Prioritized topics saved to TopicStore |
-
-### Production Pipeline (Articles/Guides)
-
-Produces a complete article from an approved topic/flow.
-
-```
-Outline → Writing (parallel) → Assembly → Image → Quality (retry) → Translation (parallel)
-```
-
-| Phase | Agent(s) | Model | Tools | Output |
-|---|---|---|---|---|
-| **Outline** | Outline Architect | project default | Read, Write, MCP: read_project_data | Article structure with sections |
-| **Writing** | Section Writer (×N, parallel) | project default | Read, Write, MCP: read_project_data, validate_section | Individual section files |
-| **Assembly** | Content Editor | project default | Read, Write, MCP: read_project_data, assemble_article, validate_article | Complete markdown article |
-| **Image** | Image Generator | project default | Read, MCP: generate_image | Hero image via Imagen 4 (non-fatal) |
-| **Quality** | SEO Checker + Content Reviewer (2 agents, parallel) | haiku (SEO) + project default (reviewer) | Read, MCP: read_project_data, validate_article | Quality scores, pass/fail |
-| **Translation** | Translator (×N, parallel) | project default | Read, Write, MCP: read_project_data, validate_article | Translated article per language |
-
-Quality failures trigger a retry (re-runs Assembly + Quality, up to `maxRetriesPerPhase`). Image failures are non-fatal — the pipeline continues without a hero image.
-
-### Social Production Pipeline
-
-Produces a social media post (LinkedIn, X, Instagram, TikTok).
-
-```
-Generate → Image (planned, not yet implemented)
-```
-
-| Phase | Agent | Model | Tools | Output |
-|---|---|---|---|---|
-| **Generate** | Social Writer | project default | Read, MCP: read_project_data | Post text, hashtags, format, image prompt |
-| **Image** | (Imagen 4) | — | — | Social media image (planned, currently skipped) |
-
-The Social Writer uses the generic `content-writer.ts` prompt builder with platform-specific content type definitions (e.g. `linkedin-post.json`). Each content type defines agent role, guidelines, and field constraints.
-
-Supported platforms: `linkedin` (3000 chars), `x` (280 chars), `instagram` (2200 chars, image required), `tiktok` (4000 chars, video required).
-
-### Email Production Pipeline
-
-Produces a newsletter.
-
-```
-Generate
-```
-
-| Phase | Agent | Model | Tools | Output |
-|---|---|---|---|---|
-| **Generate** | Newsletter Writer | project default | Read, MCP: read_project_data | Subject, preview text, sections, CTA |
-
-### Video Production Pipeline
-
-Produces video content. Pipeline exists in code but is not exposed via the Flow UI.
-
-```
-Script → Storyboard → Generate → Subtitle → Thumbnail
-```
-
-### Audio Production Pipeline
-
-Produces audio content (podcasts, narration). Pipeline exists in code but is not exposed via the Flow UI.
-
-```
-Script → Voice → Transcript
-```
-
-### Enrich Pipeline
-
-Enriches a single topic with AI-powered keyword and competitor research.
-
-```
-Enrich
-```
-
-| Phase | Agent | Model | Tools | Output |
-|---|---|---|---|---|
-| **Enrich** | Topic Enricher | project default | WebSearch, WebFetch, Read, MCP: read_project_data, read_content_index | Keywords, competitor insights, suggested angle |
-
-## Agent Context
-
-Every agent receives layered context:
+Every agent receives context in layers:
 
 ```
 1. Project Level (always)
-   ├── Brand Voice (project override → customer fallback)
-   ├── Style Guide (project override → customer fallback)
-   ├── Project Brief
-   ├── SEO Guidelines
-   ├── SEO AI Strategy
-   ├── Section Specs + Templates
-   └── Pipeline Settings (model, retries, imagen model)
+   Brand Voice, Style Guide, Project Brief, Pipeline Settings
 
-2. Flow Level (when producing from flow)
-   ├── Inputs (transcripts, notes, URLs)
-   ├── Research fields (keywords, competitors, angle)
-   └── Brainstorm chat history
+2. Flow Level (from the user's Flow)
+   Title, Direction, Source Summaries, Chat Distillation, Enrichment
 
-3. Phase Level (specific to the pipeline phase)
-   ├── Previous phase output (e.g. outline for section writers)
-   ├── Platform specs (for social writers)
-   └── Quality feedback (for retry loops)
+3. ContentType Level (defines agent behavior)
+   Role, Guidelines, Field Constraints, Output Schema
 ```
 
-## Prompt Files
+### Prompt Files
 
-All agent prompts are in `pipeline/prompts/`:
-
-| File | Agent | Used By |
-|---|---|---|
-| `auditor.ts` | Content Auditor | Strategy Pipeline |
-| `researcher.ts` | Topic Researcher | Strategy Pipeline |
-| `strategist.ts` | Content Strategist | Strategy Pipeline |
-| `outline-architect.ts` | Outline Architect | Production Pipeline |
-| `section-writer.ts` | Section Writer | Production Pipeline |
-| `content-editor.ts` | Content Editor (Assembly) | Production Pipeline |
-| `image-generator.ts` | Image Generator | Production Pipeline |
-| `seo-checker.ts` | SEO Checker | Production Pipeline (Quality) |
-| `reviewer.ts` | Content/Brand Reviewer | Production Pipeline (Quality) |
-| `translator.ts` | Translator | Production Pipeline |
-| `enricher.ts` | Topic Enricher | Enrich Pipeline |
-| `content-writer.ts` | Generic Content Writer | Social + Email + Custom Pipelines |
+| File | What It Does | When It's Used |
+|------|-------------|----------------|
+| `content-writer.ts` | Builds prompt from ContentType definition | **Every single-phase content type** (LinkedIn, Instagram, X, TikTok, Newsletter, custom) |
+| `outline-architect.ts` | Plans article structure | Blog post only |
+| `section-writer.ts` | Writes one article section | Blog post only |
+| `content-editor.ts` | Assembles sections into article | Blog post only |
+| `seo-checker.ts` | Validates SEO compliance | Blog post only |
+| `reviewer.ts` | Reviews brand voice + quality | Blog post only |
+| `image-generator.ts` | Creates image generation prompt | Blog post only |
+| `translator.ts` | Translates preserving structure | Blog post only |
+| `enricher.ts` | SEO keyword + competitor research | Enrich pipeline |
+| `auditor.ts` | Content gap analysis | Strategy pipeline |
+| `researcher.ts` | Topic discovery | Strategy pipeline |
+| `strategist.ts` | Topic prioritization | Strategy pipeline |
 
 ## Monitoring
 
-Pipeline runs are tracked in real-time. Each agent call persists events to disk via `runAgentTracked()`:
-
-```json
-{
-  "type": "tool_call",
-  "timestamp": "2026-03-25T10:30:00Z",
-  "tool": "WebSearch",
-  "input": "atemtechnik anfänger keyword difficulty"
-}
-```
-
-The frontend Monitor page polls `GET /pipeline/runs/:id` to show live agent activity, phase progress, and cost tracking.
+Pipeline runs are tracked in real-time. Each agent call persists events via `runAgentTracked()`. The Monitor page shows live agent activity, phase progress, and cost tracking per run.

@@ -114,12 +114,12 @@ const STATUS_BADGE: Record<string, { label: string; variant: "default" | "second
 };
 
 const FALLBACK_OUTPUT_OPTIONS = [
-  { type: "article", label: "Article", icon: <FileText className="h-3.5 w-3.5" /> },
-  { type: "social_post", platform: "linkedin", label: "LinkedIn", icon: <Linkedin className="h-3.5 w-3.5" /> },
-  { type: "social_post", platform: "instagram", label: "Instagram", icon: <Instagram className="h-3.5 w-3.5" /> },
-  { type: "social_post", platform: "x", label: "X", icon: <Twitter className="h-3.5 w-3.5" /> },
-  { type: "newsletter", label: "Newsletter", icon: <Mail className="h-3.5 w-3.5" /> },
-  { type: "social_post", platform: "tiktok", label: "TikTok", icon: <Video className="h-3.5 w-3.5" /> },
+  { contentTypeId: "blog-post", label: "Article", icon: <FileText className="h-3.5 w-3.5" /> },
+  { contentTypeId: "linkedin-post", label: "LinkedIn", icon: <Linkedin className="h-3.5 w-3.5" /> },
+  { contentTypeId: "instagram-post", label: "Instagram", icon: <Instagram className="h-3.5 w-3.5" /> },
+  { contentTypeId: "x-post", label: "X", icon: <Twitter className="h-3.5 w-3.5" /> },
+  { contentTypeId: "newsletter", label: "Newsletter", icon: <Mail className="h-3.5 w-3.5" /> },
+  { contentTypeId: "tiktok-post", label: "TikTok", icon: <Video className="h-3.5 w-3.5" /> },
 ];
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
@@ -324,10 +324,10 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
     }
   };
 
-  const handleProduce = async (type: string, platform?: string) => {
+  const handleProduce = async (contentTypeId: string) => {
     if (!customerId || !projectId) return;
     try {
-      await produceFlowOutput(customerId, projectId, id, { type, platform });
+      await produceFlowOutput(customerId, projectId, id, { contentTypeId });
       setBottomTab("content");
       await loadData();
     } catch (err) {
@@ -686,19 +686,13 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                      {contentTypes.length > 0 ? contentTypes.map((ct) => {
-                        let apiType = "article";
-                        let platform: string | undefined;
-                        if (ct.category === "social") { apiType = "social_post"; platform = ct.id.replace("-post", ""); }
-                        else if (ct.category === "email") { apiType = "newsletter"; }
-                        return (
-                          <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(apiType, platform)}>
-                            {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
-                            {ct.label}
-                          </DropdownMenuItem>
-                        );
-                      }) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
-                        <DropdownMenuItem key={opt.platform ?? opt.type} className="gap-2" onClick={() => handleProduce(opt.type, opt.platform)}>
+                      {contentTypes.length > 0 ? contentTypes.map((ct) => (
+                        <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(ct.id)}>
+                          {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                          {ct.label}
+                        </DropdownMenuItem>
+                      )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                        <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleProduce(opt.contentTypeId)}>
                           {opt.icon}{opt.label}
                         </DropdownMenuItem>
                       ))}
@@ -718,19 +712,13 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
-                      {contentTypes.length > 0 ? contentTypes.map((ct) => {
-                        let apiType = "article";
-                        let platform: string | undefined;
-                        if (ct.category === "social") { apiType = "social_post"; platform = ct.id.replace("-post", ""); }
-                        else if (ct.category === "email") { apiType = "newsletter"; }
-                        return (
-                          <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(apiType, platform)}>
-                            {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
-                            {ct.label}
-                          </DropdownMenuItem>
-                        );
-                      }) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
-                        <DropdownMenuItem key={opt.platform ?? opt.type} className="gap-2" onClick={() => handleProduce(opt.type, opt.platform)}>
+                      {contentTypes.length > 0 ? contentTypes.map((ct) => (
+                        <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(ct.id)}>
+                          {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                          {ct.label}
+                        </DropdownMenuItem>
+                      )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                        <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleProduce(opt.contentTypeId)}>
                           {opt.icon}{opt.label}
                         </DropdownMenuItem>
                       ))}
@@ -773,11 +761,11 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                               </DropdownMenuItem>
                               {!isProducing && (
                                 <DropdownMenuItem onClick={(e) => { e.preventDefault();
-                                  let apiType = "article";
-                                  let platform: string | undefined;
-                                  if (item.type === "social_post") { apiType = "social_post"; platform = item.category ?? "linkedin"; }
-                                  else if (item.type === "newsletter") apiType = "newsletter";
-                                  handleProduce(apiType, platform);
+                                  // Derive contentTypeId from content item type + category
+                                  const ctId = item.type === "social_post" ? `${item.category ?? "linkedin"}-post`
+                                    : item.type === "newsletter" ? "newsletter"
+                                    : "blog-post";
+                                  handleProduce(ctId);
                                 }}>
                                   <Sparkles className="mr-2 h-3.5 w-3.5" />Generate with AI
                                 </DropdownMenuItem>

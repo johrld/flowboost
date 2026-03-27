@@ -162,8 +162,8 @@ export default function FlowsPage() {
                       </>
                     )}
                   </div>
-                  {topic.suggestedAngle && (
-                    <p className="text-xs text-muted-foreground truncate">{topic.suggestedAngle}</p>
+                  {topic.direction && (
+                    <p className="text-xs text-muted-foreground truncate">{topic.direction}</p>
                   )}
                 </div>
                 <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />

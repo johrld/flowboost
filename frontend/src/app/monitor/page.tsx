@@ -239,43 +239,38 @@ export default function MonitorPage() {
                 })}
               </div>
 
-              {/* Results: Topics discovered by strategy runs */}
-              {run.type === "strategy" && run.status === "completed" && (() => {
-                const runTopics = topics.filter((t) => t.runId === run.id);
-                if (runTopics.length === 0) return null;
+              {/* Results: Topic linked to this run */}
+              {run.type === "strategy" && run.status === "completed" && run.topicId && (() => {
+                const runTopic = topics.find((t) => t.id === run.topicId);
+                if (!runTopic) return null;
                 return (
                   <div className="border-t px-4 py-3">
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                      Discovered Topics ({runTopics.length})
+                      Topic
                     </p>
-                    <div className="space-y-1.5">
-                      {runTopics.map((topic) => (
-                        <Link
-                          key={topic.id}
-                          href={`/briefings/${topic.id}`}
-                          className="flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5 hover:bg-muted/50 transition-colors group"
+                    <Link
+                      href={`/flows/${runTopic.id}`}
+                      className="flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5 hover:bg-muted/50 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Lightbulb className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        <span className="text-sm truncate">{runTopic.title}</span>
+                        {runTopic.category && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                            {runTopic.category}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1.5 py-0"
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <Lightbulb className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                            <span className="text-sm truncate">{topic.title}</span>
-                            {topic.category && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
-                                {topic.category}
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Badge
-                              variant="secondary"
-                              className="text-[10px] px-1.5 py-0"
-                            >
-                              {topic.status}
-                            </Badge>
-                            <ArrowRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
+                          {runTopic.status}
+                        </Badge>
+                        <ArrowRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </Link>
                   </div>
                 );
               })()}

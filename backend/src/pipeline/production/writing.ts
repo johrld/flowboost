@@ -23,7 +23,7 @@ export async function runWritingPhase(ctx: PipelineContext, outline: Outline): P
     title: outline.topic.title,
     primaryKeyword: outline.topic.primaryKeyword,
     secondaryKeywords: outline.topic.secondaryKeywords,
-    suggestedAngle: outline.topic.suggestedAngle,
+    suggestedAngle: outline.topic.suggestedAngle ?? "",
   };
 
   try {
