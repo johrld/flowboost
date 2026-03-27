@@ -514,14 +514,6 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                           >
                             <Copy className="h-3.5 w-3.5" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => { setChatInput(chatMessages.filter(m => m.role === "user").slice(-1)[0]?.content ?? ""); }}
-                            className="p-1 rounded hover:bg-muted text-muted-foreground"
-                            title="Retry"
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          </button>
                           <span className="text-xs text-muted-foreground ml-1">
                             {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
                           </span>
