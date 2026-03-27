@@ -449,7 +449,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
         {/* ── Tabs: Chat | Sources | Content ────────────── */}
         <div className="pb-12">
           <div className="flex items-center gap-2 mb-6">
-            {(["chat", "sources", "content"] as const).map((tab) => {
+            {(["content", "sources", "chat"] as const).map((tab) => {
               const count = tab === "sources" ? inputs.length : tab === "content" ? outputs.length : chatMessages.length;
               const isActive = bottomTab === tab;
               return (
