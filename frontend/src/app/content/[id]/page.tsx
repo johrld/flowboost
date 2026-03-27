@@ -40,13 +40,16 @@ import {
   restoreContent,
   getTopics,
   getContentMedia,
-  getContentMediaUrl,
+  getMediaFileUrl,
   generateHeroImage,
   uploadContentMedia,
   setHeroImage,
   deleteContentMedia,
+  linkMediaToContent,
+  reconcileContentMedia,
 } from "@/lib/api";
-import type { ContentItem, ContentVersion, ContentMediaAsset, Topic } from "@/lib/types";
+import type { ContentItem, ContentVersion, MediaAsset, Topic } from "@/lib/types";
+import { MediaPicker } from "@/components/media-picker";
 import {
   DndContext,
   closestCenter,
@@ -366,9 +369,11 @@ export default function ContentEditorPage({
   const [schedTime, setSchedTime] = useState("");
 
   // Hero image / media gallery
-  const [mediaAssets, setMediaAssets] = useState<ContentMediaAsset[]>([]);
+  const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
   const [generating, setGenerating] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const mediaPickerResolveRef = useRef<((url: string | null) => void) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Track which languages the user actually edited (vs TiptapEditor roundtrip noise)
@@ -513,7 +518,13 @@ export default function ContentEditorPage({
       });
       setItem({ ...item, ...updated });
 
-      // 2. If body changed, create new version
+      // 2. Reconcile inline media usage (extract asset IDs from all editor content)
+      const allContent = Object.values(editorContent).join("\n");
+      const mediaUrlPattern = /\/media\/([0-9a-f-]{36})\/file/g;
+      const inlineAssetIds = [...new Set([...allContent.matchAll(mediaUrlPattern)].map((m) => m[1]))];
+      await reconcileContentMedia(customerId, projectId, item.id, inlineAssetIds);
+
+      // 3. If body changed, create new version
       if (bodyDirty) {
         const files: Record<string, string> = {};
         for (const lang of Object.keys(editorContent)) {
@@ -616,7 +627,7 @@ export default function ContentEditorPage({
     const keywords = meta?.keywords ?? "";
     const faqs = meta?.faqs ?? [];
     const heroUrl = item?.heroImageId
-      ? getContentMediaUrl(customerId, projectId, item.id, item.heroImageId)
+      ? getMediaFileUrl(customerId, projectId,item.heroImageId)
       : "";
     const version = versions.find((v) => v.id === activeVersionId) ?? versions[versions.length - 1];
     const langs = version?.languages?.map((l) => l.lang) ?? [activeLang];
@@ -1111,7 +1122,7 @@ export default function ContentEditorPage({
             {item.heroImageId ? (
               <div className="relative aspect-video rounded-md overflow-hidden border bg-muted">
                 <img
-                  src={getContentMediaUrl(customerId, projectId, item.id, item.heroImageId)}
+                  src={getMediaFileUrl(customerId, projectId,item.heroImageId)}
                   alt="Hero"
                   className="w-full h-full object-cover"
                 />
@@ -1126,11 +1137,11 @@ export default function ContentEditorPage({
             )}
 
             {/* Actions */}
-            <div className="flex gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 text-xs"
+                className="text-xs"
                 disabled={generating}
                 onClick={async () => {
                   if (!item) return;
@@ -1138,10 +1149,9 @@ export default function ContentEditorPage({
                   try {
                     const prompt = `Professional blog hero image for article titled "${item.title}". ${item.category ? `Category: ${item.category}.` : ""} ${item.keywords?.length ? `Keywords: ${item.keywords.join(", ")}.` : ""} Modern, clean, editorial style photography. No text overlays.`;
                     const asset = await generateHeroImage(customerId, projectId, item.id, prompt);
-                    setMediaAssets((prev) => [...prev, asset]);
-                    if (!item.heroImageId) {
-                      setItem({ ...item, heroImageId: asset.id });
-                    }
+                    setItem({ ...item, heroImageId: asset.id });
+                    const { assets } = await getContentMedia(customerId, projectId, item.id);
+                    setMediaAssets(assets);
                   } catch (err) {
                     console.error("Generate failed:", err);
                   } finally {
@@ -1155,12 +1165,21 @@ export default function ContentEditorPage({
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 text-xs"
+                className="text-xs"
                 disabled={uploading}
                 onClick={() => fileInputRef.current?.click()}
               >
                 {uploading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}
                 Upload
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => setMediaPickerOpen(true)}
+              >
+                <ImageIcon className="mr-1 h-3 w-3" />
+                Browse
               </Button>
               <input
                 ref={fileInputRef}
@@ -1173,10 +1192,9 @@ export default function ContentEditorPage({
                   setUploading(true);
                   try {
                     const asset = await uploadContentMedia(customerId, projectId, item.id, file);
-                    setMediaAssets((prev) => [...prev, asset]);
-                    if (!item.heroImageId) {
-                      setItem({ ...item, heroImageId: asset.id });
-                    }
+                    setItem({ ...item, heroImageId: asset.id });
+                    const { assets } = await getContentMedia(customerId, projectId, item.id);
+                    setMediaAssets(assets);
                   } catch (err) {
                     console.error("Upload failed:", err);
                   } finally {
@@ -1187,10 +1205,44 @@ export default function ContentEditorPage({
               />
             </div>
 
+            {/* Media Picker (shared for hero image + editor inline) */}
+            <MediaPicker
+              open={mediaPickerOpen}
+              onOpenChange={(open) => {
+                setMediaPickerOpen(open);
+                if (!open) {
+                  const resolve = mediaPickerResolveRef.current;
+                  mediaPickerResolveRef.current = null;
+                  resolve?.(null);
+                }
+              }}
+              typeFilter="image"
+              onSelect={async (globalAsset) => {
+                // Editor inline image browse
+                const resolve = mediaPickerResolveRef.current;
+                if (resolve) {
+                  mediaPickerResolveRef.current = null;
+                  if (item) await linkMediaToContent(customerId, projectId, item.id, globalAsset.id, "inline");
+                  const url = getMediaFileUrl(customerId, projectId, globalAsset.id);
+                  resolve(url);
+                  setMediaPickerOpen(false);
+                  return;
+                }
+                // Hero image: set global asset ID directly
+                if (!item) return;
+                await setHeroImage(customerId, projectId, item.id, globalAsset.id);
+                setItem({ ...item, heroImageId: globalAsset.id });
+                // Refresh media list (usedBy updated server-side)
+                const { assets } = await getContentMedia(customerId, projectId, item.id);
+                setMediaAssets(assets);
+                setMediaPickerOpen(false);
+              }}
+            />
+
             {/* Gallery */}
             {mediaAssets.length > 1 && (
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Gallery ({mediaAssets.length})</p>
+                <p className="text-xs text-muted-foreground">Used images ({mediaAssets.length})</p>
                 <div className="grid grid-cols-3 gap-1.5">
                   {mediaAssets.map((asset) => (
                     <div key={asset.id} className="relative group">
@@ -1206,7 +1258,7 @@ export default function ContentEditorPage({
                         }}
                       >
                         <img
-                          src={getContentMediaUrl(customerId, projectId, item.id, asset.id)}
+                          src={getMediaFileUrl(customerId, projectId,asset.id)}
                           alt={asset.altText ?? ""}
                           className="w-full h-full object-cover"
                         />
@@ -1435,7 +1487,13 @@ export default function ContentEditorPage({
                   }}
                   onImageUpload={async (file) => {
                     const asset = await uploadContentMedia(customerId, projectId, item!.id, file, "inline");
-                    return getContentMediaUrl(customerId, projectId, item!.id, asset.id);
+                    return getMediaFileUrl(customerId, projectId, asset.id);
+                  }}
+                  onImageBrowse={() => {
+                    return new Promise<string | null>((resolve) => {
+                      mediaPickerResolveRef.current = resolve;
+                      setMediaPickerOpen(true);
+                    });
                   }}
                 />
               ) : (

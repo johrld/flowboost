@@ -25,6 +25,7 @@ import {
   Square,
   Droplets,
   Type,
+  ImageIcon,
 } from "lucide-react";
 
 // ── Custom Image extension with styling attributes ──────────────
@@ -143,6 +144,8 @@ interface TiptapEditorProps {
   onChange?: (markdown: string) => void;
   editable?: boolean;
   onImageUpload?: (file: File) => Promise<string>;
+  /** Open a media picker and return the selected image URL, or null to cancel */
+  onImageBrowse?: () => Promise<string | null>;
 }
 
 // ── Main Editor Component ───────────────────────────────────────
@@ -152,6 +155,7 @@ export function TiptapEditor({
   onChange,
   editable = true,
   onImageUpload,
+  onImageBrowse,
 }: TiptapEditorProps) {
   const initialHtml = useMemo(() => marked.parse(content) as string, [content]);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -385,6 +389,23 @@ export function TiptapEditor({
           >
             <Redo className="h-4 w-4" />
           </ToolbarButton>
+
+          {onImageBrowse && (
+            <>
+              <ToolbarSep />
+              <ToolbarButton
+                onClick={async () => {
+                  const url = await onImageBrowse();
+                  if (url) {
+                    editor.chain().focus().setImage({ src: url, alt: "" }).run();
+                  }
+                }}
+                title="Insert image from library"
+              >
+                <ImageIcon className="h-4 w-4" />
+              </ToolbarButton>
+            </>
+          )}
         </div>
       )}
 
