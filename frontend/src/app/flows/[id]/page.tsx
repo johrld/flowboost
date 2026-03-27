@@ -40,6 +40,8 @@ import {
   MoreHorizontal,
   ArrowUp,
   RefreshCw,
+  Copy,
+  RotateCcw,
   Bot,
   User,
   X,
@@ -503,9 +505,27 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                         <div className="text-sm prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-3 prose-blockquote:my-2 prose-a:text-primary">
                           <ReactMarkdown>{msg.content}</ReactMarkdown>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
-                        </p>
+                        <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard.writeText(msg.content)}
+                            className="p-1 rounded hover:bg-muted text-muted-foreground"
+                            title="Copy"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setChatInput(chatMessages.filter(m => m.role === "user").slice(-1)[0]?.content ?? ""); }}
+                            className="p-1 rounded hover:bg-muted text-muted-foreground"
+                            title="Retry"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="text-xs text-muted-foreground ml-1">
+                            {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )
