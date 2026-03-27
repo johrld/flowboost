@@ -1,4 +1,4 @@
-import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage, ContentMediaAsset, FlowInput } from "./types";
+import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage, ContentMediaAsset, FlowInput, MediaAsset } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
 
@@ -683,4 +683,138 @@ export async function getGitHubFile(installationId: number, owner: string, repo:
   const res = await fetch(`${API_URL}/github/repos/${owner}/${repo}/file?${params}`);
   if (!res.ok) throw new Error(`Failed to load file: ${res.status}`);
   return res.text();
+}
+
+// ── Media Library ────────────────────────────────────────────────
+
+export function getMedia(
+  customerId: string,
+  projectId: string,
+  filters?: { type?: string; source?: string; tags?: string; search?: string; unused?: boolean; page?: number; limit?: number },
+): Promise<{ total: number; assets: MediaAsset[] }> {
+  const params = new URLSearchParams();
+  if (filters?.type) params.set("type", filters.type);
+  if (filters?.source) params.set("source", filters.source);
+  if (filters?.tags) params.set("tags", filters.tags);
+  if (filters?.search) params.set("search", filters.search);
+  if (filters?.unused) params.set("unused", "true");
+  if (filters?.page) params.set("page", String(filters.page));
+  if (filters?.limit) params.set("limit", String(filters.limit));
+  const qs = params.toString();
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/media${qs ? `?${qs}` : ""}`);
+}
+
+export function getMediaTags(
+  customerId: string,
+  projectId: string,
+): Promise<{ tags: { tag: string; count: number }[] }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/media/tags`);
+}
+
+export function getMediaAsset(
+  customerId: string,
+  projectId: string,
+  assetId: string,
+): Promise<MediaAsset> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/media/${assetId}`);
+}
+
+export function updateMediaAsset(
+  customerId: string,
+  projectId: string,
+  assetId: string,
+  data: { title?: string; description?: string; tags?: string[]; altText?: string },
+): Promise<MediaAsset> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/media/${assetId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteMediaAsset(
+  customerId: string,
+  projectId: string,
+  assetId: string,
+  force?: boolean,
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/media/${assetId}${force ? "?force=true" : ""}`, {
+    method: "DELETE",
+  });
+}
+
+export async function uploadMedia(
+  customerId: string,
+  projectId: string,
+  file: File,
+  metadata?: { title?: string; description?: string; tags?: string[] },
+): Promise<{ asset: MediaAsset; thumbnailGenerated: boolean }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (metadata?.title) formData.append("title", metadata.title);
+  if (metadata?.description) formData.append("description", metadata.description);
+  if (metadata?.tags) formData.append("tags", JSON.stringify(metadata.tags));
+  const res = await fetch(
+    `${API_URL}/customers/${customerId}/projects/${projectId}/media/upload`,
+    { method: "POST", body: formData },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `Upload failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export function bulkUpdateMedia(
+  customerId: string,
+  projectId: string,
+  data: { assetIds: string[]; addTags?: string[]; removeTags?: string[] },
+): Promise<{ updated: string[]; notFound: string[] }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/media/bulk/update`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function bulkDeleteMedia(
+  customerId: string,
+  projectId: string,
+  assetIds: string[],
+  force?: boolean,
+): Promise<{ deleted: string[]; notFound: string[]; inUse: string[] }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/media/bulk/delete`, {
+    method: "POST",
+    body: JSON.stringify({ assetIds, force }),
+  });
+}
+
+export function getMediaFileUrl(customerId: string, projectId: string, assetId: string): string {
+  return `${API_URL}/customers/${customerId}/projects/${projectId}/media/${assetId}/file`;
+}
+
+export function getMediaThumbnailUrl(customerId: string, projectId: string, assetId: string): string {
+  return `${API_URL}/customers/${customerId}/projects/${projectId}/media/${assetId}/thumbnail`;
+}
+
+export function addMediaUsage(
+  customerId: string,
+  projectId: string,
+  assetId: string,
+  contentId: string,
+  role: "hero" | "inline" | "thumbnail" | "attachment" | "social_media",
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/media/${assetId}/usage`, {
+    method: "POST",
+    body: JSON.stringify({ contentId, role }),
+  });
+}
+
+export function removeMediaUsage(
+  customerId: string,
+  projectId: string,
+  assetId: string,
+  contentId: string,
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/media/${assetId}/usage/${contentId}`, {
+    method: "DELETE",
+  });
 }

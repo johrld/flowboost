@@ -173,48 +173,9 @@ data/customers/{id}/projects/{id}/
 └── pipeline-runs/   # Agent execution logs
 ```
 
-## Authentication Details
+## Deployment
 
-<details>
-<summary>Option 1: API Key (pay-per-use)</summary>
-
-```bash
-# .env
-ANTHROPIC_API_KEY=sk-ant-...
-```
-</details>
-
-<details>
-<summary>Option 2: OAuth Token (Max subscription)</summary>
-
-On Linux: `cat ~/.claude/.credentials.json | grep accessToken`
-On macOS: Extract from Keychain Access
-
-```bash
-# .env
-ANTHROPIC_AUTH_TOKEN=sk-ant-oat01-...
-```
-
-Token expires after a few months.
-</details>
-
-<details>
-<summary>Option 3: CLI Credentials (Max, recommended)</summary>
-
-```bash
-claude auth status   # Must show loggedIn: true
-
-# macOS: export from Keychain first
-security find-generic-password -s "Claude Code-credentials" -w > ~/.claude/.credentials.json
-
-# Create override file
-cp docker-compose.override.example.yml docker-compose.override.yml
-# Uncomment volume mounts in docker-compose.override.yml
-
-docker compose up --build -d
-docker compose exec api claude auth status   # Verify
-```
-</details>
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production setup, authentication options (API Key, OAuth, CLI Credentials), hosting platform guides (Dokploy/Coolify), and data persistence.
 
 ## Contributing
 

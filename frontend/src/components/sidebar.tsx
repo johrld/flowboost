@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Activity,
   Cable,
+  ImageIcon,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -312,8 +313,20 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Monitor */}
-      <div className="px-3 pb-1">
+      {/* Media + Monitor */}
+      <div className="px-3 pb-1 space-y-0.5">
+        <Link
+          href="/media"
+          className={cn(
+            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            (pathname === "/media" || pathname.startsWith("/media/"))
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          )}
+        >
+          <ImageIcon className="h-4 w-4" />
+          Media
+        </Link>
         <Link
           href="/monitor"
           className={cn(
@@ -351,8 +364,12 @@ export function Sidebar() {
       </div>
 
       {/* Footer */}
-      <div className="border-t px-4 py-3 text-xs text-muted-foreground">
-        flowboost v0.3.0
+      <div className="border-t px-4 py-3 text-xs text-muted-foreground flex items-center gap-2">
+        <span className={cn(
+          "h-2 w-2 rounded-full",
+          process.env.NODE_ENV === "production" ? "bg-green-500" : "bg-amber-500"
+        )} />
+        flowboost v0.3.0{process.env.NODE_ENV !== "production" && " dev"}
       </div>
 
       <CreateProjectWizard

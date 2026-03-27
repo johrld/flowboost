@@ -134,6 +134,34 @@ export interface NewsletterVersionMeta {
 export type MediaType = "image" | "video" | "audio" | "document";
 export type MediaSource = "generated" | "uploaded" | "extracted";
 
+export interface MediaAsset {
+  id: string;
+  customerId: string;
+  projectId: string;
+  type: MediaType;
+  source: MediaSource;
+  mimeType: string;
+  fileName: string;
+  fileSize: number;
+  localPath: string;
+  cdnUrl?: string;
+  width?: number;
+  height?: number;
+  altText?: string;
+  title?: string;
+  description?: string;
+  tags: string[];
+  usedBy: { contentId: string; role: string; addedAt: string }[];
+  durationSeconds?: number;
+  resolution?: string;
+  thumbnailPath?: string;
+  generationPrompt?: string;
+  generationModel?: string;
+  generationCostUsd?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ContentMediaAsset {
   id: string;
   contentId: string;

@@ -435,6 +435,11 @@ export interface MediaAsset {
   height?: number;
   altText?: string;
 
+  title?: string;
+  description?: string;
+  tags: string[];
+  usedBy: MediaUsageRef[];
+
   durationSeconds?: number;
   resolution?: string;
   thumbnailPath?: string;
@@ -445,6 +450,22 @@ export interface MediaAsset {
 
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MediaUsageRef {
+  contentId: string;
+  role: "hero" | "inline" | "thumbnail" | "attachment" | "social_media";
+  addedAt: string;
+}
+
+export interface MediaFilter {
+  type?: MediaType;
+  source?: MediaSource;
+  tags?: string[];
+  search?: string;
+  unused?: boolean;
+  page?: number;
+  limit?: number;
 }
 
 export interface MediaAssetRef {

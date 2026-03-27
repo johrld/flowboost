@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
 import { buildServer } from "./api/server.js";
+import { CustomerStore } from "./models/customer.js";
 import { createLogger } from "./utils/logger.js";
 
 const log = createLogger("main");
@@ -32,6 +33,21 @@ function checkClaudeAuth(): void {
 
 async function main() {
   checkClaudeAuth();
+
+  // Auto-seed default customer on first run (empty data volume)
+  const customerStore = new CustomerStore(dataDir);
+  if (customerStore.list().length === 0) {
+    const now = new Date().toISOString();
+    customerStore.create({
+      name: "FlowBoost User",
+      slug: "default",
+      plan: "pro" as const,
+      authors: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    log.info("Created default customer (first run)");
+  }
 
   const app = await buildServer(dataDir);
 
