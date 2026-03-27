@@ -110,7 +110,7 @@ export default function MediaPage() {
       setAssets(mediaResult.assets);
       setAllTags(tagsResult.tags);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Medien konnten nicht geladen werden");
+      setError(err instanceof Error ? err.message : "Failed to load media");
     }
   }, [customerId, projectId, filterType, filterSource, filterTag, search]);
 
@@ -202,7 +202,7 @@ export default function MediaPage() {
       setDetailAsset(updated);
       setAssets((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
     } catch {
-      // Speichern fehlgeschlagen
+      // save failed
     } finally {
       setSaving(false);
     }
@@ -211,7 +211,7 @@ export default function MediaPage() {
   const handleDeleteDetail = async () => {
     if (!detailAsset || !customerId || !projectId) return;
     const hasUsages = detailAsset.usedBy.length > 0;
-    if (hasUsages && !confirm("Dieses Asset wird von Content-Items referenziert. Trotzdem löschen?")) {
+    if (hasUsages && !confirm("This asset is referenced by content items. Delete anyway?")) {
       return;
     }
     setDeleting(true);
@@ -221,7 +221,7 @@ export default function MediaPage() {
       setDetailOpen(false);
       setDetailAsset(null);
     } catch {
-      // Löschen fehlgeschlagen
+      // delete failed
     } finally {
       setDeleting(false);
     }
@@ -243,7 +243,7 @@ export default function MediaPage() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0 || !customerId || !projectId) return;
-    if (!confirm(`${selectedIds.size} Asset(s) wirklich löschen?`)) return;
+    if (!confirm(`Delete ${selectedIds.size} asset(s)?`)) return;
     try {
       await api.bulkDeleteMedia(customerId, projectId, Array.from(selectedIds));
       setAssets((prev) => prev.filter((a) => !selectedIds.has(a.id)));
@@ -294,7 +294,7 @@ export default function MediaPage() {
       <div className="p-8">
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
           <p className="text-sm text-destructive">{error}</p>
-          <p className="text-xs text-muted-foreground mt-1">Stelle sicher, dass das Backend auf Port 6100 läuft</p>
+          <p className="text-xs text-muted-foreground mt-1">Make sure the backend is running and reachable</p>
         </div>
       </div>
     );
@@ -340,7 +340,7 @@ export default function MediaPage() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Suchen..."
+            placeholder="Search..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8 h-9"
@@ -351,22 +351,22 @@ export default function MediaPage() {
             <SelectValue placeholder="Typ" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Alle Typen</SelectItem>
-            <SelectItem value="image">Bilder</SelectItem>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="image">Images</SelectItem>
             <SelectItem value="video">Videos</SelectItem>
             <SelectItem value="audio">Audio</SelectItem>
-            <SelectItem value="document">Dokumente</SelectItem>
+            <SelectItem value="document">Documents</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterSource} onValueChange={setFilterSource}>
           <SelectTrigger className="w-36 h-9">
-            <SelectValue placeholder="Quelle" />
+            <SelectValue placeholder="Source" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Alle Quellen</SelectItem>
-            <SelectItem value="uploaded">Hochgeladen</SelectItem>
-            <SelectItem value="generated">Generiert</SelectItem>
-            <SelectItem value="extracted">Extrahiert</SelectItem>
+            <SelectItem value="all">All Sources</SelectItem>
+            <SelectItem value="uploaded">Uploaded</SelectItem>
+            <SelectItem value="generated">Generated</SelectItem>
+            <SelectItem value="extracted">Extracted</SelectItem>
           </SelectContent>
         </Select>
         {allTags.length > 0 && (
@@ -375,7 +375,7 @@ export default function MediaPage() {
               <SelectValue placeholder="Tag" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Alle Tags</SelectItem>
+              <SelectItem value="all">All Tags</SelectItem>
               {allTags.map((t) => (
                 <SelectItem key={t.tag} value={t.tag}>
                   {t.tag} ({t.count})
@@ -390,11 +390,11 @@ export default function MediaPage() {
       {assets.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-12 text-center">
           <ImageIcon className="mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-sm font-medium">Keine Medien vorhanden</p>
-          <p className="text-xs text-muted-foreground mt-1">Lade Dateien hoch oder generiere Bilder mit AI</p>
+          <p className="text-sm font-medium">No media yet</p>
+          <p className="text-xs text-muted-foreground mt-1">Upload files or generate images with AI</p>
           <Button className="mt-4" onClick={() => fileInputRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" />
-            Erste Datei hochladen
+            Upload first file
           </Button>
         </div>
       ) : (
@@ -493,7 +493,7 @@ export default function MediaPage() {
       {selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg border bg-background shadow-lg px-4 py-3">
           <span className="text-sm font-medium">
-            {selectedIds.size} ausgewählt
+            {selectedIds.size} selected
           </span>
           <div className="h-4 w-px bg-border" />
           <Button
@@ -511,7 +511,7 @@ export default function MediaPage() {
             onClick={handleBulkDelete}
           >
             <Trash2 className="h-4 w-4 mr-1.5" />
-            Löschen
+            Delete
           </Button>
           <Button
             variant="ghost"
@@ -528,9 +528,9 @@ export default function MediaPage() {
       {bulkTagOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-background rounded-lg border shadow-lg p-6 w-80 space-y-4">
-            <h3 className="text-sm font-semibold">Tag hinzufügen</h3>
+            <h3 className="text-sm font-semibold">Add Tag</h3>
             <Input
-              placeholder="Tag-Name..."
+              placeholder="Tag name..."
               value={bulkTagValue}
               onChange={(e) => setBulkTagValue(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleBulkTag()}
@@ -545,10 +545,10 @@ export default function MediaPage() {
                   setBulkTagValue("");
                 }}
               >
-                Abbrechen
+                Cancel
               </Button>
               <Button size="sm" onClick={handleBulkTag} disabled={!bulkTagValue.trim()}>
-                Anwenden
+                Apply
               </Button>
             </div>
           </div>
@@ -585,41 +585,41 @@ export default function MediaPage() {
 
                 {/* Metadata Info */}
                 <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  <div>Typ: <span className="text-foreground">{detailAsset.mimeType}</span></div>
-                  <div>Größe: <span className="text-foreground">{formatFileSize(detailAsset.fileSize)}</span></div>
+                  <div>Type: <span className="text-foreground">{detailAsset.mimeType}</span></div>
+                  <div>Size: <span className="text-foreground">{formatFileSize(detailAsset.fileSize)}</span></div>
                   {detailAsset.width && detailAsset.height && (
-                    <div>Maße: <span className="text-foreground">{detailAsset.width}x{detailAsset.height}</span></div>
+                    <div>Dimensions: <span className="text-foreground">{detailAsset.width}x{detailAsset.height}</span></div>
                   )}
-                  <div>Quelle: <span className="text-foreground capitalize">{detailAsset.source}</span></div>
+                  <div>Source: <span className="text-foreground capitalize">{detailAsset.source}</span></div>
                 </div>
 
                 {/* Editable Fields */}
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Titel</label>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Title</label>
                     <Input
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
-                      placeholder="Asset-Titel..."
+                      placeholder="Asset title..."
                       className="h-9"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Beschreibung</label>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Description</label>
                     <Input
                       value={editDescription}
                       onChange={(e) => setEditDescription(e.target.value)}
-                      placeholder="Beschreibung..."
+                      placeholder="Description..."
                       className="h-9"
                     />
                   </div>
                   {detailAsset.type === "image" && (
                     <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Alt-Text</label>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Alt Text</label>
                       <Input
                         value={editAltText}
                         onChange={(e) => setEditAltText(e.target.value)}
-                        placeholder="Beschreibung für Screenreader..."
+                        placeholder="Image description for screen readers..."
                         className="h-9"
                       />
                     </div>
@@ -648,7 +648,7 @@ export default function MediaPage() {
                       value={newTag}
                       onChange={(e) => setNewTag(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && addTag()}
-                      placeholder="Neuen Tag hinzufügen..."
+                      placeholder="Add new tag..."
                       className="h-8 text-sm"
                     />
                     <Button
@@ -667,7 +667,7 @@ export default function MediaPage() {
                 {detailAsset.usedBy.length > 0 && (
                   <div>
                     <label className="text-xs font-medium text-muted-foreground mb-2 block">
-                      Verwendet in ({detailAsset.usedBy.length})
+                      Used in ({detailAsset.usedBy.length})
                     </label>
                     <div className="space-y-1.5">
                       {detailAsset.usedBy.map((ref, idx) => (
@@ -710,7 +710,7 @@ export default function MediaPage() {
                   {saving ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : null}
-                  Speichern
+                  Save
                 </Button>
                 <Button
                   variant="outline"
