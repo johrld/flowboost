@@ -216,6 +216,7 @@ export interface Competitor {
 
 export interface ConnectorConfig {
   type: "git" | "github" | "filesystem" | "shopware" | "wordpress" | "api";
+  useAsSource?: boolean;
   git?: {
     repoUrl: string;
     branch: string;
@@ -235,6 +236,11 @@ export interface ConnectorConfig {
   };
   filesystem?: {
     outputDir: string;
+  };
+  shopware?: {
+    shopUrl: string;
+    clientId: string;
+    clientSecret: string;
   };
 }
 

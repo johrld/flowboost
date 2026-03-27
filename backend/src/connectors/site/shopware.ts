@@ -70,6 +70,21 @@ export class ShopwareSiteConnector implements SiteConnector {
     return res.json() as Promise<T>;
   }
 
+  async apiPost<T>(path: string, body: unknown): Promise<T> {
+    const token = await this.getToken();
+    const res = await fetch(`${this.config.shopUrl}/api${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Shopware API POST ${path}: ${res.status}`);
+    return res.json() as Promise<T>;
+  }
+
   private async apiPatch(path: string, body: unknown): Promise<void> {
     const token = await this.getToken();
     const res = await fetch(`${this.config.shopUrl}/api${path}`, {
@@ -106,8 +121,8 @@ export class ShopwareSiteConnector implements SiteConnector {
   async discoverSchemas(): Promise<ConnectorSchema[]> {
     log.info("discovering Shopware CMS layouts");
 
-    // Fetch all CMS pages of type "landingpage" with full structure
-    const result = await this.apiGet<{
+    // Use POST /search/cms-page for reliable association loading
+    const result = await this.apiPost<{
       data: Array<{
         id: string;
         name: string;
@@ -126,7 +141,21 @@ export class ShopwareSiteConnector implements SiteConnector {
           }>;
         }>;
       }>;
-    }>("/cms-page?filter[type]=landingpage&associations[sections][associations][blocks][associations][slots]=true&limit=50");
+    }>("/search/cms-page", {
+      filter: [{ type: "equals", field: "type", value: "landingpage" }],
+      associations: {
+        sections: {
+          associations: {
+            blocks: {
+              associations: {
+                slots: {},
+              },
+            },
+          },
+        },
+      },
+      limit: 50,
+    });
 
     const schemas: ConnectorSchema[] = [];
 

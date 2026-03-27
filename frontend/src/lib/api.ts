@@ -382,15 +382,6 @@ export function deleteContentType(
   });
 }
 
-export function importConnectorSchemas(
-  customerId: string,
-  projectId: string,
-): Promise<{ message: string; types: ContentTypeDefinition[] }> {
-  return fetchJson(`/customers/${customerId}/projects/${projectId}/content-types/import`, {
-    method: "POST",
-  });
-}
-
 // ── Pipeline ──────────────────────────────────────────────────────
 
 export function getPipelineRuns(customerId: string, projectId: string): Promise<PipelineRun[]> {
@@ -817,4 +808,59 @@ export function removeMediaUsage(
   return fetchJson(`/customers/${customerId}/projects/${projectId}/media/${assetId}/usage/${contentId}`, {
     method: "DELETE",
   });
+}
+
+// ── Connectors ───────────────────────────────────────────────────
+
+export function testConnector(
+  customerId: string,
+  projectId: string,
+  data: { type: string; config: Record<string, string | undefined> },
+): Promise<{ success: boolean; error?: string; shopName?: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/test`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function getConnectorSchemas(
+  customerId: string,
+  projectId: string,
+): Promise<{ schemas: Array<{ id: string; label: string; description: string; slots: unknown[] }> }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/schemas`);
+}
+
+export function importConnectorSchemas(
+  customerId: string,
+  projectId: string,
+  schemaIds?: string[],
+): Promise<{ types: Array<{ id: string; label: string }> }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content-types/import`, {
+    method: "POST",
+    body: JSON.stringify(schemaIds ? { schemaIds } : {}),
+  });
+}
+
+export function browseConnector(
+  customerId: string,
+  projectId: string,
+  query: { entity?: string; search?: string; categoryId?: string; page?: number; limit?: number },
+): Promise<{ total: number; items: Array<{ id: string; name: string; productNumber?: string; description?: string }> }> {
+  const params = new URLSearchParams();
+  if (query.entity) params.set("entity", query.entity);
+  if (query.search) params.set("search", query.search);
+  if (query.categoryId) params.set("categoryId", query.categoryId);
+  if (query.page) params.set("page", String(query.page));
+  if (query.limit) params.set("limit", String(query.limit));
+  const qs = params.toString();
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/browse${qs ? `?${qs}` : ""}`);
+}
+
+export function browseConnectorDetail(
+  customerId: string,
+  projectId: string,
+  refId: string,
+  entity = "products",
+): Promise<{ id: string; name: string; structuredText: string; imageUrl?: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/browse/${refId}?entity=${entity}`);
 }
