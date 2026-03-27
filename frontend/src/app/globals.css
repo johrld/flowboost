@@ -124,7 +124,10 @@
   body {
     @apply bg-background text-foreground;
   }
-  a, button, [role="button"], [role="menuitem"], summary {
+  a, button, [role="button"], [role="menuitem"], [role="option"],
+  [role="tab"], [role="switch"], [role="checkbox"], [role="radio"],
+  summary, label[for], select, [data-slot="dialog-close"],
+  [class*="hover:"] {
     cursor: pointer;
   }
 }
