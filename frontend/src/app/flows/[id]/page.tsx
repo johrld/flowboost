@@ -743,14 +743,14 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               ) : (
                 <div>
-                  {/* + Add Content row */}
+                  {/* + Create Content row */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button className="flex items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b">
                         <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center">
                           <Plus className="h-4 w-4" />
                         </div>
-                        Add Content
+                        Create Content
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
