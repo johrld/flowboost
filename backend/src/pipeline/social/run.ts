@@ -62,7 +62,7 @@ export async function runSocialPipeline(
   let socialOutput: SocialOutput;
 
   try {
-    const briefingContext = ctx.buildFullBriefingContext();
+    const briefingContext = ctx.buildFullFlowContext();
     const prompt = buildContentWriterPrompt(contentType, project, topic, briefingContext);
 
     const config: AgentConfig = {

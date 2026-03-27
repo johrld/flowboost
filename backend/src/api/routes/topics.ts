@@ -5,7 +5,9 @@ import { PipelineContext } from "../../pipeline/context.js";
 import { runProductionPipeline } from "../../pipeline/production/run.js";
 import { runSocialPipeline } from "../../pipeline/social/run.js";
 import { runEmailPipeline } from "../../pipeline/email/run.js";
-import type { ChatMessage, Topic, BriefingInputType } from "../../models/types.js";
+import type { ChatMessage, Topic, FlowInputType } from "../../models/types.js";
+import { processInput } from "../../pipeline/ingest/process-input.js";
+import { distillChat } from "../../pipeline/ingest/distill-chat.js";
 import { createLogger } from "../../utils/logger.js";
 
 const log = createLogger("topic-chat");
@@ -34,17 +36,38 @@ function buildSystemPrompt(topic: Topic): string {
   if (topic.reasoning) parts.push(`\n## AI Analysis\n${topic.reasoning}`);
   if (topic.userNotes) parts.push(`\n## User Notes\n${topic.userNotes}`);
 
-  // Briefing Inputs — so the chat knows what the user uploaded
+  // Flow Inputs — uses processed summaries when available
   const inputs = topic.inputs ?? [];
   if (inputs.length > 0) {
-    parts.push("\n## Briefing Inputs (uploaded by user)");
+    parts.push("\n## Flow Inputs (uploaded by user)");
     for (const input of inputs) {
       if (input.type === "text" || input.type === "transcript") {
-        parts.push(`\n### ${input.type === "transcript" ? "Voice Memo Transcript" : "Note"}\n${input.content.slice(0, 2000)}`);
+        if (input.processed?.status === "completed" && input.processed.summary) {
+          parts.push(`\n### ${input.type === "transcript" ? "Voice Memo (Transcribed)" : "Note (Summarized)"}\n${input.processed.summary}`);
+          if (input.processed.keyPoints?.length) {
+            parts.push(`Key points: ${input.processed.keyPoints.join("; ")}`);
+          }
+        } else {
+          parts.push(`\n### ${input.type === "transcript" ? "Voice Memo" : "Note"}\n${input.content.slice(0, 2000)}`);
+        }
       } else if (input.type === "url") {
-        parts.push(`- **URL:** ${input.content}`);
-      } else if (input.type === "image" || input.type === "document") {
-        parts.push(`- **File:** ${input.fileName ?? input.type} (${input.mimeType ?? "unknown"})`);
+        if (input.processed?.status === "completed" && input.processed.summary) {
+          parts.push(`- **URL:** ${input.content}\n  Summary: ${input.processed.summary}`);
+        } else {
+          parts.push(`- **URL:** ${input.content}`);
+        }
+      } else if (input.type === "image") {
+        if (input.processed?.status === "completed" && input.processed.description) {
+          parts.push(`- **Image (${input.fileName ?? "image"}):** ${input.processed.description}`);
+        } else {
+          parts.push(`- **File:** ${input.fileName ?? input.type} (${input.mimeType ?? "unknown"})`);
+        }
+      } else if (input.type === "document") {
+        if (input.processed?.status === "completed" && input.processed.summary) {
+          parts.push(`- **Document (${input.fileName ?? "document"}):** ${input.processed.summary}`);
+        } else {
+          parts.push(`- **File:** ${input.fileName ?? input.type} (${input.mimeType ?? "unknown"})`);
+        }
       }
     }
   }
@@ -143,7 +166,7 @@ export async function topicRoutes(app: FastifyInstance) {
       const body = (request.body ?? {}) as Record<string, unknown>;
       const safeFields = [
         "title", "category", "keywords", "suggestedAngle", "searchIntent",
-        "estimatedSections", "format", "userNotes", "scheduledDate",
+        "estimatedSections", "format", "userNotes", "scheduledDate", "status",
       ];
       const updates: Record<string, unknown> = {};
 
@@ -171,6 +194,21 @@ export async function topicRoutes(app: FastifyInstance) {
 
       topics.update(topicId, updates);
       return { message: "Topic updated", topic: topics.get(topicId) };
+    },
+  );
+
+  // DELETE /customers/:customerId/projects/:projectId/topics/:topicId
+  app.delete<{ Params: { customerId: string; projectId: string; topicId: string } }>(
+    "/:topicId",
+    async (request, reply) => {
+      const { customerId, projectId, topicId } = request.params;
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
+      if (!topic) {
+        return reply.status(404).send({ error: "Topic not found" });
+      }
+      topics.delete(topicId);
+      return { message: "Flow deleted" };
     },
   );
 
@@ -310,6 +348,23 @@ export async function topicRoutes(app: FastifyInstance) {
         const assistantMsg: ChatMessage = { role: "assistant", content: assistantText, ts: new Date().toISOString() };
         appendChat(dir, assistantMsg);
 
+        // Auto-generate title if still "Untitled Flow"
+        if (topic.title === "Untitled Flow" && message.trim().length > 5) {
+          try {
+            const { callClaude } = await import("../../pipeline/ingest/process-input.js");
+            const titleResponse = await callClaude([{
+              type: "text",
+              text: `Generate a short, descriptive title (max 6 words, no quotes) for a content flow about:\n\nUser said: "${message.trim().slice(0, 200)}"\n\nAI responded: "${assistantText.slice(0, 200)}"\n\nReturn ONLY the title, nothing else.`,
+            }]);
+            const newTitle = titleResponse.trim().replace(/^["']|["']$/g, "").slice(0, 60);
+            if (newTitle && newTitle.length > 2) {
+              topics.update(topicId, { title: newTitle });
+            }
+          } catch {
+            // Auto-title failed, not critical
+          }
+        }
+
         // Check if response contains field updates
         const jsonMatch = assistantText.match(/```(?:json)?\s*\r?\n?([\s\S]*?)\r?\n?\s*```/i);
         if (jsonMatch) {
@@ -369,18 +424,18 @@ export async function topicRoutes(app: FastifyInstance) {
     },
   );
 
-  // ── Briefing Input Endpoints ──────────────────────────────
+  // ── Flow Input Endpoints ──────────────────────────────
 
   // POST /topics/:topicId/inputs — Add text/URL input
   app.post<{
     Params: { customerId: string; projectId: string; topicId: string };
-    Body: { type: BriefingInputType; content: string; fileName?: string };
+    Body: { type: FlowInputType; content: string; fileName?: string };
   }>(
     "/:topicId/inputs",
     async (request, reply) => {
       const { customerId, projectId, topicId } = request.params;
       const { type, content, fileName } = (request.body ?? {}) as {
-        type?: BriefingInputType;
+        type?: FlowInputType;
         content?: string;
         fileName?: string;
       };
@@ -389,7 +444,7 @@ export async function topicRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "type and content are required" });
       }
 
-      const validTypes: BriefingInputType[] = ["text", "transcript", "image", "url", "document"];
+      const validTypes: FlowInputType[] = ["text", "transcript", "image", "url", "document"];
       if (!validTypes.includes(type)) {
         return reply.status(400).send({ error: `Invalid input type. Must be one of: ${validTypes.join(", ")}` });
       }
@@ -399,6 +454,11 @@ export async function topicRoutes(app: FastifyInstance) {
       if (!input) {
         return reply.status(404).send({ error: "Topic not found" });
       }
+
+      // Fire-and-forget async processing
+      processInput(topics, topicId, input).catch((err) => {
+        log.error({ topicId, inputId: input.id, err }, "input processing failed");
+      });
 
       return reply.status(201).send(input);
     },
@@ -429,14 +489,14 @@ export async function topicRoutes(app: FastifyInstance) {
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ];
-      if (!ALLOWED_MIMES.some((m) => mimeType === m || (m.endsWith("/*") && mimeType.startsWith(m.replace("/*", "/"))))) {
+      if (!ALLOWED_MIMES.includes(mimeType)) {
         return reply.status(400).send({ error: `File type not allowed: ${mimeType}` });
       }
 
       const buffer = await file.toBuffer();
 
       // Determine input type from mime
-      let inputType: BriefingInputType = "document";
+      let inputType: FlowInputType = "document";
       if (mimeType.startsWith("image/")) inputType = "image";
       else if (mimeType.startsWith("audio/")) inputType = "transcript";
 
@@ -446,7 +506,69 @@ export async function topicRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Topic not found" });
       }
 
+      // Fire-and-forget async processing
+      processInput(topics, topicId, input).catch((err) => {
+        log.error({ topicId, inputId: input.id, err }, "input processing failed");
+      });
+
       return reply.status(201).send(input);
+    },
+  );
+
+  // POST /topics/:topicId/inputs/:inputId/reprocess — Re-process input with optional note
+  app.post<{
+    Params: { customerId: string; projectId: string; topicId: string; inputId: string };
+    Body: { note?: string };
+  }>(
+    "/:topicId/inputs/:inputId/reprocess",
+    async (request, reply) => {
+      const { customerId, projectId, topicId, inputId } = request.params;
+      const { note } = (request.body ?? {}) as { note?: string };
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
+      if (!topic) return reply.status(404).send({ error: "Topic not found" });
+
+      const input = (topic.inputs ?? []).find((i) => i.id === inputId);
+      if (!input) return reply.status(404).send({ error: "Input not found" });
+
+      // Reset status and optionally set new note, then re-process
+      topics.updateInputProcessed(topicId, inputId, {
+        status: "pending",
+        ...(note ? { userNote: note } : {}),
+      });
+
+      // Re-read to get the updated input with correct processed state
+      const updated = topics.get(topicId);
+      const updatedInput = (updated?.inputs ?? []).find((i) => i.id === inputId);
+      if (updatedInput) {
+        processInput(topics, topicId, updatedInput).catch((err) => {
+          log.error({ topicId, inputId, err }, "reprocessing failed");
+        });
+      }
+
+      return { message: "Reprocessing started" };
+    },
+  );
+
+  // POST /topics/:topicId/distill — Manually trigger chat distillation
+  app.post<{
+    Params: { customerId: string; projectId: string; topicId: string };
+  }>(
+    "/:topicId/distill",
+    async (request, reply) => {
+      const { customerId, projectId, topicId } = request.params;
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
+      if (!topic) return reply.status(404).send({ error: "Topic not found" });
+
+      const chatDir = topics.entityDir(topicId);
+      const chatMessages = readChat(chatDir);
+      if (chatMessages.length === 0) {
+        return reply.status(400).send({ error: "No chat messages to distill" });
+      }
+
+      const distillation = await distillChat(topics, topicId, chatMessages, topic.chatDistillation);
+      return { message: "Chat distilled", distillation };
     },
   );
 
@@ -492,7 +614,7 @@ export async function topicRoutes(app: FastifyInstance) {
     },
   );
 
-  // ── Briefing Produce Endpoint ─────────────────────────────
+  // ── Flow Produce Endpoint ─────────────────────────────
 
   // POST /topics/:topicId/produce — Create output from briefing
   app.post<{
@@ -524,12 +646,33 @@ export async function topicRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Topic not found" });
       }
 
+      // Block production if inputs are still processing
+      const pendingInputs = (topic.inputs ?? []).filter(
+        (i) => i.processed?.status === "processing" || i.processed?.status === "pending",
+      );
+      if (pendingInputs.length > 0) {
+        return reply.status(400).send({
+          error: `${pendingInputs.length} input(s) still processing. Wait for all inputs to finish before producing content.`,
+        });
+      }
+
       const project = app.ctx.projectsFor(customerId).get(projectId);
       if (!project) {
         return reply.status(404).send({ error: "Project not found" });
       }
 
-      // Create ContentItem linked to this briefing
+      // Distill chat before production (merge with existing distillation)
+      try {
+        const chatDir = topics.entityDir(topicId);
+        const chatMessages = readChat(chatDir);
+        if (chatMessages.length > 0) {
+          await distillChat(topics, topicId, chatMessages, topic.chatDistillation);
+        }
+      } catch (err) {
+        log.warn({ topicId, err }, "chat distillation failed, proceeding without it");
+      }
+
+      // Create ContentItem linked to this flow
       const now = new Date().toISOString();
       const contentItem = app.ctx.contentFor(customerId, projectId).create({
         customerId,
@@ -545,7 +688,7 @@ export async function topicRoutes(app: FastifyInstance) {
         updatedAt: now,
       });
 
-      // Add to briefing outputs
+      // Add to flow outputs
       topics.addOutput(topicId, contentItem.id);
 
       // Determine pipeline type and start asynchronously

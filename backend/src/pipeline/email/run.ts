@@ -49,7 +49,7 @@ export async function runEmailPipeline(ctx: PipelineContext): Promise<void> {
   let output: NewsletterOutput;
 
   try {
-    const briefingContext = ctx.buildFullBriefingContext();
+    const briefingContext = ctx.buildFullFlowContext();
     const prompt = buildContentWriterPrompt(contentType, project, topic, briefingContext);
 
     const config: AgentConfig = {

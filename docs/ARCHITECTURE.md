@@ -24,19 +24,19 @@ FlowBoost is an AI-powered content pipeline that researches, writes, reviews, an
 
 ## Core Entities
 
-### Briefing (= Topic)
+### Flow (= Topic)
 
-The central workspace. A Briefing bundles everything around one content theme. Briefings extend the existing `Topic` entity with additional fields.
+The central workspace. A Flow bundles everything around one content theme. Flows extend the existing `Topic` entity with additional fields.
 
 ```
-Topic (= Briefing)
+Topic (= Flow)
 ├── title, status, category, priority
 ├── keywords                — { primary, secondary[], longTail[] }
 ├── searchIntent            — "informational" | "how-to" | "transactional" | "navigational"
 ├── competitorInsights      — string (flat field, not nested)
 ├── suggestedAngle          — string (flat field, not nested)
 ├── userNotes?              — free-form notes
-├── inputs?                 — BriefingInput[] (text, files, URLs, transcripts)
+├── inputs?                 — FlowInput[] (text, files, URLs, transcripts)
 ├── outputIds?              — string[] (ContentItem IDs)
 ├── chat                    — ChatMessage[] (stored as chat.jsonl)
 ├── format?                 — "article" | "guide" | "landing_page" | "social_post"
@@ -44,7 +44,7 @@ Topic (= Briefing)
 └── scheduledDate?
 ```
 
-Topics from the Strategy Pipeline become Briefings when approved. The `inputs` and `outputIds` fields are optional — existing topics without them continue to work.
+Topics from the Strategy Pipeline become Flows when the user creates them. The `inputs` and `outputIds` fields are optional — existing topics without them continue to work.
 
 ### ContentItem
 
@@ -56,7 +56,7 @@ ContentItem
 ├── status            — planned | producing | draft | review | approved | delivered | published | updating | archived
 ├── title, description?, category?, tags?, keywords?, author?
 ├── topicId?          — Link to originating Topic
-├── briefingId?       — Link to Briefing (same as topicId when using Briefing flow)
+├── flowId (briefingId in data)?       — Link to Flow
 ├── parentId?         — Link to parent ContentItem
 ├── currentVersionId?, lastPublishedVersionId?
 ├── deliveryRef?      — Platform-specific reference (PR number, post ID, category ID)
@@ -97,13 +97,13 @@ Custom types: User-defined via Template Builder (planned).
 
 ```
 1. BRIEFING
-   User creates a Topic/Briefing, adds inputs (text, files, URLs).
+   User creates a Flow, adds inputs (text, files, URLs).
    Optionally brainstorms with AI via chat, runs Research (enrich).
 
 2. PRODUCE
    User clicks "Create" → selects content type
    → POST /customers/:cid/projects/:pid/topics/:tid/produce { type, platform? }
-   → Creates ContentItem with briefingId
+   → Creates ContentItem with flowId (briefingId in data)
    → Starts appropriate pipeline (production, social_production, email_production)
 
 3. PIPELINE
@@ -170,8 +170,8 @@ data/customers/{customerId}/
     ├── content-types/      (ContentTypeDefinition JSON files, created on demand)
     ├── section-specs/      (agent writing specs per section type)
     ├── templates/          (article templates)
-    ├── topics/{topicId}/   (Briefings)
-    │   ├── topic.json      (Briefing data incl. inputs[], outputIds[])
+    ├── topics/{topicId}/   (Flows)
+    │   ├── topic.json      (Flow data incl. inputs[], outputIds[])
     │   ├── chat.jsonl      (Brainstorm chat history)
     │   └── inputs/         (Uploaded files)
     ├── content/{contentId}/

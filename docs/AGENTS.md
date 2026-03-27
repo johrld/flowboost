@@ -60,7 +60,7 @@ Audit → Research → Strategy
 
 ### Production Pipeline (Articles/Guides)
 
-Produces a complete article from an approved topic/briefing.
+Produces a complete article from an approved topic/flow.
 
 ```
 Outline → Writing (parallel) → Assembly → Image → Quality (retry) → Translation (parallel)
@@ -108,7 +108,7 @@ Generate
 
 ### Video Production Pipeline
 
-Produces video content. Pipeline exists in code but is not exposed via the Briefing UI.
+Produces video content. Pipeline exists in code but is not exposed via the Flow UI.
 
 ```
 Script → Storyboard → Generate → Subtitle → Thumbnail
@@ -116,7 +116,7 @@ Script → Storyboard → Generate → Subtitle → Thumbnail
 
 ### Audio Production Pipeline
 
-Produces audio content (podcasts, narration). Pipeline exists in code but is not exposed via the Briefing UI.
+Produces audio content (podcasts, narration). Pipeline exists in code but is not exposed via the Flow UI.
 
 ```
 Script → Voice → Transcript
@@ -148,7 +148,7 @@ Every agent receives layered context:
    ├── Section Specs + Templates
    └── Pipeline Settings (model, retries, imagen model)
 
-2. Briefing Level (when producing from briefing)
+2. Flow Level (when producing from flow)
    ├── Inputs (transcripts, notes, URLs)
    ├── Research fields (keywords, competitors, angle)
    └── Brainstorm chat history

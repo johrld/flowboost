@@ -27,13 +27,13 @@ Create a detailed section-level outline for the following article topic. The out
 ## Topic Brief
 
 - **Title**: ${topic.title}
-- **Category**: ${topic.category}
-- **Primary Keyword**: ${topic.keywords.primary}
+- **Category**: ${topic.category || "general"}
+${topic.keywords?.primary ? `- **Primary Keyword**: ${topic.keywords.primary}
 - **Secondary Keywords**: ${topic.keywords.secondary.join(", ")}
-- **Long-tail Keywords**: ${topic.keywords.longTail.join(", ")}
-- **Search Intent**: ${topic.searchIntent}
-- **Suggested Angle**: ${topic.suggestedAngle}
-- **Estimated Sections**: ${topic.estimatedSections}
+- **Long-tail Keywords**: ${topic.keywords.longTail.join(", ")}` : `- **Keywords**: Not provided — research appropriate keywords for this topic using WebSearch before creating the outline.`}
+${topic.searchIntent ? `- **Search Intent**: ${topic.searchIntent}` : ""}
+${topic.suggestedAngle ? `- **Suggested Angle**: ${topic.suggestedAngle}` : ""}
+${topic.estimatedSections ? `- **Estimated Sections**: ${topic.estimatedSections}` : "- **Estimated Sections**: Determine based on topic complexity (typically 3-6)"}
 ${briefingContext ? `\n${briefingContext}` : ""}
 </briefing>
 

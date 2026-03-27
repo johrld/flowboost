@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Store } from "./store.js";
 import { createLogger } from "../utils/logger.js";
-import type { Topic, BriefingInput } from "./types.js";
+import type { Topic, FlowInput, ProcessedInputData, ChatDistillation } from "./types.js";
 
 const log = createLogger("topic-store");
 
@@ -19,11 +19,11 @@ export class TopicStore extends Store<Topic> {
   }
 
   /** Add a text/URL input (no file upload) */
-  addInput(topicId: string, input: Omit<BriefingInput, "id" | "createdAt">): BriefingInput | null {
+  addInput(topicId: string, input: Omit<FlowInput, "id" | "createdAt">): FlowInput | null {
     const topic = this.get(topicId);
     if (!topic) return null;
 
-    const entry: BriefingInput = {
+    const entry: FlowInput = {
       id: crypto.randomUUID(),
       ...input,
       createdAt: new Date().toISOString(),
@@ -41,8 +41,8 @@ export class TopicStore extends Store<Topic> {
   addFileInput(
     topicId: string,
     file: { buffer: Buffer; fileName: string; mimeType: string },
-    type: BriefingInput["type"] = "document",
-  ): BriefingInput | null {
+    type: FlowInput["type"] = "document",
+  ): FlowInput | null {
     const topic = this.get(topicId);
     if (!topic) return null;
 
@@ -54,7 +54,7 @@ export class TopicStore extends Store<Topic> {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, diskName), file.buffer);
 
-    const entry: BriefingInput = {
+    const entry: FlowInput = {
       id: inputId,
       type,
       content: `inputs/${diskName}`,
@@ -105,6 +105,32 @@ export class TopicStore extends Store<Topic> {
 
     const filePath = path.join(this.entityDir(topicId), input.content);
     return fs.existsSync(filePath) ? filePath : null;
+  }
+
+  // ── Processing Status ─────────────────────────────────
+
+  /** Update the processed data for a specific input */
+  updateInputProcessed(topicId: string, inputId: string, processed: ProcessedInputData): boolean {
+    const topic = this.get(topicId);
+    if (!topic) return false;
+
+    const inputs = topic.inputs ?? [];
+    const input = inputs.find((i) => i.id === inputId);
+    if (!input) return false;
+
+    input.processed = processed;
+    this.update(topicId, { inputs } as Partial<Topic>);
+    log.debug({ topicId, inputId, status: processed.status }, "input processing updated");
+    return true;
+  }
+
+  /** Update chat distillation for a topic */
+  updateChatDistillation(topicId: string, distillation: ChatDistillation): boolean {
+    const topic = this.get(topicId);
+    if (!topic) return false;
+    this.update(topicId, { chatDistillation: distillation } as Partial<Topic>);
+    log.debug({ topicId }, "chat distillation updated");
+    return true;
   }
 
   // ── Output Management ──────────────────────────────────

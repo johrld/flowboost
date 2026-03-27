@@ -155,7 +155,7 @@ export interface ContentAudit {
 
 export interface Topic {
   id: string;
-  status: "proposed" | "approved" | "rejected" | "in_production" | "produced";
+  status: "proposed" | "approved" | "rejected" | "in_production" | "produced" | "archived";
   title: string;
   category: string;
   priority: number;
@@ -192,24 +192,55 @@ export interface Topic {
   rejectedAt?: string;
   rejectionReason?: string;
 
-  // ── Briefing extensions ────────────────────────────────
+  // ── Flow extensions ────────────────────────────────────
   // Inputs: source material (text, files, URLs, transcripts)
-  inputs?: BriefingInput[];
-  // Output references: ContentItem IDs produced from this briefing
+  inputs?: FlowInput[];
+  // Output references: ContentItem IDs produced from this flow
   outputIds?: string[];
+  // Distilled chat decisions (extracted from brainstorm chat)
+  chatDistillation?: ChatDistillation;
 }
 
-// ─── Briefing Input ─────────────────────────────────────────
+// ─── Flow Input ─────────────────────────────────────────────
 
-export type BriefingInputType = "text" | "transcript" | "image" | "url" | "document";
+export type FlowInputType = "text" | "transcript" | "image" | "url" | "document";
 
-export interface BriefingInput {
+export type InputProcessingStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface ProcessedInputData {
+  status: InputProcessingStatus;
+  summary?: string;
+  keyPoints?: string[];
+  transcript?: string;
+  description?: string;
+  extractedText?: string;
+  fetchedContent?: string;
+  userNote?: string;
+  processedAt?: string;
+  error?: string;
+}
+
+export interface FlowInput {
   id: string;
-  type: BriefingInputType;
+  type: FlowInputType;
   content: string;              // Text content or relative file path
   fileName?: string;
   mimeType?: string;
   createdAt: string;
+  processed?: ProcessedInputData;
+}
+
+// ─── Chat Distillation ─────────────────────────────────────
+
+export interface ChatDistillation {
+  keyDecisions: string[];
+  contentDirection: string;
+  mustInclude: string[];
+  rejectedIdeas: string[];
+  rejectedApproaches: string[];
+  contentReferences: string[];
+  toneNotes: string;
+  distilledAt: string;
 }
 
 // ─── Articles (V2 — kept for backward compat, use ContentItem for new code) ──

@@ -124,6 +124,9 @@
   body {
     @apply bg-background text-foreground;
   }
+  a, button, [role="button"], [role="menuitem"], summary {
+    cursor: pointer;
+  }
 }
 
 /* Thinking dots animation */

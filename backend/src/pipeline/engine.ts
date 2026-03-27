@@ -191,7 +191,7 @@ export async function runAgent(
  */
 export async function runSimpleAgent(
   prompt: string,
-  options?: { model?: string; maxTurns?: number; systemPrompt?: string },
+  options?: { model?: string; maxTurns?: number; systemPrompt?: string; allowedTools?: string[] },
 ): Promise<AgentRunResult> {
   const startTime = Date.now();
   const model = options?.model ?? "haiku";
@@ -212,6 +212,7 @@ export async function runSimpleAgent(
         model,
         maxTurns: options?.maxTurns ?? 1,
         systemPrompt: options?.systemPrompt,
+        allowedTools: options?.allowedTools,
         permissionMode: "acceptEdits",
       },
     })) {

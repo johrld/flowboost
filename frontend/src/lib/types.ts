@@ -155,7 +155,7 @@ export interface ContentMediaAsset {
 
 // ── Topic Status ────────────────────────────────────────────────
 
-export type TopicStatus = "proposed" | "approved" | "rejected" | "in_production" | "produced";
+export type TopicStatus = "proposed" | "approved" | "rejected" | "in_production" | "produced" | "archived";
 
 // ── Pipeline ────────────────────────────────────────────────────
 
@@ -265,20 +265,48 @@ export interface Topic {
   rejectedAt?: string;
   rejectionReason?: string;
 
-  // Briefing extensions
-  inputs?: BriefingInput[];
+  // Flow extensions
+  inputs?: FlowInput[];
   outputIds?: string[];
+  chatDistillation?: ChatDistillation;
 }
 
-export type BriefingInputType = "text" | "transcript" | "image" | "url" | "document";
+export type FlowInputType = "text" | "transcript" | "image" | "url" | "document";
 
-export interface BriefingInput {
+export type InputProcessingStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface ProcessedInputData {
+  status: InputProcessingStatus;
+  summary?: string;
+  keyPoints?: string[];
+  transcript?: string;
+  description?: string;
+  extractedText?: string;
+  fetchedContent?: string;
+  userNote?: string;
+  processedAt?: string;
+  error?: string;
+}
+
+export interface FlowInput {
   id: string;
-  type: BriefingInputType;
+  type: FlowInputType;
   content: string;
   fileName?: string;
   mimeType?: string;
   createdAt: string;
+  processed?: ProcessedInputData;
+}
+
+export interface ChatDistillation {
+  keyDecisions: string[];
+  contentDirection: string;
+  mustInclude: string[];
+  rejectedIdeas: string[];
+  rejectedApproaches: string[];
+  contentReferences: string[];
+  toneNotes: string;
+  distilledAt: string;
 }
 
 
