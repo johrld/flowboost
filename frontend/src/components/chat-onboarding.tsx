@@ -156,14 +156,17 @@ export function ChatOnboarding({ contentType, onComplete, onCancel }: ChatOnboar
               </div>
             </div>
           </div>
-          <div className="ml-10 flex gap-2">
-            <Button size="sm" onClick={handleComplete}>
-              <Check className="mr-1.5 h-3.5 w-3.5" />
-              Create Now
-            </Button>
-            <Button size="sm" variant="outline" onClick={onCancel}>
-              Keep chatting instead
-            </Button>
+          <div className="ml-10 space-y-2">
+            <p className="text-xs text-muted-foreground">Click &quot;Start&quot; to send this brief to the AI, then use the Create button above when you&apos;re ready to produce.</p>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleComplete}>
+                <Check className="mr-1.5 h-3.5 w-3.5" />
+                Start
+              </Button>
+              <Button size="sm" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+            </div>
           </div>
         </div>
       )}

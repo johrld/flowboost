@@ -496,16 +496,11 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
               {onboardingContentType ? (
                 <ChatOnboarding
                   contentType={onboardingContentType}
-                  onComplete={async (answers, summary) => {
+                  onComplete={async (_answers, summary) => {
                     setOnboardingContentType(null);
-                    // Send summary as chat message
+                    // Send the briefing summary as a single chat message
+                    // This gives the AI context — user can then click "Create" when ready
                     await handleSendMessage(summary);
-                    // Then produce
-                    let apiType = "article";
-                    let platform: string | undefined;
-                    if (onboardingContentType.category === "social") { apiType = "social_post"; platform = onboardingContentType.id.replace("-post", ""); }
-                    else if (onboardingContentType.category === "email") { apiType = "newsletter"; }
-                    await handleProduce(apiType, platform);
                   }}
                   onCancel={() => setOnboardingContentType(null)}
                 />
