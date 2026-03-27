@@ -48,6 +48,7 @@ import {
   Layers,
   Image as ImageIcon,
   Share2,
+  Package,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -586,47 +587,66 @@ function DetailDialog({
 
 // ── Assign Dialog ───────────────────────────────────────────────
 
+const PLATFORM_LABELS: Record<string, string> = {
+  linkedin: "LinkedIn",
+  instagram: "Instagram",
+  x: "X",
+  tiktok: "TikTok",
+};
+
+const CONTENT_TYPE_LABELS: Record<string, string> = {
+  article: "Article",
+  guide: "Guide",
+  newsletter: "Newsletter",
+  social_post: "Social Post",
+};
+
 function AssignDialog({
   dateStr,
   open,
-  unscheduled,
-  categories,
+  contentItems,
   onAssign,
   onClose,
 }: {
   dateStr: string;
   open: boolean;
-  unscheduled: Topic[];
-  categories: { id: string; labels: Record<string, string> }[];
-  onAssign: (topicId: string, date: string) => void;
+  contentItems: ContentItem[];
+  onAssign: (contentId: string, date: string) => void;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [times, setTimes] = useState<Record<string, string>>({});
-  const [tab, setTab] = useState<"articles" | "social">("articles");
+  const [typeFilter, setTypeFilter] = useState("all");
 
-  const catLabel = (catId: string) => {
-    const c = categories.find((cat) => cat.id === catId);
-    return c?.labels.de ?? c?.labels.en ?? catId;
-  };
+  // Build type counts for filter dropdown
+  const typeCounts: Record<string, number> = {};
+  for (const c of contentItems) {
+    const key = c.type === "social_post" && c.category ? c.category : c.type;
+    typeCounts[key] = (typeCounts[key] ?? 0) + 1;
+  }
 
-  const sorted = [...unscheduled].sort((a, b) => a.priority - b.priority);
+  // Filter by type
+  const typeFiltered = typeFilter === "all"
+    ? contentItems
+    : contentItems.filter((c) => {
+        const key = c.type === "social_post" && c.category ? c.category : c.type;
+        return key === typeFilter;
+      });
+
+  // Filter by search
   const query = search.toLowerCase().trim();
   const filtered = query
-    ? sorted.filter(
-        (t) =>
-          t.title.toLowerCase().includes(query) ||
-          t.category.toLowerCase().includes(query) ||
-          catLabel(t.category).toLowerCase().includes(query) ||
-          t.keywords.primary.toLowerCase().includes(query) ||
-          t.keywords.secondary.some((kw) => kw.toLowerCase().includes(query)) ||
-          t.keywords.longTail.some((kw) => kw.toLowerCase().includes(query)),
-      )
-    : sorted;
+    ? typeFiltered.filter((c) => c.title.toLowerCase().includes(query))
+    : typeFiltered;
+
+  const getLabel = (item: ContentItem) => {
+    if (item.type === "social_post" && item.category) return PLATFORM_LABELS[item.category] ?? item.category;
+    return CONTENT_TYPE_LABELS[item.type] ?? item.type;
+  };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) { onClose(); setSearch(""); setTimes({}); setTab("articles"); } }}>
-      <DialogContent className="sm:max-w-4xl h-[70vh] flex flex-col gap-0 p-0">
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { onClose(); setSearch(""); setTimes({}); setTypeFilter("all"); } }}>
+      <DialogContent className="sm:max-w-3xl h-[70vh] flex flex-col gap-0 p-0">
         <div className="px-6 pt-6 pb-4 space-y-4 shrink-0">
           <DialogHeader>
             <DialogTitle>
@@ -637,150 +657,91 @@ function AssignDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* Tabs + Search */}
+          {/* Filter + Search */}
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-1">
-              <button
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                  tab === "articles"
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                }`}
-                onClick={() => setTab("articles")}
-              >
-                Articles
-                {unscheduled.length > 0 && (
-                  <span className="text-[10px] tabular-nums text-muted-foreground">{unscheduled.length}</span>
-                )}
-              </button>
-              <button
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  tab === "social"
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                }`}
-                onClick={() => setTab("social")}
-              >
-                Social Posts
-              </button>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="all">All Types ({contentItems.length})</option>
+              {Object.entries(typeCounts).map(([key, count]) => (
+                <option key={key} value={key}>
+                  {PLATFORM_LABELS[key] ?? CONTENT_TYPE_LABELS[key] ?? key} ({count})
+                </option>
+              ))}
+            </select>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-8 w-52 text-sm"
+              />
             </div>
-            {tab === "articles" && (
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  placeholder="Search…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-8 h-8 w-52 text-sm"
-                />
-              </div>
-            )}
           </div>
         </div>
 
         <div className="overflow-y-auto flex-1 px-6 py-2">
-          {/* Articles Tab */}
-          {tab === "articles" && (
-            <div className="divide-y">
-              {filtered.map((topic) => (
-                <div
-                  key={topic.id}
-                  className="flex items-start gap-4 py-3.5 group/row hover:bg-muted/30 -mx-2 px-2 rounded-md transition-colors"
-                >
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[10px] shrink-0">P{topic.priority}</Badge>
-                      <p className="font-medium text-sm">{topic.title}</p>
-                      <TopicStatusBadge status={topic.status} />
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span>{catLabel(topic.category)}</span>
-                      <span>·</span>
-                      <span className="capitalize">{topic.searchIntent}</span>
-                      <span>·</span>
-                      <span>~{topic.estimatedSections} sections</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {[topic.keywords.primary, ...topic.keywords.secondary.slice(0, 3)].map((kw) => (
-                        <Badge key={kw} variant="secondary" className="text-[10px] px-1.5 py-0 font-normal">
-                          {kw}
-                        </Badge>
-                      ))}
-                    </div>
+          <div className="divide-y">
+            {filtered.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-4 py-3.5 group/row hover:bg-muted/30 -mx-2 px-2 rounded-md transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm truncate">{item.title}</p>
+                    <ContentStatusBadge status={item.status} />
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 mt-0.5">
-                    <input
-                      type="time"
-                      defaultValue="09:00"
-                      className="h-8 rounded-md border border-input bg-background px-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => setTimes((prev) => ({ ...prev, [topic.id]: e.target.value }))}
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="opacity-60 group-hover/row:opacity-100 transition-opacity"
-                      onClick={() => {
-                        const time = times[topic.id] ?? "09:00";
-                        onAssign(topic.id, `${dateStr}T${time}`);
-                        onClose();
-                        setSearch("");
-                        setTimes({});
-                      }}
-                    >
-                      <Calendar className="mr-1.5 h-3 w-3" />
-                      Schedule
-                    </Button>
-                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{getLabel(item)}</p>
                 </div>
-              ))}
-              {filtered.length === 0 && unscheduled.length > 0 && (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Search className="h-6 w-6 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">No topics match &ldquo;{search}&rdquo;</p>
+                <div className="flex items-center gap-2 shrink-0">
+                  <input
+                    type="time"
+                    defaultValue="09:00"
+                    className="h-8 rounded-md border border-input bg-background px-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setTimes((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="opacity-60 group-hover/row:opacity-100 transition-opacity"
+                    onClick={() => {
+                      const time = times[item.id] ?? "09:00";
+                      onAssign(item.id, `${dateStr}T${time}`);
+                    }}
+                  >
+                    <Calendar className="mr-1.5 h-3 w-3" />
+                    Schedule
+                  </Button>
                 </div>
-              )}
-              {unscheduled.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <FileText className="h-6 w-6 text-muted-foreground mb-2" />
-                  <p className="text-sm font-medium">No unscheduled topics</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 mb-3">
-                    All topics are already scheduled. Create new content to plan ahead.
-                  </p>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href="/content">View Articles</Link>
-                    </Button>
-                    <Button size="sm" asChild>
-                      <Link href="/content">
-                        <Plus className="mr-1.5 h-3.5 w-3.5" />
-                        New Content
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Social Posts Tab */}
-          {tab === "social" && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Share2 className="h-8 w-8 text-muted-foreground mb-3" />
-              <p className="text-sm font-medium">Social Post Scheduling</p>
-              <p className="text-xs text-muted-foreground mt-1 mb-4 max-w-xs">
-                Schedule social media posts directly from the calendar. Connect your accounts to get started.
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/flows">View Flows</Link>
-                </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/connectors">Configure Connectors</Link>
+              </div>
+            ))}
+            {filtered.length === 0 && contentItems.length > 0 && (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Search className="h-6 w-6 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">No content matches your filter</p>
+              </div>
+            )}
+            {contentItems.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Package className="h-6 w-6 text-muted-foreground mb-2" />
+                <p className="text-sm font-medium">No unscheduled content</p>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-3">
+                  All content is scheduled. Create new content in your Flows.
+                </p>
+                <Button size="sm" asChild>
+                  <Link href="/flows">
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    Go to Flows
+                  </Link>
                 </Button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -837,6 +798,8 @@ export default function DashboardPage() {
       !scheduledTopicIds.has(t.id) &&
       (["proposed", "approved"] as string[]).includes(t.status)
   );
+
+  const unscheduledContent = contentData.filter((c) => !c.scheduledDate);
 
   // Stats
   const reviewCount = contentData.filter((i) => i.status === "review").length;
@@ -978,6 +941,18 @@ export default function DashboardPage() {
         prev.map((t) =>
           t.id === topicId ? { ...t, scheduledDate: undefined } : t
         )
+      );
+    });
+  }
+
+  function handleAssignContent(contentId: string, dateStr: string) {
+    if (!customerId || !projectId) return;
+    setContentData((prev) =>
+      prev.map((c) => c.id === contentId ? { ...c, scheduledDate: dateStr } : c)
+    );
+    updateContent(customerId, projectId, contentId, { scheduledDate: dateStr }).catch(() => {
+      setContentData((prev) =>
+        prev.map((c) => c.id === contentId ? { ...c, scheduledDate: undefined } : c)
       );
     });
   }
@@ -1336,9 +1311,8 @@ export default function DashboardPage() {
       <AssignDialog
         dateStr={assignDate ?? ""}
         open={!!assignDate}
-        unscheduled={unscheduled}
-        categories={categories}
-        onAssign={handleAssign}
+        contentItems={unscheduledContent}
+        onAssign={handleAssignContent}
         onClose={() => setAssignDate(null)}
       />
     </div>
