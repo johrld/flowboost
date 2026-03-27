@@ -42,7 +42,7 @@
         "id": "topic",
         "question": "What's the tweet about?",
         "type": "text",
-        "placeholder": "e.g. Quick tip about Box Breathing"
+        "placeholder": "e.g. Quick tip about our industry"
       },
       {
         "id": "tone",
@@ -51,9 +51,8 @@
         "options": [
           "Sharp & witty",
           "Informative",
-          "Provocative / hot take",
-          "Conversational",
-          "Thread (multi-tweet)"
+          "Hot take / provocative",
+          "Conversational"
         ],
         "optional": true
       }

@@ -42,19 +42,7 @@
         "id": "topic",
         "question": "What's the post about?",
         "type": "text",
-        "placeholder": "e.g. Morning routine with breathing exercises"
-      },
-      {
-        "id": "audience",
-        "question": "Who's the audience?",
-        "type": "choice",
-        "options": [
-          "Health & Wellness",
-          "Lifestyle",
-          "Fitness",
-          "Mindfulness",
-          "General"
-        ]
+        "placeholder": "e.g. Before & after of our latest project"
       },
       {
         "id": "style",
@@ -62,12 +50,22 @@
         "type": "choice",
         "options": [
           "Educational carousel",
-          "Quote / inspiration",
           "Behind the scenes",
+          "Before & after",
           "Product showcase",
-          "Tutorial"
+          "Quote / inspiration"
         ],
         "optional": true
+      },
+      {
+        "id": "sources",
+        "question": "Do you have photos or reference material?",
+        "type": "choice",
+        "options": [
+          "Yes, I'll add them now",
+          "No, generate ideas for me",
+          "I'll add them later"
+        ]
       }
     ]
   },

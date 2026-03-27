@@ -56,18 +56,7 @@
         "id": "topic",
         "question": "What's the newsletter about?",
         "type": "text",
-        "placeholder": "e.g. Weekly breathing techniques roundup"
-      },
-      {
-        "id": "audience",
-        "question": "Subscriber type?",
-        "type": "choice",
-        "options": [
-          "Existing customers",
-          "Leads / prospects",
-          "Community members",
-          "Industry peers"
-        ]
+        "placeholder": "e.g. Monthly update with tips and company news"
       },
       {
         "id": "goal",
@@ -76,10 +65,20 @@
         "options": [
           "Educate & inform",
           "Drive to website",
-          "Product announcement",
+          "Product / service announcement",
           "Community building"
         ],
         "optional": true
+      },
+      {
+        "id": "sources",
+        "question": "Do you have any content or links to include?",
+        "type": "choice",
+        "options": [
+          "Yes, I'll add them now",
+          "No, generate content for me",
+          "I'll add them later"
+        ]
       }
     ]
   },

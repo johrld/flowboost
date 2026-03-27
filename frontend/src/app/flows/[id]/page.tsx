@@ -194,6 +194,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const [showReanalyzeNote, setShowReanalyzeNote] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [onboardingContentType, setOnboardingContentType] = useState<ContentTypeDefinition | null>(null);
+  const [onboardingDone, setOnboardingDone] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -496,15 +497,19 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
               {onboardingContentType ? (
                 <ChatOnboarding
                   contentType={onboardingContentType}
-                  onComplete={(_answers, summary) => {
-                    if (!onboardingContentType) return; // guard against double-fire
+                  onComplete={(answers, summary) => {
+                    if (!onboardingContentType) return;
                     setOnboardingContentType(null);
-                    // Send the briefing summary as a single chat message
+                    setOnboardingDone(true);
                     handleSendMessage(summary);
+                    // If user said they want to add sources, switch to Sources tab
+                    if (answers.sources?.includes("add them now")) {
+                      setTimeout(() => setBottomTab("sources"), 500);
+                    }
                   }}
                   onCancel={() => setOnboardingContentType(null)}
                 />
-              ) : chatMessages.length === 0 ? (
+              ) : chatMessages.length === 0 && !onboardingDone ? (
                 <div className="space-y-6">
                   {/* AI Welcome */}
                   <div className="flex gap-3">

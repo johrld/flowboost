@@ -43,32 +43,30 @@
         "id": "topic",
         "question": "What's the topic or idea?",
         "type": "text",
-        "placeholder": "e.g. Box Breathing for stress management"
-      },
-      {
-        "id": "audience",
-        "question": "Who's the target audience?",
-        "type": "choice",
-        "options": [
-          "Business professionals",
-          "Health & Wellness",
-          "Tech industry",
-          "Founders & CEOs",
-          "General audience"
-        ]
+        "placeholder": "e.g. Our new workshop technology saves 30% repair time"
       },
       {
         "id": "angle",
         "question": "What angle should the post take?",
         "type": "choice",
         "options": [
-          "Data-driven insight",
-          "Personal story",
-          "Contrarian take",
-          "How-to / practical tips",
-          "Industry trend"
+          "Share expertise / tips",
+          "Behind the scenes",
+          "Customer success story",
+          "Industry insight",
+          "Company news"
         ],
         "optional": true
+      },
+      {
+        "id": "sources",
+        "question": "Do you have any sources? (URLs, documents, images)",
+        "type": "choice",
+        "options": [
+          "Yes, I'll add them now",
+          "No, just use what I described",
+          "I'll add them later"
+        ]
       }
     ]
   },

@@ -95,18 +95,7 @@
         "id": "topic",
         "question": "What should the article be about?",
         "type": "text",
-        "placeholder": "e.g. Complete guide to breathing exercises for beginners"
-      },
-      {
-        "id": "audience",
-        "question": "Who's reading this?",
-        "type": "choice",
-        "options": [
-          "Beginners",
-          "Intermediate practitioners",
-          "Professionals",
-          "Mixed audience"
-        ]
+        "placeholder": "e.g. Complete guide to choosing the right service provider"
       },
       {
         "id": "length",
@@ -129,6 +118,16 @@
           "Thought leadership"
         ],
         "optional": true
+      },
+      {
+        "id": "sources",
+        "question": "Do you have research material or references?",
+        "type": "choice",
+        "options": [
+          "Yes, I'll add them now",
+          "No, the AI should research",
+          "I'll add them later"
+        ]
       }
     ]
   },

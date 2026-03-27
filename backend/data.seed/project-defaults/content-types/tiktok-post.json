@@ -42,7 +42,7 @@
         "id": "topic",
         "question": "What's the video about?",
         "type": "text",
-        "placeholder": "e.g. 60-second Box Breathing tutorial"
+        "placeholder": "e.g. 60-second tutorial on common mistakes"
       },
       {
         "id": "format",
@@ -64,8 +64,7 @@
           "Shocking fact",
           "Question",
           "Bold claim",
-          "Visual hook",
-          "Skip"
+          "Visual hook"
         ],
         "optional": true
       }
