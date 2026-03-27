@@ -1,4 +1,4 @@
-import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage, ContentMediaAsset, FlowInput, MediaAsset } from "./types";
+import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage, FlowInput, MediaAsset } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
 
@@ -513,17 +513,8 @@ export function getContentMedia(
   customerId: string,
   projectId: string,
   contentId: string,
-): Promise<{ total: number; assets: ContentMediaAsset[] }> {
+): Promise<{ total: number; assets: MediaAsset[] }> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/media`);
-}
-
-export function getContentMediaUrl(
-  customerId: string,
-  projectId: string,
-  contentId: string,
-  assetId: string,
-): string {
-  return `${API_URL}/customers/${customerId}/projects/${projectId}/content/${contentId}/media/${assetId}/file`;
 }
 
 export function generateHeroImage(
@@ -532,7 +523,7 @@ export function generateHeroImage(
   contentId: string,
   prompt: string,
   aspectRatio?: "16:9" | "1:1" | "9:16" | "4:3" | "3:4",
-): Promise<ContentMediaAsset> {
+): Promise<MediaAsset> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/media/generate`, {
     method: "POST",
     body: JSON.stringify({ prompt, aspectRatio }),
@@ -545,7 +536,7 @@ export function generateContentImage(
   contentId: string,
   prompt: string,
   options?: { aspectRatio?: "16:9" | "1:1" | "9:16" | "4:3" | "3:4"; role?: "hero" | "inline" },
-): Promise<ContentMediaAsset> {
+): Promise<MediaAsset> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/media/generate`, {
     method: "POST",
     body: JSON.stringify({ prompt, aspectRatio: options?.aspectRatio, role: options?.role ?? "hero" }),
@@ -558,7 +549,7 @@ export async function uploadContentMedia(
   contentId: string,
   file: File,
   role: "hero" | "inline" = "hero",
-): Promise<ContentMediaAsset> {
+): Promise<MediaAsset> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("role", role);
@@ -570,7 +561,32 @@ export async function uploadContentMedia(
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error ?? `Upload failed: ${res.status}`);
   }
-  return res.json() as Promise<ContentMediaAsset>;
+  return res.json() as Promise<MediaAsset>;
+}
+
+export function linkMediaToContent(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  assetId: string,
+  role: "hero" | "inline" = "inline",
+): Promise<{ assetId: string; contentId: string; role: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/media/link`, {
+    method: "POST",
+    body: JSON.stringify({ assetId, role }),
+  });
+}
+
+export function reconcileContentMedia(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  inlineAssetIds: string[],
+): Promise<{ added: number; removed: number }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/media/reconcile`, {
+    method: "POST",
+    body: JSON.stringify({ inlineAssetIds }),
+  });
 }
 
 export function setHeroImage(
