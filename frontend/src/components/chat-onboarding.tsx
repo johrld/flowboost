@@ -15,6 +15,14 @@ interface OnboardingQuestion {
   optional?: boolean;
 }
 
+interface SourceItem {
+  id: string;
+  type: string;
+  fileName?: string;
+  content: string;
+  processed?: { status?: string };
+}
+
 interface ChatOnboardingProps {
   contentType: ContentTypeDefinition;
   step: number;
@@ -25,6 +33,7 @@ interface ChatOnboardingProps {
   onShowUploadChange: (show: boolean) => void;
   uploadedFiles: string[];
   onUploadedFilesChange: (files: string[]) => void;
+  sources: SourceItem[];
   onComplete: (answers: Record<string, string>, summary: string) => void;
   onCancel: () => void;
   onFileUpload?: (files: FileList) => Promise<void>;
@@ -33,7 +42,7 @@ interface ChatOnboardingProps {
 export function ChatOnboarding({
   contentType, step, answers, onStepChange, onAnswersChange,
   showUpload, onShowUploadChange, uploadedFiles, onUploadedFilesChange,
-  onComplete, onCancel, onFileUpload,
+  sources, onComplete, onCancel, onFileUpload,
 }: ChatOnboardingProps) {
   const questions = contentType.agent?.onboarding ?? [];
   const [textValue, setTextValue] = useState("");
@@ -185,14 +194,16 @@ export function ChatOnboarding({
                 }}
               />
 
-              {/* Uploaded files list */}
-              {uploadedFiles.length > 0 && (
+              {/* Show all sources from the topic */}
+              {sources.length > 0 && (
                 <div className="space-y-1">
-                  {uploadedFiles.map((name, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {sources.map((s) => (
+                    <div key={s.id} className="flex items-center gap-2 text-sm text-muted-foreground">
                       <FileText className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{name}</span>
-                      <span className="text-xs text-emerald-500 shrink-0">Added</span>
+                      <span className="truncate">{s.fileName ?? (s.type === "url" ? s.content.replace(/^https?:\/\//, "").slice(0, 40) : s.type)}</span>
+                      <span className="text-xs text-emerald-500 shrink-0">
+                        {s.processed?.status === "completed" ? "Analyzed" : s.processed?.status === "processing" ? "Analyzing..." : "Added"}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -200,13 +211,15 @@ export function ChatOnboarding({
 
               <div className="rounded-xl border-2 border-dashed p-6 text-center">
                 <Upload className="h-5 w-5 text-muted-foreground/40 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground mb-3">Drop files here or click to upload</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                  {sources.length > 0 ? `${sources.length} source${sources.length !== 1 ? "s" : ""} added — drop more or continue` : "Drop files here or click to upload"}
+                </p>
                 <div className="flex gap-2 justify-center">
                   <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
                     <Paperclip className="mr-1.5 h-3.5 w-3.5" />Add More
                   </Button>
                   <Button size="sm" onClick={handleFinishUpload}>
-                    {uploadedFiles.length > 0 ? "Continue" : "Skip"}
+                    {sources.length > 0 ? "Continue" : "Skip"}
                   </Button>
                 </div>
               </div>

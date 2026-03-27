@@ -509,6 +509,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   onShowUploadChange={setOnboardingShowUpload}
                   uploadedFiles={onboardingUploadedFiles}
                   onUploadedFilesChange={setOnboardingUploadedFiles}
+                  sources={inputs}
                   onComplete={(answers, summary) => {
                     if (!onboardingContentType) return;
                     setOnboardingContentType(null);
