@@ -27,10 +27,31 @@ export function ChatOnboarding({ contentType, onComplete, onCancel }: ChatOnboar
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [textValue, setTextValue] = useState("");
 
+  // No onboarding questions → show simple confirmation
   if (questions.length === 0) {
-    // No onboarding questions → skip straight to creation
-    onComplete({}, `Create a ${contentType.label}`);
-    return null;
+    return (
+      <div className="space-y-4">
+        <div className="flex gap-3">
+          <div className="shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center bg-muted mt-0.5">
+            <Bot className="h-3.5 w-3.5" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm mb-3">Ready to create a {contentType.label}. Any specific topic or direction?</p>
+            <div className="flex gap-2">
+              <Input
+                value={textValue}
+                onChange={(e) => setTextValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && textValue.trim()) onComplete({topic: textValue.trim()}, `Create a ${contentType.label} about "${textValue.trim()}". Use all available sources and chat context.`); }}
+                placeholder={`e.g. Topic for your ${contentType.label}...`}
+                autoFocus
+                className="flex-1"
+              />
+              <Button size="sm" onClick={() => onComplete({}, `Create a ${contentType.label}. Use all available sources and chat context.`)}>Skip</Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const currentQuestion = questions[step];
