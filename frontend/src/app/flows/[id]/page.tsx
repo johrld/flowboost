@@ -688,7 +688,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                         <Badge variant={status.variant} className="text-xs shrink-0">{status.label}</Badge>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="p-1.5 rounded-md hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity shrink-0">
+                            <button className="p-1.5 rounded-md hover:bg-muted text-muted-foreground shrink-0">
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
                           </DropdownMenuTrigger>
