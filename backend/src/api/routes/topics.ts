@@ -674,13 +674,26 @@ export async function topicRoutes(app: FastifyInstance) {
 
       // Create ContentItem linked to this flow
       const now = new Date().toISOString();
+      // Build a descriptive title based on platform
+      const platformLabels: Record<string, string> = {
+        linkedin: "LinkedIn Post",
+        instagram: "Instagram Post",
+        x: "X Post",
+        tiktok: "TikTok Post",
+      };
+      const contentTitle = type === "social_post" && platform
+        ? `${topic.title} — ${platformLabels[platform] ?? platform}`
+        : type === "newsletter"
+        ? `${topic.title} — Newsletter`
+        : topic.title;
+
       const contentItem = app.ctx.contentFor(customerId, projectId).create({
         customerId,
         projectId,
         type: type as "article" | "social_post" | "newsletter",
         status: "planned",
-        title: topic.title,
-        category: topic.category,
+        title: contentTitle,
+        category: platform ?? topic.category,
         keywords: topic.keywords ? [topic.keywords.primary, ...topic.keywords.secondary] : undefined,
         topicId,
         briefingId: topicId,

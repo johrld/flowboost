@@ -38,6 +38,7 @@ import {
   Pencil,
   Trash2,
   MoreHorizontal,
+  Sparkles,
   ArrowUp,
   RefreshCw,
   Copy,
@@ -182,7 +183,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [bottomTab, setBottomTab] = useState<"chat" | "sources" | "content">("chat");
+  const [bottomTab, setBottomTab] = useState<"chat" | "sources" | "content">("content");
   const [isDragging, setIsDragging] = useState(false);
   const [addingInput, setAddingInput] = useState(false);
   const [sourceText, setSourceText] = useState("");
@@ -399,11 +400,15 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
       className="h-screen overflow-y-auto relative"
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setIsDragging(false); }}
-      onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFileUpload(e.dataTransfer.files); }}
+      onDrop={(e) => { e.preventDefault(); setIsDragging(false); }}
     >
       {/* Fullscreen drag overlay */}
       {isDragging && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center pointer-events-none">
+        <div
+          className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); handleFileUpload(e.dataTransfer.files); }}
+        >
           <div className="flex items-center gap-4 mb-4 text-muted-foreground/50">
             <FileText className="h-8 w-8" />
             <ImageIcon className="h-8 w-8" />
@@ -435,33 +440,6 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
               {topic.title}
             </h1>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" className="shrink-0 ml-4">
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Create
-                <ChevronDown className="ml-1.5 h-3 w-3 opacity-50" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {contentTypes.length > 0 ? contentTypes.map((ct) => {
-                let apiType = "article";
-                let platform: string | undefined;
-                if (ct.category === "social") { apiType = "social_post"; platform = ct.id.replace("-post", ""); }
-                else if (ct.category === "email") { apiType = "newsletter"; }
-                return (
-                  <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(apiType, platform)}>
-                    {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
-                    {ct.label}
-                  </DropdownMenuItem>
-                );
-              }) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
-                <DropdownMenuItem key={opt.platform ?? opt.type} className="gap-2" onClick={() => handleProduce(opt.type, opt.platform)}>
-                  {opt.icon}{opt.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
 
         <input
@@ -728,51 +706,125 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* ── Content Tab ───────────────────────── */}
           {bottomTab === "content" && (
-            <div className="space-y-3">
+            <div>
               {outputs.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-10 text-center">
+                <div className="rounded-xl border-2 border-dashed p-10 text-center">
                   <Package className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground mb-1">No content yet.</p>
-                  <p className="text-xs text-muted-foreground">Click &quot;Create&quot; to generate your first piece.</p>
+                  <p className="text-sm font-medium mb-1">No content yet</p>
+                  <p className="text-xs text-muted-foreground mb-4">Create content pieces and generate them with AI or write manually.</p>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="rounded-full">
+                        <Plus className="mr-1.5 h-3.5 w-3.5" />Create Content
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      {contentTypes.length > 0 ? contentTypes.map((ct) => {
+                        let apiType = "article";
+                        let platform: string | undefined;
+                        if (ct.category === "social") { apiType = "social_post"; platform = ct.id.replace("-post", ""); }
+                        else if (ct.category === "email") { apiType = "newsletter"; }
+                        return (
+                          <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(apiType, platform)}>
+                            {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                            {ct.label}
+                          </DropdownMenuItem>
+                        );
+                      }) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                        <DropdownMenuItem key={opt.platform ?? opt.type} className="gap-2" onClick={() => handleProduce(opt.type, opt.platform)}>
+                          {opt.icon}{opt.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               ) : (
-                <div className="space-y-1">
+                <div>
+                  {/* + Add Content row */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b">
+                        <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+                          <Plus className="h-4 w-4" />
+                        </div>
+                        Add Content
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {contentTypes.length > 0 ? contentTypes.map((ct) => {
+                        let apiType = "article";
+                        let platform: string | undefined;
+                        if (ct.category === "social") { apiType = "social_post"; platform = ct.id.replace("-post", ""); }
+                        else if (ct.category === "email") { apiType = "newsletter"; }
+                        return (
+                          <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(apiType, platform)}>
+                            {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                            {ct.label}
+                          </DropdownMenuItem>
+                        );
+                      }) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                        <DropdownMenuItem key={opt.platform ?? opt.type} className="gap-2" onClick={() => handleProduce(opt.type, opt.platform)}>
+                          {opt.icon}{opt.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <div className="divide-y mt-1">
                   {outputs.map((item) => {
                     const status = STATUS_BADGE[item.status] ?? { label: item.status, variant: "secondary" as const };
                     const isProducing = item.status === "producing";
+                    const isPlanned = item.status === "planned";
                     return (
-                      <div key={item.id} className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted/50 transition-colors group">
-                        <Link href={`/content/${item.id}`} className="flex items-center gap-3 flex-1 min-w-0">
-                          <span className="text-muted-foreground shrink-0">
-                            {OUTPUT_ICONS[item.type] ?? <FileText className="h-4 w-4" />}
-                          </span>
+                      <div key={item.id} className="py-3 space-y-3">
+                        {/* Header row */}
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+                            {OUTPUT_ICONS[item.category ?? ""] ?? OUTPUT_ICONS[item.type] ?? <FileText className="h-4 w-4" />}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{item.title}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{item.type.replace("_", " ")}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {({ linkedin: "LinkedIn Post", instagram: "Instagram Post", x: "X Post", tiktok: "TikTok Post" } as Record<string, string>)[item.category ?? ""]
+                                ?? ({ article: "Article", guide: "Guide", newsletter: "Newsletter", social_post: "Social Post" } as Record<string, string>)[item.type]
+                                ?? item.type.replace("_", " ")}
+                            </p>
                           </div>
-                        </Link>
-                        {isProducing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
-                        <Badge variant={status.variant} className="text-xs shrink-0">{status.label}</Badge>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="p-1.5 rounded-md hover:bg-muted text-muted-foreground shrink-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link href={`/content/${item.id}`}>
-                                <Pencil className="mr-2 h-3.5 w-3.5" />Edit
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteContent(item.id)}>
-                              <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                          {isProducing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
+                          <Badge variant={status.variant} className="text-xs shrink-0">{status.label}</Badge>
+                        </div>
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 pl-[52px]">
+                          {!isProducing && (
+                            <Button size="sm" variant="outline" className="rounded-full text-xs" onClick={() => {
+                              let apiType = "article";
+                              let platform: string | undefined;
+                              if (item.type === "social_post") {
+                                apiType = "social_post";
+                                const t = item.title.toLowerCase();
+                                if (t.includes("linkedin")) platform = "linkedin";
+                                else if (t.includes("instagram")) platform = "instagram";
+                                else if (t.includes("tiktok")) platform = "tiktok";
+                                else platform = "x";
+                              } else if (item.type === "newsletter") apiType = "newsletter";
+                              handleProduce(apiType, platform);
+                            }}>
+                              <Sparkles className="mr-1.5 h-3.5 w-3.5" />Generate with AI
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" className="rounded-full text-xs" asChild>
+                            <Link href={`/content/${item.id}`}>
+                              <Pencil className="mr-1.5 h-3.5 w-3.5" />Edit
+                            </Link>
+                          </Button>
+                          <Button size="sm" variant="ghost" className="rounded-full text-xs text-destructive" onClick={() => handleDeleteContent(item.id)}>
+                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />Delete
+                          </Button>
+                        </div>
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               )}
             </div>

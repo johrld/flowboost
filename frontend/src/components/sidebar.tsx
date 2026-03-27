@@ -32,6 +32,8 @@ import { useProject } from "@/lib/project-context";
 import { CreateProjectWizard } from "@/components/create-project-wizard";
 import { getTopics, createTopic, updateTopic, deleteTopic } from "@/lib/api";
 import type { Topic } from "@/lib/types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FlowOnboardingModal } from "@/components/flow-onboarding-modal";
 
 const settingsItems = [
   { href: "/connectors", label: "Connectors", icon: Cable },
@@ -47,8 +49,10 @@ export function Sidebar() {
   const [flows, setFlows] = useState<Topic[]>([]);
   const [showArchive, setShowArchive] = useState(false);
   const [creatingFlow, setCreatingFlow] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [deleteFlowId, setDeleteFlowId] = useState<string | null>(null);
 
   const loadFlows = useCallback(async () => {
     if (!customerId || !projectId) return;
@@ -75,19 +79,15 @@ export function Sidebar() {
     return () => window.removeEventListener("flows-updated", handler);
   }, [loadFlows]);
 
-  const handleNewFlow = async () => {
-    if (!customerId || !projectId || creatingFlow) return;
-    setCreatingFlow(true);
-    try {
-      const topic = await createTopic(customerId, projectId, {
-        title: "Untitled Flow",
-      });
-      router.push(`/flows/${topic.id}`);
-    } catch (err) {
-      console.error("Failed to create flow:", err);
-    } finally {
-      setCreatingFlow(false);
-    }
+  const handleOpenOnboarding = () => {
+    setShowOnboarding(true);
+  };
+
+  const handleCreateFlow = async (title: string) => {
+    if (!customerId || !projectId) return;
+    const topic = await createTopic(customerId, projectId, { title });
+    await loadFlows();
+    router.push(`/flows/${topic.id}`);
   };
 
   const handleRenameFlow = async (flowId: string) => {
@@ -122,13 +122,13 @@ export function Sidebar() {
     }
   };
 
-  const handleDeleteFlow = async (flowId: string) => {
-    if (!customerId || !projectId) return;
-    if (!confirm("Permanently delete this flow? This cannot be undone.")) return;
+  const handleConfirmDelete = async () => {
+    if (!customerId || !projectId || !deleteFlowId) return;
     try {
-      await deleteTopic(customerId, projectId, flowId);
+      await deleteTopic(customerId, projectId, deleteFlowId);
+      setDeleteFlowId(null);
       await loadFlows();
-      if (pathname === `/flows/${flowId}`) router.push("/dashboard");
+      if (pathname === `/flows/${deleteFlowId}`) router.push("/dashboard");
     } catch (err) {
       console.error("Delete failed:", err);
     }
@@ -198,12 +198,11 @@ export function Sidebar() {
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Flows</span>
           <button
             type="button"
-            onClick={handleNewFlow}
-            disabled={creatingFlow}
+            onClick={handleOpenOnboarding}
             className="text-muted-foreground hover:text-foreground transition-colors"
             title="New Flow"
           >
-            {creatingFlow ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            <Plus className="h-3.5 w-3.5" />
           </button>
         </div>
 
@@ -255,7 +254,7 @@ export function Sidebar() {
                       <Archive className="mr-2 h-3.5 w-3.5" />Archive
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteFlow(flow.id)}>
+                    <DropdownMenuItem className="text-destructive" onClick={() => setDeleteFlowId(flow.id)}>
                       <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -302,7 +301,7 @@ export function Sidebar() {
                         <Archive className="mr-2 h-3.5 w-3.5" />Unarchive
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteFlow(flow.id)}>
+                      <DropdownMenuItem className="text-destructive" onClick={() => setDeleteFlowId(flow.id)}>
                         <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -377,6 +376,29 @@ export function Sidebar() {
         open={showCreateWizard}
         onOpenChange={setShowCreateWizard}
       />
+
+      <FlowOnboardingModal
+        open={showOnboarding}
+        onOpenChange={setShowOnboarding}
+        onCreateFlow={handleCreateFlow}
+      />
+
+      {/* Delete Confirmation */}
+      <Dialog open={!!deleteFlowId} onOpenChange={(open) => { if (!open) setDeleteFlowId(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Flow?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            <strong>All content, sources, and chat history will be permanently deleted.</strong>{" "}
+            This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteFlowId(null)}>Cancel</Button>
+            <Button variant="destructive" size="sm" onClick={handleConfirmDelete}>Delete</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }
