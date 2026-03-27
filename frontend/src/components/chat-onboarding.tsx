@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Bot, ArrowRight, Check, Upload, Paperclip, FileText } from "lucide-react";
+import { Bot, ArrowRight, Check, Upload, Paperclip, FileText, FileEdit, LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { ContentTypeDefinition } from "@/lib/api";
 
 interface OnboardingQuestion {
@@ -37,15 +38,19 @@ interface ChatOnboardingProps {
   onComplete: (answers: Record<string, string>, summary: string) => void;
   onCancel: () => void;
   onFileUpload?: (files: FileList) => Promise<void>;
+  onAddTextSource?: (content: string) => Promise<void>;
 }
 
 export function ChatOnboarding({
   contentType, step, answers, onStepChange, onAnswersChange,
   showUpload, onShowUploadChange, uploadedFiles, onUploadedFilesChange,
-  sources, onComplete, onCancel, onFileUpload,
+  sources, onComplete, onCancel, onFileUpload, onAddTextSource,
 }: ChatOnboardingProps) {
   const questions = contentType.agent?.onboarding ?? [];
   const [textValue, setTextValue] = useState("");
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showTextDialog, setShowTextDialog] = useState(false);
+  const [sourceText, setSourceText] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // No onboarding questions → show simple topic input
@@ -212,17 +217,82 @@ export function ChatOnboarding({
               <div className="rounded-xl border-2 border-dashed p-6 text-center">
                 <Upload className="h-5 w-5 text-muted-foreground/40 mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground mb-3">
-                  {sources.length > 0 ? `${sources.length} source${sources.length !== 1 ? "s" : ""} added — drop more or continue` : "Drop files here or click to upload"}
+                  {sources.length > 0 ? `${sources.length} source${sources.length !== 1 ? "s" : ""} added — add more or continue` : "Drop files here or click to add"}
                 </p>
                 <div className="flex gap-2 justify-center">
-                  <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
-                    <Paperclip className="mr-1.5 h-3.5 w-3.5" />Add More
+                  <Button size="sm" variant="outline" onClick={() => setShowAddDialog(true)}>
+                    <Paperclip className="mr-1.5 h-3.5 w-3.5" />Add Source
                   </Button>
                   <Button size="sm" onClick={handleFinishUpload}>
                     {sources.length > 0 ? "Continue" : "Skip"}
                   </Button>
                 </div>
               </div>
+
+              {/* Add Source Dialog — same as Sources tab */}
+              <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Add Source</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div
+                      className="rounded-xl border-2 border-dashed p-8 text-center"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={async (e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files.length > 0 && onFileUpload) {
+                          await onFileUpload(e.dataTransfer.files);
+                          onUploadedFilesChange([...uploadedFiles, ...Array.from(e.dataTransfer.files).map(f => f.name)]);
+                          setShowAddDialog(false);
+                        }
+                      }}
+                    >
+                      <Upload className="h-6 w-6 text-muted-foreground/30 mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Drop files here</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => { fileRef.current?.click(); setShowAddDialog(false); }}
+                        className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 hover:bg-muted transition-colors">
+                        <Upload className="h-5 w-5 text-muted-foreground" />
+                        <span className="text-xs font-medium">Upload</span>
+                      </button>
+                      <button type="button" onClick={() => { setShowAddDialog(false); setShowTextDialog(true); }}
+                        className="flex flex-col items-center gap-2 rounded-xl bg-muted/50 p-4 hover:bg-muted transition-colors">
+                        <FileEdit className="h-5 w-5 text-muted-foreground" />
+                        <span className="text-xs font-medium">Text or URL</span>
+                      </button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {/* Text/URL Dialog */}
+              <Dialog open={showTextDialog} onOpenChange={setShowTextDialog}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Add Text Source</DialogTitle>
+                  </DialogHeader>
+                  <textarea
+                    value={sourceText}
+                    onChange={(e) => setSourceText(e.target.value)}
+                    placeholder="Paste URL or type text here..."
+                    rows={4}
+                    autoFocus
+                    className="w-full rounded-lg border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[100px]"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => { setShowTextDialog(false); setShowAddDialog(true); }}>Back</Button>
+                    <Button size="sm" onClick={async () => {
+                      if (sourceText.trim() && onAddTextSource) {
+                        await onAddTextSource(sourceText.trim());
+                        setSourceText("");
+                        setShowTextDialog(false);
+                      }
+                    }} disabled={!sourceText.trim()}>Add</Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           )}
         </div>

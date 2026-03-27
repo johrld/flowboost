@@ -518,6 +518,12 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     handleSendMessage(summary);
                   }}
                   onFileUpload={async (files) => { await handleFileUpload(files); }}
+                  onAddTextSource={async (content) => {
+                    if (!customerId || !projectId) return;
+                    const isUrl = /^https?:\/\/.+/.test(content);
+                    await addFlowInput(customerId, projectId, id, { type: isUrl ? "url" : "text", content });
+                    await loadData();
+                  }}
                   onCancel={() => setOnboardingContentType(null)}
                 />
               ) : chatMessages.length === 0 && !onboardingDone ? (
