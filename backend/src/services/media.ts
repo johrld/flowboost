@@ -32,6 +32,9 @@ interface IngestOptions {
   buffer: Buffer;
   source?: MediaSource;
   altText?: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
   generationPrompt?: string;
   generationModel?: string;
   generationCostUsd?: number;
@@ -60,6 +63,10 @@ export class MediaService {
       fileSize: opts.buffer.length,
       localPath: "", // set after save
       altText: opts.altText,
+      title: opts.title,
+      description: opts.description,
+      tags: opts.tags ?? [],
+      usedBy: [],
       generationPrompt: opts.generationPrompt,
       generationModel: opts.generationModel,
       generationCostUsd: opts.generationCostUsd,
@@ -132,5 +139,33 @@ export class MediaService {
       .resize(maxWidth, undefined, { withoutEnlargement: true })
       .webp({ quality: 80 })
       .toFile(outputPath);
+  }
+
+  async generate(opts: {
+    customerId: string;
+    projectId: string;
+    prompt: string;
+    aspectRatio?: string;
+    title?: string;
+    tags?: string[];
+  }): Promise<IngestResult> {
+    const { generateImageBuffer } = await import("./imagen.js");
+    const buffer = await generateImageBuffer(opts.prompt, {
+      aspectRatio: opts.aspectRatio as "16:9" | "1:1" | "9:16" | "4:3" | "3:4" | undefined,
+    });
+
+    return this.ingest({
+      customerId: opts.customerId,
+      projectId: opts.projectId,
+      fileName: `generated-${Date.now()}.png`,
+      mimeType: "image/png",
+      buffer,
+      source: "generated",
+      title: opts.title ?? `Generated: ${opts.prompt.slice(0, 60)}`,
+      tags: opts.tags ?? [],
+      generationPrompt: opts.prompt,
+      generationModel: process.env.IMAGEN_MODEL ?? "imagen-4.0-fast-generate-001",
+      generationCostUsd: 0.02,
+    });
   }
 }
