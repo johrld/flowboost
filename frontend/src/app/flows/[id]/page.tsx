@@ -512,7 +512,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                           <button
                             key={ct.id}
                             type="button"
-                            onClick={() => handleSendMessage(`I want to create a ${ct.label}`)}
+                            onClick={() => handleSendMessage(`I want to create a ${ct.label} about this topic. What do you need from me to get started?`)}
                             className="flex flex-col items-center gap-1.5 rounded-xl border p-3 hover:bg-muted/50 transition-colors text-center"
                           >
                             <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category] ?? OUTPUT_ICONS[ct.id] ?? <FileText className="h-4 w-4" />}</span>
