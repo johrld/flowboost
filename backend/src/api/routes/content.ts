@@ -115,7 +115,7 @@ export async function contentRoutes(app: FastifyInstance) {
   app.put<{
     Params: { customerId: string; projectId: string; contentId: string };
     Body: Partial<Pick<ContentItem,
-      "title" | "description" | "category" | "tags" | "keywords" | "author" | "translationKey" | "heroImageId"
+      "title" | "description" | "category" | "tags" | "keywords" | "author" | "translationKey" | "heroImageId" | "scheduledDate"
     >>;
   }>("/:contentId", async (request, reply) => {
     const { customerId, projectId, contentId } = request.params;

@@ -324,6 +324,9 @@ export interface ContentItem {
   // Hero image
   heroImageId?: string;
 
+  // Scheduling
+  scheduledDate?: string; // ISO: "2025-02-14T09:00" or "2025-02-14"
+
   // Timestamps
   createdAt: string;
   updatedAt: string;

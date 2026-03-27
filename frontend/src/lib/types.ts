@@ -44,6 +44,7 @@ export interface ContentItem {
   deliveryRef?: string;
   deliveryUrl?: string;
   heroImageId?: string;
+  scheduledDate?: string;
   createdAt: string;
   updatedAt: string;
   approvedAt?: string;

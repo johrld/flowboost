@@ -59,6 +59,7 @@ import {
   uploadFlowFile,
   deleteFlowInput,
   deleteContent,
+  updateContent,
   produceFlowOutput,
   getContent,
   getContentTypes,
@@ -791,6 +792,20 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                             </p>
                           </div>
                           {isProducing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
+                          <input
+                            type="date"
+                            value={item.scheduledDate?.split("T")[0] ?? ""}
+                            onChange={async (e) => {
+                              if (!customerId || !projectId) return;
+                              const val = e.target.value || undefined;
+                              try {
+                                await updateContent(customerId, projectId, item.id, { scheduledDate: val ? `${val}T09:00` : undefined });
+                                await loadData();
+                              } catch (err) { console.error("Schedule failed:", err); }
+                            }}
+                            className="text-xs text-muted-foreground bg-transparent border rounded px-2 py-0.5 w-[120px] shrink-0"
+                            title="Schedule date"
+                          />
                           <Badge variant={status.variant} className="text-xs shrink-0">{status.label}</Badge>
                         </div>
                         {/* Action buttons */}
