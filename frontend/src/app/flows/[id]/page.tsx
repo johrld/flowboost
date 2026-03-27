@@ -244,11 +244,11 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
   // ── Handlers ──────────────────────────────────────────────
 
-  const handleSendChat = async () => {
-    if (!chatInput.trim() || !customerId || !projectId || sending) return;
+  const handleSendMessage = async (message: string) => {
+    if (!message.trim() || !customerId || !projectId || sending) return;
     setSending(true);
     try {
-      await sendTopicChat(customerId, projectId, id, chatInput.trim());
+      await sendTopicChat(customerId, projectId, id, message.trim());
       setChatInput("");
       const chat = await getTopicChat(customerId, projectId, id);
       setChatMessages(chat);
@@ -259,6 +259,10 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setSending(false);
     }
+  };
+
+  const handleSendChat = async () => {
+    handleSendMessage(chatInput);
   };
 
   const handleAddSource = async () => {
@@ -504,23 +508,17 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                           { id: "x-post", label: "X Post", category: "social" },
                           { id: "newsletter", label: "Newsletter", category: "email" },
                           { id: "tiktok-post", label: "TikTok", category: "social" },
-                        ] as ContentTypeDefinition[]).map((ct) => {
-                          let apiType = "article";
-                          let platform: string | undefined;
-                          if (ct.category === "social") { apiType = "social_post"; platform = ct.id.replace("-post", ""); }
-                          else if (ct.category === "email") { apiType = "newsletter"; }
-                          return (
-                            <button
-                              key={ct.id}
-                              type="button"
-                              onClick={() => handleProduce(apiType, platform)}
-                              className="flex flex-col items-center gap-1.5 rounded-xl border p-3 hover:bg-muted/50 transition-colors text-center"
-                            >
-                              <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category] ?? OUTPUT_ICONS[ct.id] ?? <FileText className="h-4 w-4" />}</span>
-                              <span className="text-xs font-medium">{ct.label}</span>
-                            </button>
-                          );
-                        })}
+                        ] as ContentTypeDefinition[]).map((ct) => (
+                          <button
+                            key={ct.id}
+                            type="button"
+                            onClick={() => handleSendMessage(`I want to create a ${ct.label}`)}
+                            className="flex flex-col items-center gap-1.5 rounded-xl border p-3 hover:bg-muted/50 transition-colors text-center"
+                          >
+                            <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category] ?? OUTPUT_ICONS[ct.id] ?? <FileText className="h-4 w-4" />}</span>
+                            <span className="text-xs font-medium">{ct.label}</span>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
