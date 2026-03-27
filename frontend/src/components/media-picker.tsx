@@ -26,10 +26,10 @@ interface MediaPickerProps {
 // ── Helpers ───────────────────────────────────────────────────────
 
 const TYPE_TABS: { value: string; label: string; icon: React.ReactNode }[] = [
-  { value: "all", label: "Alle", icon: null },
-  { value: "image", label: "Bilder", icon: <ImageIcon className="h-3.5 w-3.5" /> },
+  { value: "all", label: "All", icon: null },
+  { value: "image", label: "Images", icon: <ImageIcon className="h-3.5 w-3.5" /> },
   { value: "video", label: "Videos", icon: <Film className="h-3.5 w-3.5" /> },
-  { value: "document", label: "Dokumente", icon: <FileText className="h-3.5 w-3.5" /> },
+  { value: "document", label: "Documents", icon: <FileText className="h-3.5 w-3.5" /> },
 ];
 
 function typeIcon(type: MediaType) {
@@ -166,7 +166,7 @@ export function MediaPicker({
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Suchen..."
+                placeholder="Search..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-8 h-9"
@@ -221,7 +221,7 @@ export function MediaPicker({
           ) : assets.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-center">
               <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">Keine Medien gefunden</p>
+              <p className="text-sm text-muted-foreground">No media found</p>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2">
@@ -316,14 +316,14 @@ export function MediaPicker({
                 <Input
                   value={altText}
                   onChange={(e) => setAltText(e.target.value)}
-                  placeholder="Beschreibung des Bildes..."
+                  placeholder="Image description..."
                   className="h-8 text-sm"
                 />
               </div>
             )}
 
             <Button onClick={handleConfirm} className="w-full">
-              Auswählen
+              Select
             </Button>
           </div>
         )}
