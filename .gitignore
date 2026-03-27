@@ -33,3 +33,6 @@ docker-compose.override.yml
 .vscode/
 .idea/
 *.code-workspace
+
+# Claude Code (contributor-specific)
+CLAUDE.md

@@ -21,6 +21,9 @@ import {
   updateProject,
   getGitHubRepos,
   getGitHubBranches,
+  testConnector,
+  getConnectorSchemas,
+  importConnectorSchemas,
 } from "@/lib/api";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -31,6 +34,7 @@ import {
   Github,
   GitBranch,
   ChevronLeft,
+  ChevronDown,
   Info,
   Globe,
   Linkedin,
@@ -80,8 +84,8 @@ const FRAMEWORKS: FrameworkDef[] = [
 
 const CONNECTORS: ConnectorDef[] = [
   { id: "git", name: "Git Repository", category: "site", icon: GitBranch, description: "Push content to a Git repository", comingSoon: false },
+  { id: "shopware", name: "Shopware 6", category: "site", icon: ShoppingBag, description: "Read Shopping Experiences, write CMS slots", comingSoon: false },
   { id: "wordpress", name: "WordPress", category: "site", icon: Globe, description: "Publish directly via WordPress API", comingSoon: true },
-  { id: "shopify", name: "Shopify", category: "site", icon: ShoppingBag, description: "Publish to Shopify blog", comingSoon: true },
   { id: "webflow", name: "Webflow", category: "site", icon: Aperture, description: "Publish to Webflow CMS", comingSoon: true },
   { id: "linkedin", name: "LinkedIn", category: "social", icon: Linkedin, description: "Post to LinkedIn", comingSoon: true },
   { id: "instagram", name: "Instagram", category: "social", icon: Instagram, description: "Post to Instagram", comingSoon: true },
@@ -125,7 +129,7 @@ async function withSave(setStatus: (s: SaveStatus) => void, fn: () => Promise<vo
 // ── Main Page Content ────────────────────────────────────────────
 
 function ConnectorsPageContent() {
-  const { customerId, projectId, project, loading: projectLoading } = useProject();
+  const { customerId, projectId, project, loading: projectLoading, refreshProjects } = useProject();
   const searchParams = useSearchParams();
 
   // Git connector state
@@ -146,6 +150,23 @@ function ConnectorsPageContent() {
   const [connectorStatus, setConnectorStatus] = useState<SaveStatus>("idle");
   const [detailView, setDetailView] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+
+  // Shopware connector state
+  const [swShopUrl, setSwShopUrl] = useState("");
+  const [swClientId, setSwClientId] = useState("");
+  const [swClientSecret, setSwClientSecret] = useState("");
+  const [swAsSource, setSwAsSource] = useState(false);
+  const [swTestStatus, setSwTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const [swTestError, setSwTestError] = useState("");
+  const [swTestShopName, setSwTestShopName] = useState("");
+  const [swSaveStatus, setSwSaveStatus] = useState<SaveStatus>("idle");
+  const [swSchemas, setSwSchemas] = useState<Array<{ id: string; label: string; description: string; slots: unknown[] }>>([]);
+  const [swSchemasLoading, setSwSchemasLoading] = useState(false);
+  const [swSelectedSchemas, setSwSelectedSchemas] = useState<Set<string>>(new Set());
+  const [swImporting, setSwImporting] = useState(false);
+  const [swExpandedSchema, setSwExpandedSchema] = useState<string | null>(null);
+  // Map: connectorRef (schema.id) → content type ID (slug) for delete
+  const [swSchemaToTypeId, setSwSchemaToTypeId] = useState<Record<string, string>>({});
 
   const loadGhRepos = useCallback(async (installationId: number) => {
     setGhLoadingRepos(true);
@@ -187,6 +208,13 @@ function ConnectorsPageContent() {
       setGhAssetsPath(project.connector.github.assetsPath);
       setGhCategoriesPath(project.connector.github.categoriesPath ?? "src/data/categories.json");
       setGhAuthorsPath(project.connector.github.authorsPath ?? "src/data/authors.json");
+    }
+    // Load Shopware config
+    if (project.connector?.shopware) {
+      setSwShopUrl(project.connector.shopware.shopUrl ?? "");
+      setSwClientId(project.connector.shopware.clientId ?? "");
+      setSwClientSecret(project.connector.shopware.clientSecret ?? "");
+      setSwAsSource(project.connector.useAsSource ?? false);
     }
     setInitialized(true);
   }, [project, initialized]);
@@ -282,11 +310,102 @@ function ConnectorsPageContent() {
 
   const isGitConnected = connectorType === "github" && !!ghInstallationId;
 
+  const isSwConnected = (project?.connector?.type === "shopware" && !!project?.connector?.shopware?.shopUrl)
+    || (swSaveStatus === "saved" && !!swShopUrl && !!swClientId && !!swClientSecret);
+
+  // Auto-load schemas when entering Shopware detail view
+  useEffect(() => {
+    if (detailView === "shopware" && isSwConnected && swSchemas.length === 0 && !swSchemasLoading && customerId && projectId) {
+      handleSwLoadSchemas();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailView, isSwConnected]);
+
   const getConnectorStatus = (id: string): "connected" | "not_connected" | "coming_soon" => {
     if (id === "git" && isGitConnected) return "connected";
+    if (id === "shopware" && isSwConnected) return "connected";
     const def = CONNECTORS.find((c) => c.id === id);
     if (def?.comingSoon) return "coming_soon";
     return "not_connected";
+  };
+
+  const handleSwTest = async () => {
+    if (!swShopUrl || !swClientId || !swClientSecret) return;
+    setSwTestStatus("testing");
+    setSwTestError("");
+    try {
+      const result = await testConnector(customerId, projectId, {
+        type: "shopware",
+        config: { shopUrl: swShopUrl.replace(/\/+$/, ""), clientId: swClientId, clientSecret: swClientSecret },
+      });
+      if (result.success) {
+        setSwTestStatus("success");
+        setSwTestShopName(result.shopName ?? "");
+      } else {
+        setSwTestStatus("error");
+        setSwTestError(result.error ?? "Unbekannter Fehler");
+      }
+    } catch (err) {
+      setSwTestStatus("error");
+      setSwTestError(err instanceof Error ? err.message : "Verbindung fehlgeschlagen");
+    }
+  };
+
+  const handleSwSave = () => withSave(setSwSaveStatus, async () => {
+    await updateProject(customerId, projectId, {
+      connector: {
+        type: "shopware",
+        shopware: {
+          shopUrl: swShopUrl.replace(/\/+$/, ""),
+          clientId: swClientId,
+          clientSecret: swClientSecret,
+        },
+      },
+    });
+    await refreshProjects();
+  });
+
+  const handleSwLoadSchemas = async () => {
+    if (!customerId || !projectId) return;
+    setSwSchemasLoading(true);
+    try {
+      const [schemasResult, typesResult] = await Promise.all([
+        getConnectorSchemas(customerId, projectId),
+        import("@/lib/api").then((m) => m.getContentTypes(customerId, projectId)),
+      ]);
+      setSwSchemas(schemasResult.schemas);
+      // Mark schemas that are already imported as content types
+      const types = typesResult as Array<{ id: string; connectorRef?: string }>;
+      const importedIds = new Set<string>();
+      const refToId: Record<string, string> = {};
+      for (const t of types) {
+        if (t.connectorRef) {
+          importedIds.add(t.connectorRef);
+          refToId[t.connectorRef] = t.id;
+        }
+      }
+      setSwSelectedSchemas(importedIds);
+      setSwSchemaToTypeId(refToId);
+    } catch (err) {
+      console.error("Schema discovery failed:", err);
+    } finally {
+      setSwSchemasLoading(false);
+    }
+  };
+
+  const handleSwImportSchemas = async () => {
+    if (!customerId || !projectId || swSelectedSchemas.size === 0) return;
+    setSwImporting(true);
+    try {
+      const result = await importConnectorSchemas(customerId, projectId, Array.from(swSelectedSchemas));
+      alert(`${result.types?.length ?? 0} Content Types importiert`);
+      setSwSchemas([]);
+    } catch (err) {
+      console.error("Schema import failed:", err);
+      alert("Import fehlgeschlagen");
+    } finally {
+      setSwImporting(false);
+    }
   };
 
   if (projectLoading) {
@@ -338,6 +457,265 @@ function ConnectorsPageContent() {
             </Button>
           )}
         </div>
+
+        {/* Shopware Configuration */}
+        {connector.id === "shopware" && (
+          <div className="flex gap-8">
+            {/* Left: Form */}
+            <div className="flex-1 max-w-lg space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold">Connection</h2>
+                <p className="text-sm text-muted-foreground">Shopware 6 Admin API credentials</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Shop URL</Label>
+                  <Input
+                    value={swShopUrl}
+                    onChange={(e) => setSwShopUrl(e.target.value)}
+                    placeholder="https://my-shop.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Client ID</Label>
+                  <Input
+                    value={swClientId}
+                    onChange={(e) => setSwClientId(e.target.value)}
+                    placeholder="Integration Client ID"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Client Secret</Label>
+                  <Input
+                    type="password"
+                    value={swClientSecret}
+                    onChange={(e) => setSwClientSecret(e.target.value)}
+                    placeholder="Integration Client Secret"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleSwTest}
+                  disabled={swTestStatus === "testing" || !swShopUrl || !swClientId || !swClientSecret}
+                >
+                  {swTestStatus === "testing" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {swTestStatus === "success" && <Check className="mr-2 h-4 w-4 text-green-600" />}
+                  {swTestStatus === "error" && <AlertCircle className="mr-2 h-4 w-4 text-destructive" />}
+                  Test Connection
+                </Button>
+                <SaveButton status={swSaveStatus} onClick={handleSwSave} />
+              </div>
+
+              {swTestStatus === "success" && (
+                <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950">
+                  <Check className="h-4 w-4 text-green-600 shrink-0" />
+                  <p className="text-sm text-green-800 dark:text-green-300">
+                    Connected{swTestShopName ? ` — ${swTestShopName}` : ""}
+                  </p>
+                </div>
+              )}
+
+              {swTestStatus === "error" && (
+                <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
+                  <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                  <p className="text-sm text-red-800 dark:text-red-300">{swTestError}</p>
+                </div>
+              )}
+
+              {/* Use as Source */}
+              {isSwConnected && (
+                <div className="border-t pt-6">
+                  <label className="flex items-center justify-between gap-4 rounded-lg border p-4 cursor-pointer hover:bg-muted/50 transition-colors">
+                    <div>
+                      <p className="text-sm font-medium">Use as Source</p>
+                      <p className="text-xs text-muted-foreground">
+                        Make Shopware content (products, categories) available as input sources in Flows
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={swAsSource}
+                      onChange={async (e) => {
+                        setSwAsSource(e.target.checked);
+                        if (customerId && projectId) {
+                          await updateProject(customerId, projectId, {
+                            connector: {
+                              type: "shopware",
+                              useAsSource: e.target.checked,
+                              shopware: {
+                                shopUrl: swShopUrl.replace(/\/+$/, ""),
+                                clientId: swClientId,
+                                clientSecret: swClientSecret,
+                              },
+                            },
+                          });
+                          await refreshProjects();
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {/* Schema Discovery */}
+              {isSwConnected && (
+                <div className="border-t pt-6 space-y-4">
+                  <div>
+                    <h2 className="text-lg font-semibold">CMS Layouts</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Import Shopping Experiences from Shopware as Content Types
+                    </p>
+                  </div>
+
+                  {swSchemasLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading layouts...
+                    </div>
+                  ) : swSchemas.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="rounded-lg border divide-y max-h-[400px] overflow-y-auto">
+                        {swSchemas.map((schema) => {
+                          const slots = schema.slots as Array<{ id: string; label: string; type: string }>;
+                          const isExpanded = swExpandedSchema === schema.id;
+                          const isImported = swSelectedSchemas.has(schema.id);
+                          return (
+                            <div key={schema.id}>
+                              <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-muted/50">
+                                <button
+                                  type="button"
+                                  onClick={() => setSwExpandedSchema(isExpanded ? null : schema.id)}
+                                  className="flex-1 flex items-center gap-2 min-w-0 text-left"
+                                >
+                                  <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${isExpanded ? "rotate-180" : "-rotate-90"}`} />
+                                  <span className="text-sm font-medium truncate">{schema.label}</span>
+                                  <Badge variant="secondary" className="text-[10px] shrink-0 ml-auto">
+                                    {slots.length}
+                                  </Badge>
+                                </button>
+                                {isImported ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 text-xs text-destructive hover:text-destructive shrink-0"
+                                    onClick={async () => {
+                                      if (!customerId || !projectId) return;
+                                      const typeId = swSchemaToTypeId[schema.id];
+                                      if (!typeId) return;
+                                      try {
+                                        const { deleteContentType } = await import("@/lib/api");
+                                        await deleteContentType(customerId, projectId, typeId);
+                                        const next = new Set(swSelectedSchemas);
+                                        next.delete(schema.id);
+                                        setSwSelectedSchemas(next);
+                                        const nextMap = { ...swSchemaToTypeId };
+                                        delete nextMap[schema.id];
+                                        setSwSchemaToTypeId(nextMap);
+                                      } catch { /* ignore */ }
+                                    }}
+                                  >
+                                    Remove
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs shrink-0"
+                                    onClick={async () => {
+                                      if (!customerId || !projectId) return;
+                                      try {
+                                        const result = await importConnectorSchemas(customerId, projectId, [schema.id]);
+                                        const next = new Set(swSelectedSchemas);
+                                        next.add(schema.id);
+                                        setSwSelectedSchemas(next);
+                                        // Track the created type ID for later removal
+                                        if (result.types?.[0]) {
+                                          setSwSchemaToTypeId((prev) => ({
+                                            ...prev,
+                                            [schema.id]: (result.types[0] as { id: string }).id,
+                                          }));
+                                        }
+                                      } catch { /* ignore */ }
+                                    }}
+                                  >
+                                    Import
+                                  </Button>
+                                )}
+                              </div>
+                              {isExpanded && slots.length > 0 && (
+                                <div className="px-3 pb-2 pl-9">
+                                  <div className="rounded border bg-muted/30 divide-y">
+                                    {slots.map((slot, idx) => (
+                                      <div key={`${slot.id}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                                        <Badge variant="outline" className="text-[10px] px-1.5 h-4 shrink-0">
+                                          {slot.type}
+                                        </Badge>
+                                        <span className="text-muted-foreground truncate">{slot.label}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{swSelectedSchemas.size} imported</span>
+                        <span>&middot;</span>
+                        <button type="button" onClick={handleSwLoadSchemas} className="hover:text-foreground transition-colors">
+                          Refresh
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={handleSwLoadSchemas}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Load Schemas
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right: Setup Guide */}
+            <div className="w-80 shrink-0">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950 sticky top-8">
+                <div className="flex gap-2 mb-3">
+                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Shopware Setup</p>
+                </div>
+                <div className="text-xs text-blue-800 dark:text-blue-300 space-y-3">
+                  <div>
+                    <p className="font-medium">1. Create Role</p>
+                    <p className="opacity-80 mt-0.5">Settings &rarr; System &rarr; Users & Permissions &rarr; Roles &rarr; New Role &quot;FlowBoost&quot;</p>
+                  </div>
+                  <div>
+                    <p className="font-medium">Permissions:</p>
+                    <ul className="list-disc ml-4 mt-1 space-y-0.5 opacity-90">
+                      <li>Catalogues &rarr; Categories: View, Edit, Create</li>
+                      <li>Content &rarr; Shopping Experiences: View</li>
+                      <li>Catalogues &rarr; Products: View</li>
+                      <li>Content &rarr; Media: View, Create</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="font-medium">2. Create Integration</p>
+                    <p className="opacity-80 mt-0.5">Settings &rarr; System &rarr; Integrations &rarr; Add Integration &rarr; Assign role &quot;FlowBoost&quot;</p>
+                  </div>
+                  <p className="opacity-70 border-t border-blue-200 dark:border-blue-800 pt-2 mt-2">Client Secret is shown only once. No admin access required.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Git Repository Configuration */}
         {connector.id === "git" && isGitConnected && (
@@ -535,17 +913,19 @@ function ConnectorsPageContent() {
 
                         {/* Status / Action */}
                         <div className="flex items-center gap-2 shrink-0">
-                          {connector.id === "git" && status === "connected" ? (
+                          {status === "connected" ? (
                             <>
-                              <Button variant="ghost" size="sm" className="text-xs h-8" asChild>
-                                <Link href="/website">View Index</Link>
-                              </Button>
+                              {connector.id === "git" && (
+                                <Button variant="ghost" size="sm" className="text-xs h-8" asChild>
+                                  <Link href="/website">View Index</Link>
+                                </Button>
+                              )}
                               <span className="text-sm font-medium text-green-600">Connected</span>
                               <Button
                                 variant="outline"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={() => setDetailView("git")}
+                                onClick={() => setDetailView(connector.id)}
                               >
                                 <Settings className="h-3.5 w-3.5" />
                               </Button>
@@ -560,6 +940,16 @@ function ConnectorsPageContent() {
                             >
                               Connect
                             </Button>
+                          ) : connector.id === "shopware" && status === "not_connected" ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setDetailView("shopware")}
+                            >
+                              Connect
+                            </Button>
+                          ) : status === "coming_soon" ? (
+                            <Badge variant="secondary" className="text-xs font-normal">Coming Soon</Badge>
                           ) : (
                             <Badge variant="secondary" className="text-xs font-normal">Coming Soon</Badge>
                           )}

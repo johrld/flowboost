@@ -124,10 +124,14 @@ export async function contentTypeRoutes(app: FastifyInstance) {
   );
 
   // POST /content-types/import — Import schemas from connector
-  app.post<{ Params: { customerId: string; projectId: string } }>(
+  app.post<{
+    Params: { customerId: string; projectId: string };
+    Body: { schemaIds?: string[] };
+  }>(
     "/import",
     async (request, reply) => {
       const { customerId, projectId } = request.params;
+      const body = (request.body ?? {}) as { schemaIds?: string[] };
       const project = app.ctx.projectsFor(customerId).get(projectId);
       if (!project) {
         return reply.status(404).send({ error: "Project not found" });
@@ -141,11 +145,18 @@ export async function contentTypeRoutes(app: FastifyInstance) {
           });
         }
 
-        const schemas = await connector.discoverSchemas();
+        let schemas = await connector.discoverSchemas();
+
+        // Filter by selected schema IDs if provided
+        if (body.schemaIds && body.schemaIds.length > 0) {
+          const idSet = new Set(body.schemaIds);
+          schemas = schemas.filter((s) => idSet.has(s.id));
+        }
+
         const store = getStore(customerId, projectId);
         const imported = store.importFromConnector(projectId, connector.platform, schemas);
 
-        log.info({ projectId, connector: connector.platform, count: imported.length }, "schemas imported");
+        log.info({ projectId, connector: connector.platform, count: imported.length, filtered: !!body.schemaIds }, "schemas imported");
         return { message: `${imported.length} content types imported`, types: imported };
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
