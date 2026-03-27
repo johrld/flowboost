@@ -207,8 +207,17 @@ export async function topicRoutes(app: FastifyInstance) {
       if (!topic) {
         return reply.status(404).send({ error: "Topic not found" });
       }
+      // Delete all content pieces linked to this flow
+      const content = app.ctx.contentFor(customerId, projectId);
+      const allContent = content.list();
+      for (const item of allContent) {
+        if (item.topicId === topicId || item.briefingId === topicId) {
+          content.delete(item.id);
+        }
+      }
+
       topics.delete(topicId);
-      return { message: "Flow deleted" };
+      return { message: "Flow and content deleted" };
     },
   );
 
