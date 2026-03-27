@@ -35,6 +35,8 @@ export interface ContentItem {
   tags?: string[];
   keywords?: string[];
   author?: string;
+  flowId?: string;
+  originFlowId?: string;
   topicId?: string;
   briefingId?: string;
   translationKey?: string;
@@ -352,6 +354,8 @@ export interface PipelineRun {
   type: "strategy" | "production" | "video_production" | "audio_production" | "social_production" | "email_production" | "update" | "translation";
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
   topicId?: string;
+  flowId?: string;
+  contentId?: string;
   phases: PipelinePhase[];
   totalCostUsd: number;
   totalTokens: { input: number; output: number };

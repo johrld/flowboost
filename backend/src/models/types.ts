@@ -308,9 +308,11 @@ export interface ContentItem {
   keywords?: string[];
   author?: string;
 
-  // Links
-  topicId?: string;
-  briefingId?: string;
+  // Flow references
+  flowId?: string;              // Active link to originating flow (nullable — cleared when flow archived + content published)
+  originFlowId?: string;        // Immutable provenance (set once at creation, never cleared)
+  topicId?: string;             // @deprecated — use flowId
+  briefingId?: string;          // @deprecated — use flowId
   translationKey?: string;
   parentId?: string;
 
@@ -519,7 +521,9 @@ export interface PipelineRun {
   projectId: string;
   type: PipelineType;
   status: RunStatus;
-  topicId?: string; // only for production runs
+  topicId?: string;     // @deprecated — use flowId
+  flowId?: string;      // Flow that triggered this run
+  contentId?: string;   // Content piece produced by this run
 
   phases: PipelinePhase[];
   totalCostUsd: number;

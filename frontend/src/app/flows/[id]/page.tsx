@@ -216,7 +216,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
       setChatMessages(chat);
       setContentTypes(types);
       const linked = (contentRes.items ?? []).filter(
-        (item: ContentItem) => item.briefingId === id || item.topicId === id,
+        (item: ContentItem) => item.flowId === id || item.topicId === id || item.briefingId === id,
       );
       setOutputs(linked);
     } catch {

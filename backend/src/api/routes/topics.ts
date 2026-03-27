@@ -5,7 +5,7 @@ import { PipelineContext } from "../../pipeline/context.js";
 import { runProductionPipeline } from "../../pipeline/production/run.js";
 import { runSocialPipeline } from "../../pipeline/social/run.js";
 import { runEmailPipeline } from "../../pipeline/email/run.js";
-import type { ChatMessage, Topic, FlowInputType } from "../../models/types.js";
+import type { ChatMessage, Topic, FlowInputType, ContentItem } from "../../models/types.js";
 import { processInput } from "../../pipeline/ingest/process-input.js";
 import { distillChat } from "../../pipeline/ingest/distill-chat.js";
 import { createLogger } from "../../utils/logger.js";
@@ -198,8 +198,75 @@ export async function topicRoutes(app: FastifyInstance) {
   );
 
   // DELETE /customers/:customerId/projects/:projectId/topics/:topicId
-  app.delete<{ Params: { customerId: string; projectId: string; topicId: string } }>(
+  // Default: Archive (soft-delete). ?hard=true for permanent deletion.
+  app.delete<{
+    Params: { customerId: string; projectId: string; topicId: string };
+    Querystring: { hard?: string };
+  }>(
     "/:topicId",
+    async (request, reply) => {
+      const { customerId, projectId, topicId } = request.params;
+      const hard = (request.query as { hard?: string }).hard === "true";
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
+      if (!topic) {
+        return reply.status(404).send({ error: "Topic not found" });
+      }
+
+      const content = app.ctx.contentFor(customerId, projectId);
+      const linked = content.list().filter(
+        (item) => item.topicId === topicId || item.briefingId === topicId || item.flowId === topicId,
+      );
+
+      if (hard) {
+        // Hard delete: refuse if published content exists
+        const published = linked.filter((item) =>
+          ["published", "delivered", "approved"].includes(item.status),
+        );
+        if (published.length > 0) {
+          return reply.status(400).send({
+            error: `Cannot hard-delete: ${published.length} published/approved content piece(s) exist. Archive instead, or remove published content first.`,
+          });
+        }
+        // Delete all linked content + flow
+        for (const item of linked) content.delete(item.id);
+        topics.delete(topicId);
+        return { message: "Flow and content permanently deleted", deleted: linked.length };
+      }
+
+      // Soft delete (archive): content-status-aware
+      const now = new Date().toISOString();
+      let contentDetached = 0;
+      let contentArchived = 0;
+
+      for (const item of linked) {
+        if (["published", "delivered", "approved"].includes(item.status)) {
+          // Detach published content — clear flow reference but keep content
+          content.update(item.id, { topicId: undefined, briefingId: undefined, flowId: undefined, updatedAt: now });
+          contentDetached++;
+        } else if (["planned", "producing", "draft"].includes(item.status)) {
+          // Archive draft content along with the flow
+          content.update(item.id, { status: "archived" as ContentItem["status"], updatedAt: now });
+          contentArchived++;
+        }
+        // "review" status: leave untouched
+      }
+
+      // Archive the flow itself
+      topics.update(topicId, { status: "archived" as Topic["status"] });
+
+      return {
+        message: "Flow archived",
+        archived: true,
+        contentDetached,
+        contentArchived,
+      };
+    },
+  );
+
+  // POST /customers/:customerId/projects/:projectId/topics/:topicId/restore
+  app.post<{ Params: { customerId: string; projectId: string; topicId: string } }>(
+    "/:topicId/restore",
     async (request, reply) => {
       const { customerId, projectId, topicId } = request.params;
       const topics = app.ctx.topicsFor(customerId, projectId);
@@ -207,17 +274,23 @@ export async function topicRoutes(app: FastifyInstance) {
       if (!topic) {
         return reply.status(404).send({ error: "Topic not found" });
       }
-      // Delete all content pieces linked to this flow
-      const content = app.ctx.contentFor(customerId, projectId);
-      const allContent = content.list();
-      for (const item of allContent) {
-        if (item.topicId === topicId || item.briefingId === topicId) {
-          content.delete(item.id);
-        }
+      if (topic.status !== "archived") {
+        return reply.status(400).send({ error: "Flow is not archived" });
       }
 
-      topics.delete(topicId);
-      return { message: "Flow and content deleted" };
+      // Restore flow
+      topics.update(topicId, { status: "proposed" as Topic["status"] });
+
+      // Restore archived content pieces linked to this flow
+      const content = app.ctx.contentFor(customerId, projectId);
+      const linked = content.list().filter(
+        (item) => (item.topicId === topicId || item.briefingId === topicId || item.flowId === topicId) && item.status === "archived",
+      );
+      for (const item of linked) {
+        content.update(item.id, { status: "draft" as ContentItem["status"], updatedAt: new Date().toISOString() });
+      }
+
+      return { message: "Flow restored", contentRestored: linked.length };
     },
   );
 
@@ -704,6 +777,8 @@ export async function topicRoutes(app: FastifyInstance) {
         title: contentTitle,
         category: platform ?? topic.category,
         keywords: topic.keywords ? [topic.keywords.primary, ...topic.keywords.secondary] : undefined,
+        flowId: topicId,
+        originFlowId: topicId,
         topicId,
         briefingId: topicId,
         createdAt: now,
@@ -738,6 +813,8 @@ export async function topicRoutes(app: FastifyInstance) {
         type: pipelineType,
         status: "pending",
         topicId,
+        flowId: topicId,
+        contentId: contentItem.id,
         phases,
         totalCostUsd: 0,
         totalTokens: { input: 0, output: 0 },

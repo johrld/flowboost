@@ -855,7 +855,7 @@ export default function ContentEditorPage({
     <ContentDetailLayout
       header={
         <div className="flex items-center gap-4">
-          <Link href={item.briefingId ? `/flows/${item.briefingId}` : item.topicId ? `/flows/${item.topicId}` : "/flows"}>
+          <Link href={item.flowId ? `/flows/${item.flowId}` : item.topicId ? `/flows/${item.topicId}` : "/flows"}>
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-4 w-4" />
             </Button>
