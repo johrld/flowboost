@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { createLogger } from "../../utils/logger.js";
 import { ShopwareSiteConnector } from "../../connectors/site/shopware.js";
 import { createSiteConnector } from "../../connectors/site/factory.js";
+import { ListmonkConnector } from "../../connectors/email/listmonk.js";
 
 const log = createLogger("api:connectors");
 
@@ -11,11 +12,7 @@ export async function connectorRoutes(app: FastifyInstance) {
     Params: { customerId: string; projectId: string };
     Body: {
       type: string;
-      config: {
-        shopUrl?: string;
-        clientId?: string;
-        clientSecret?: string;
-      };
+      config: Record<string, string | undefined>;
     };
   }>("/test", async (request, reply) => {
     const { type, config } = request.body;
@@ -75,7 +72,22 @@ export async function connectorRoutes(app: FastifyInstance) {
       }
     }
 
-    return reply.status(400).send({ success: false, error: `Connector-Typ "${type}" wird nicht unterstützt` });
+    if (type === "listmonk") {
+      if (!config.baseUrl || !config.username || !config.password) {
+        return reply.status(400).send({ success: false, error: "baseUrl, username, password are required" });
+      }
+
+      const connector = new ListmonkConnector({
+        baseUrl: (config.baseUrl as string).replace(/\/+$/, ""),
+        username: config.username as string,
+        password: config.password as string,
+      });
+
+      const result = await connector.testConnection();
+      return result;
+    }
+
+    return reply.status(400).send({ success: false, error: `Connector type "${type}" not supported` });
   });
 
   // GET /connectors/schemas — discover schemas from configured connector
@@ -190,6 +202,50 @@ export async function connectorRoutes(app: FastifyInstance) {
       log.error({ err, refId, entity }, "connector browse detail failed");
       return reply.status(500).send({ error: message });
     }
+  });
+
+  // GET /connectors/templates — list templates from email connector (Listmonk)
+  app.get<{
+    Params: { customerId: string; projectId: string };
+  }>("/templates", async (request, reply) => {
+    const { customerId, projectId } = request.params;
+    const projects = app.ctx.projectsFor(customerId);
+    const project = projects.get(projectId);
+    if (!project) return reply.status(404).send({ error: "Project not found" });
+
+    if (project.connector?.type === "listmonk") {
+      const lm = project.connector.listmonk;
+      if (!lm?.baseUrl || !lm?.username || !lm?.password) {
+        return reply.status(400).send({ error: "Listmonk connector not configured" });
+      }
+      const connector = new ListmonkConnector(lm);
+      const templates = await connector.getTemplates();
+      return { templates };
+    }
+
+    return reply.status(400).send({ error: "No email connector configured" });
+  });
+
+  // GET /connectors/lists — list subscriber lists from email connector (Listmonk)
+  app.get<{
+    Params: { customerId: string; projectId: string };
+  }>("/lists", async (request, reply) => {
+    const { customerId, projectId } = request.params;
+    const projects = app.ctx.projectsFor(customerId);
+    const project = projects.get(projectId);
+    if (!project) return reply.status(404).send({ error: "Project not found" });
+
+    if (project.connector?.type === "listmonk") {
+      const lm = project.connector.listmonk;
+      if (!lm?.baseUrl || !lm?.username || !lm?.password) {
+        return reply.status(400).send({ error: "Listmonk connector not configured" });
+      }
+      const connector = new ListmonkConnector(lm);
+      const lists = await connector.getLists();
+      return { lists };
+    }
+
+    return reply.status(400).send({ error: "No email connector configured" });
   });
 }
 

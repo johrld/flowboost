@@ -52,7 +52,7 @@ import {
 // ── Types ────────────────────────────────────────────────────────
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
-type ConnectorCategory = "site" | "ecommerce" | "social" | "media";
+type ConnectorCategory = "site" | "ecommerce" | "newsletter" | "social" | "media";
 type Framework = "astro" | "hugo" | "nextjs" | "custom";
 
 interface ConnectorDef {
@@ -89,6 +89,8 @@ const CONNECTORS: ConnectorDef[] = [
   { id: "shopware", name: "Shopware 6", category: "ecommerce", icon: ShoppingBag, description: "Read Shopping Experiences, write CMS slots", comingSoon: false },
   { id: "shopify", name: "Shopify", category: "ecommerce", icon: ShoppingBag, description: "Publish to Shopify blog and pages", comingSoon: true },
   { id: "woocommerce", name: "WooCommerce", category: "ecommerce", icon: ShoppingBag, description: "Publish via WooCommerce REST API", comingSoon: true },
+  { id: "listmonk", name: "Listmonk", category: "newsletter", icon: Radio, description: "Create newsletter drafts via Listmonk API", comingSoon: false },
+  { id: "mailchimp", name: "Mailchimp", category: "newsletter", icon: Radio, description: "Create campaigns via Mailchimp API", comingSoon: true },
   { id: "linkedin", name: "LinkedIn", category: "social", icon: Linkedin, description: "Post to LinkedIn", comingSoon: true },
   { id: "instagram", name: "Instagram", category: "social", icon: Instagram, description: "Post to Instagram", comingSoon: true },
   { id: "tiktok", name: "TikTok", category: "social", icon: Music2, description: "Post to TikTok", comingSoon: true },
@@ -100,6 +102,7 @@ const CONNECTORS: ConnectorDef[] = [
 const CATEGORY_LABELS: Record<ConnectorCategory, { title: string; description: string }> = {
   site: { title: "Site Delivery", description: "Publish articles, guides, and landing pages" },
   ecommerce: { title: "E-Commerce", description: "Connect shop platforms for content and product data" },
+  newsletter: { title: "Newsletter", description: "Create and send email campaigns" },
   social: { title: "Social Channels", description: "Distribute social media posts" },
   media: { title: "Media Platforms", description: "Upload video and audio content" },
 };
@@ -171,6 +174,18 @@ function ConnectorsPageContent() {
   // Map: connectorRef (schema.id) → content type ID (slug) for delete
   const [swSchemaToTypeId, setSwSchemaToTypeId] = useState<Record<string, string>>({});
 
+  // Listmonk connector state
+  const [lmBaseUrl, setLmBaseUrl] = useState("");
+  const [lmUsername, setLmUsername] = useState("");
+  const [lmPassword, setLmPassword] = useState("");
+  const [lmTestStatus, setLmTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const [lmTestError, setLmTestError] = useState("");
+  const [lmListCount, setLmListCount] = useState(0);
+  const [lmSaveStatus, setLmSaveStatus] = useState<SaveStatus>("idle");
+  const [lmTemplates, setLmTemplates] = useState<Array<{ id: number; name: string; isDefault: boolean }>>([]);
+  const [lmLists, setLmLists] = useState<Array<{ id: number; name: string; type: string; subscriberCount: number }>>([]);
+  const [lmDataLoading, setLmDataLoading] = useState(false);
+
   const loadGhRepos = useCallback(async (installationId: number) => {
     setGhLoadingRepos(true);
     try {
@@ -211,6 +226,12 @@ function ConnectorsPageContent() {
       setGhAssetsPath(project.connector.github.assetsPath);
       setGhCategoriesPath(project.connector.github.categoriesPath ?? "src/data/categories.json");
       setGhAuthorsPath(project.connector.github.authorsPath ?? "src/data/authors.json");
+    }
+    // Load Listmonk config
+    if (project.connector?.listmonk) {
+      setLmBaseUrl(project.connector.listmonk.baseUrl ?? "");
+      setLmUsername(project.connector.listmonk.username ?? "");
+      setLmPassword(project.connector.listmonk.password ?? "");
     }
     // Load Shopware config
     if (project.connector?.shopware) {
@@ -314,7 +335,74 @@ function ConnectorsPageContent() {
   const isGitConnected = connectorType === "github" && !!ghInstallationId;
 
   const isSwConnected = (project?.connector?.type === "shopware" && !!project?.connector?.shopware?.shopUrl)
+    || (swTestStatus === "success")
     || (swSaveStatus === "saved" && !!swShopUrl && !!swClientId && !!swClientSecret);
+
+  const isLmConnected = (project?.connector?.type === "listmonk" && !!project?.connector?.listmonk?.baseUrl)
+    || (lmTestStatus === "success")
+    || (lmSaveStatus === "saved" && !!lmBaseUrl && !!lmUsername && !!lmPassword);
+
+  const handleLmTest = async () => {
+    if (!lmBaseUrl || !lmUsername || !lmPassword) return;
+    setLmTestStatus("testing");
+    setLmTestError("");
+    try {
+      const result = await testConnector(customerId, projectId, {
+        type: "listmonk",
+        config: { baseUrl: lmBaseUrl.replace(/\/+$/, ""), username: lmUsername, password: lmPassword },
+      });
+      if (result.success) {
+        setLmTestStatus("success");
+        setLmListCount((result as { listCount?: number }).listCount ?? 0);
+      } else {
+        setLmTestStatus("error");
+        setLmTestError(result.error ?? "Unknown error");
+      }
+    } catch (err) {
+      setLmTestStatus("error");
+      setLmTestError(err instanceof Error ? err.message : "Connection failed");
+    }
+  };
+
+  const handleLmSave = () => withSave(setLmSaveStatus, async () => {
+    await updateProject(customerId, projectId, {
+      connector: {
+        type: "listmonk",
+        listmonk: {
+          baseUrl: lmBaseUrl.replace(/\/+$/, ""),
+          username: lmUsername,
+          password: lmPassword,
+        },
+      },
+    });
+    await refreshProjects();
+  });
+
+  const handleLmLoadData = async () => {
+    if (!customerId || !projectId) return;
+    setLmDataLoading(true);
+    try {
+      const [templatesRes, listsRes] = await Promise.all([
+        import("@/lib/api").then((m) => m.getConnectorTemplates(customerId, projectId)),
+        import("@/lib/api").then((m) => m.getConnectorLists(customerId, projectId)),
+      ]);
+      setLmTemplates(templatesRes.templates);
+      setLmLists(listsRes.lists);
+    } catch (err) {
+      console.error("Failed to load Listmonk data:", err);
+    } finally {
+      setLmDataLoading(false);
+    }
+  };
+
+  // Auto-load Listmonk data when entering detail view (with connected project)
+  useEffect(() => {
+    if (detailView === "listmonk" && isLmConnected && lmTemplates.length === 0 && !lmDataLoading && customerId && projectId
+        && project?.connector?.type === "listmonk") {
+      handleLmLoadData();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailView, isLmConnected, project?.connector?.type]);
 
   // Auto-load schemas when entering Shopware detail view
   useEffect(() => {
@@ -327,6 +415,7 @@ function ConnectorsPageContent() {
   const getConnectorStatus = (id: string): "connected" | "not_connected" | "coming_soon" => {
     if (id === "git" && isGitConnected) return "connected";
     if (id === "shopware" && isSwConnected) return "connected";
+    if (id === "listmonk" && isLmConnected) return "connected";
     const def = CONNECTORS.find((c) => c.id === id);
     if (def?.comingSoon) return "coming_soon";
     return "not_connected";
@@ -460,6 +549,135 @@ function ConnectorsPageContent() {
             </Button>
           )}
         </div>
+
+        {/* Listmonk Configuration */}
+        {connector.id === "listmonk" && (
+          <div className="flex gap-8">
+            <div className="flex-1 max-w-lg space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold">Connection</h2>
+                <p className="text-sm text-muted-foreground">Listmonk API credentials</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Listmonk URL</Label>
+                  <Input value={lmBaseUrl} onChange={(e) => setLmBaseUrl(e.target.value)} placeholder="https://newsletter.example.com" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Username</Label>
+                  <Input value={lmUsername} onChange={(e) => setLmUsername(e.target.value)} placeholder="API username" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Password / API Token</Label>
+                  <Input type="password" value={lmPassword} onChange={(e) => setLmPassword(e.target.value)} placeholder="API token or password" />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button variant="outline" onClick={handleLmTest} disabled={lmTestStatus === "testing" || !lmBaseUrl || !lmUsername || !lmPassword}>
+                  {lmTestStatus === "testing" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {lmTestStatus === "success" && <Check className="mr-2 h-4 w-4 text-green-600" />}
+                  {lmTestStatus === "error" && <AlertCircle className="mr-2 h-4 w-4 text-destructive" />}
+                  Test Connection
+                </Button>
+                <SaveButton status={lmSaveStatus} onClick={handleLmSave} />
+              </div>
+
+              {lmTestStatus === "success" && (
+                <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950">
+                  <Check className="h-4 w-4 text-green-600 shrink-0" />
+                  <p className="text-sm text-green-800 dark:text-green-300">
+                    Connected — {lmListCount} list{lmListCount !== 1 ? "s" : ""} found
+                  </p>
+                </div>
+              )}
+
+              {lmTestStatus === "error" && (
+                <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
+                  <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                  <p className="text-sm text-red-800 dark:text-red-300">{lmTestError}</p>
+                </div>
+              )}
+
+              {/* Templates + Lists */}
+              {isLmConnected && (
+                <div className="border-t pt-6 space-y-4">
+                  {lmDataLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading templates and lists...
+                    </div>
+                  ) : (
+                    <>
+                      {lmTemplates.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-semibold mb-2">Templates</h3>
+                          <div className="rounded-lg border divide-y">
+                            {lmTemplates.map((t) => (
+                              <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                                <span className="flex-1">{t.name}</span>
+                                {t.isDefault && <Badge variant="secondary" className="text-[10px]">Default</Badge>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {lmLists.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-semibold mb-2">Subscriber Lists</h3>
+                          <div className="rounded-lg border divide-y">
+                            {lmLists.map((l) => (
+                              <div key={l.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                                <span className="flex-1">{l.name}</span>
+                                <Badge variant="outline" className="text-[10px]">{l.type}</Badge>
+                                <span className="text-xs text-muted-foreground">{l.subscriberCount.toLocaleString()} subscribers</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <button type="button" onClick={handleLmLoadData} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        Refresh
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right: Setup Guide */}
+            <div className="w-80 shrink-0">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950 sticky top-8">
+                <div className="flex gap-2 mb-3">
+                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Listmonk Setup</p>
+                </div>
+                <div className="text-xs text-blue-800 dark:text-blue-300 space-y-3">
+                  <div>
+                    <p className="font-medium">1. Create Role</p>
+                    <p className="opacity-80 mt-0.5">Settings &rarr; User Roles &rarr; New &rarr; Name: &quot;FlowBoost&quot;</p>
+                    <ul className="list-disc ml-4 mt-1 space-y-0.5 opacity-90">
+                      <li>Lists: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">lists:get_all</code></li>
+                      <li>Campaigns: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">campaigns:get</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">campaigns:manage</code></li>
+                      <li>Templates: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">templates:get</code></li>
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="font-medium">2. Create API User</p>
+                    <p className="opacity-80 mt-0.5">Settings &rarr; Users &rarr; New User &rarr; Type: API &rarr; Role: FlowBoost</p>
+                  </div>
+                  <div>
+                    <p className="font-medium">3. Copy Credentials</p>
+                    <p className="opacity-80 mt-0.5">Username + API token. Token is shown only once.</p>
+                  </div>
+                  <p className="opacity-70 border-t border-blue-200 dark:border-blue-800 pt-2 mt-2">FlowBoost creates campaign drafts only — never sends automatically.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Shopware Configuration */}
         {connector.id === "shopware" && (
@@ -887,7 +1105,7 @@ function ConnectorsPageContent() {
 
         {/* ── Connections Tab ──────────────────────────────────────── */}
         <TabsContent value="connections" className="mt-6 space-y-8">
-          {(["site", "ecommerce", "social", "media"] as ConnectorCategory[]).map((cat) => {
+          {(["site", "ecommerce", "newsletter", "social", "media"] as ConnectorCategory[]).map((cat) => {
             const items = CONNECTORS.filter((c) => c.category === cat);
             return (
               <div key={cat} className="space-y-1">
@@ -943,11 +1161,11 @@ function ConnectorsPageContent() {
                             >
                               Connect
                             </Button>
-                          ) : connector.id === "shopware" && status === "not_connected" ? (
+                          ) : (connector.id === "shopware" || connector.id === "listmonk") && status === "not_connected" ? (
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setDetailView("shopware")}
+                              onClick={() => setDetailView(connector.id)}
                             >
                               Connect
                             </Button>

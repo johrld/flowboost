@@ -81,7 +81,7 @@ export interface Competitor {
 }
 
 export interface ConnectorConfig {
-  type: "git" | "github" | "filesystem" | "shopware" | "wordpress" | "api";
+  type: "git" | "github" | "filesystem" | "shopware" | "wordpress" | "listmonk" | "api";
   useAsSource?: boolean;
   git?: {
     repoUrl: string;
@@ -109,6 +109,11 @@ export interface ConnectorConfig {
     siteUrl: string;
     username: string;
     applicationPassword: string;
+  };
+  listmonk?: {
+    baseUrl: string;
+    username: string;
+    password: string;
   };
 }
 

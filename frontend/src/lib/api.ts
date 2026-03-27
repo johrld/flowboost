@@ -864,3 +864,17 @@ export function browseConnectorDetail(
 ): Promise<{ id: string; name: string; structuredText: string; imageUrl?: string }> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/browse/${refId}?entity=${entity}`);
 }
+
+export function getConnectorTemplates(
+  customerId: string,
+  projectId: string,
+): Promise<{ templates: Array<{ id: number; name: string; type: string; isDefault: boolean }> }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/templates`);
+}
+
+export function getConnectorLists(
+  customerId: string,
+  projectId: string,
+): Promise<{ lists: Array<{ id: number; name: string; type: string; subscriberCount: number }> }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/lists`);
+}
