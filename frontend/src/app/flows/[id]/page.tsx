@@ -197,6 +197,8 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const [onboardingDone, setOnboardingDone] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [onboardingAnswers, setOnboardingAnswers] = useState<Record<string, string>>({});
+  const [onboardingShowUpload, setOnboardingShowUpload] = useState(false);
+  const [onboardingUploadedFiles, setOnboardingUploadedFiles] = useState<string[]>([]);
   const [titleDraft, setTitleDraft] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -503,6 +505,10 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   answers={onboardingAnswers}
                   onStepChange={setOnboardingStep}
                   onAnswersChange={setOnboardingAnswers}
+                  showUpload={onboardingShowUpload}
+                  onShowUploadChange={setOnboardingShowUpload}
+                  uploadedFiles={onboardingUploadedFiles}
+                  onUploadedFilesChange={setOnboardingUploadedFiles}
                   onComplete={(answers, summary) => {
                     if (!onboardingContentType) return;
                     setOnboardingContentType(null);
@@ -538,7 +544,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                           <button
                             key={ct.id}
                             type="button"
-                            onClick={() => { setOnboardingContentType(ct); setOnboardingStep(0); setOnboardingAnswers({}); }}
+                            onClick={() => { setOnboardingContentType(ct); setOnboardingStep(0); setOnboardingAnswers({}); setOnboardingShowUpload(false); setOnboardingUploadedFiles([]); }}
                             className="flex flex-col items-center gap-1.5 rounded-xl border p-3 hover:bg-muted/50 transition-colors text-center"
                           >
                             <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category] ?? OUTPUT_ICONS[ct.id] ?? <FileText className="h-4 w-4" />}</span>

@@ -21,6 +21,10 @@ interface ChatOnboardingProps {
   answers: Record<string, string>;
   onStepChange: (step: number) => void;
   onAnswersChange: (answers: Record<string, string>) => void;
+  showUpload: boolean;
+  onShowUploadChange: (show: boolean) => void;
+  uploadedFiles: string[];
+  onUploadedFilesChange: (files: string[]) => void;
   onComplete: (answers: Record<string, string>, summary: string) => void;
   onCancel: () => void;
   onFileUpload?: (files: FileList) => Promise<void>;
@@ -28,12 +32,11 @@ interface ChatOnboardingProps {
 
 export function ChatOnboarding({
   contentType, step, answers, onStepChange, onAnswersChange,
+  showUpload, onShowUploadChange, uploadedFiles, onUploadedFilesChange,
   onComplete, onCancel, onFileUpload,
 }: ChatOnboardingProps) {
   const questions = contentType.agent?.onboarding ?? [];
   const [textValue, setTextValue] = useState("");
-  const [showUpload, setShowUpload] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // No onboarding questions → show simple topic input
@@ -68,7 +71,7 @@ export function ChatOnboarding({
 
   const handleAnswer = (value: string) => {
     if (currentQuestion.id === "sources" && value.includes("add them now")) {
-      setShowUpload(true);
+      onShowUploadChange(true);
       onAnswersChange({ ...answers, [currentQuestion.id]: value });
       return;
     }
@@ -82,7 +85,7 @@ export function ChatOnboarding({
   };
 
   const handleFinishUpload = () => {
-    setShowUpload(false);
+    onShowUploadChange(false);
     if (uploadedFiles.length > 0) {
       onAnswersChange({ ...answers, sources: `${uploadedFiles.length} file${uploadedFiles.length !== 1 ? "s" : ""} uploaded` });
     }
@@ -176,7 +179,7 @@ export function ChatOnboarding({
                   if (e.target.files && onFileUpload) {
                     const names = Array.from(e.target.files).map((f) => f.name);
                     await onFileUpload(e.target.files);
-                    setUploadedFiles((prev) => [...prev, ...names]);
+                    onUploadedFilesChange([...uploadedFiles, ...names]);
                   }
                   e.target.value = "";
                 }}
