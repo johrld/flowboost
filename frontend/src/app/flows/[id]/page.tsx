@@ -514,11 +514,8 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     if (!onboardingContentType) return;
                     setOnboardingContentType(null);
                     setOnboardingDone(true);
+                    setBottomTab("chat");
                     handleSendMessage(summary);
-                    // If user said they want to add sources, switch to Sources tab
-                    if (answers.sources?.includes("add them now")) {
-                      setTimeout(() => setBottomTab("sources"), 500);
-                    }
                   }}
                   onFileUpload={async (files) => { await handleFileUpload(files); }}
                   onCancel={() => setOnboardingContentType(null)}
