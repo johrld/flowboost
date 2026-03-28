@@ -5,16 +5,19 @@
 Each content type has its own **platform-native editor** that matches the look and feel of the target platform. The editor is selected automatically based on the ContentType ID.
 
 ```
-contentType.id      →  Editor Component
-──────────────────────────────────────────
-"blog-post"         →  Article Editor      (TipTap WYSIWYG + Frontmatter)
-"linkedin-post"     →  LinkedIn Editor     (Rich text + side-by-side preview)
-"instagram-post"    →  Instagram Editor    (Image-first + caption)
-"x-post"            →  X Editor           (280ch + tweet preview)
-"tiktok-post"       →  TikTok Editor      (Script sections + caption)
-"newsletter"        →  Newsletter Editor   (Subject + sections + email preview)
-*                   →  Generic Editor      (Dynamic form from ContentType fields)
+contentType.id      →  Editor Component                                          Status
+──────────────────────────────────────────────────────────────────────────────────────────
+"blog-post"         →  Article Editor      (TipTap WYSIWYG + Frontmatter)        ✅ Done
+"linkedin-post"     →  LinkedIn Editor     (Rich text + side-by-side preview)     ✅ Done
+"instagram-post"    →  Instagram Editor    (Image-first + caption)               🔧 Prepared
+"x-post"            →  X Editor           (280ch + tweet preview)                🔧 Prepared
+"tiktok-post"       →  TikTok Editor      (Script sections + caption)            🔧 Prepared
+"newsletter"        →  Newsletter Editor   (Subject + sections + email preview)  🔧 Prepared
+*                   →  Generic Editor      (Dynamic form from ContentType fields) 🔧 Prepared
 ```
+
+> **✅ Done** = Fully functional, tested, production-ready
+> **🔧 Prepared** = Component exists with UI structure, needs visual polish and testing
 
 ## Editor Architecture
 
@@ -55,7 +58,7 @@ const editorMode = isArticle ? "markdown" : "json";
 - **Markdown mode**: Loads `.md` files, renders TipTap WYSIWYG editor
 - **JSON mode**: Loads `.json` files, renders platform-specific editor
 
-## LinkedIn Editor
+## LinkedIn Editor ✅
 
 **File:** `components/editors/linkedin-editor.tsx`
 
@@ -92,7 +95,7 @@ const editorMode = isArticle ? "markdown" : "json";
 - 2 images: 50/50 side by side
 - 3+ images: large left (2/3), stacked right (1/3), "+N" overlay on 4+
 
-## X (Twitter) Editor
+## X (Twitter) Editor 🔧
 
 **File:** `components/editors/x-editor.tsx`
 
@@ -101,7 +104,7 @@ const editorMode = isArticle ? "markdown" : "json";
 - Tweet-style preview with avatar, handle, engagement metrics
 - Copy button
 
-## Instagram Editor
+## Instagram Editor 🔧
 
 **File:** `components/editors/instagram-editor.tsx`
 
@@ -110,7 +113,7 @@ const editorMode = isArticle ? "markdown" : "json";
 - Hashtag input (max 15)
 - Instagram-style preview: photo card with avatar, image, like/comment icons
 
-## TikTok Editor
+## TikTok Editor 🔧
 
 **File:** `components/editors/tiktok-editor.tsx`
 
@@ -119,7 +122,7 @@ const editorMode = isArticle ? "markdown" : "json";
 - Hashtag input (max 5)
 - TikTok-style preview: vertical 9:16 black card with caption overlay
 
-## Newsletter Editor
+## Newsletter Editor 🔧
 
 **File:** `components/editors/newsletter-editor.tsx`
 
@@ -129,7 +132,7 @@ const editorMode = isArticle ? "markdown" : "json";
 - **CTA editor** (text + button label + URL)
 - Email preview card (inbox header + body + CTA button)
 
-## Generic Editor
+## Generic Editor 🔧
 
 **File:** `components/editors/generic-editor.tsx`
 
@@ -147,7 +150,7 @@ Dynamic form from ContentType fields. Used for custom and connector-imported typ
 | `number` | Number input |
 | `boolean` | Checkbox |
 
-## Article Editor
+## Article Editor ✅
 
 **File:** `app/content/[id]/page.tsx` (inline, not extracted)
 
