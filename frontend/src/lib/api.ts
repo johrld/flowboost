@@ -426,7 +426,7 @@ export function updateContent(
   customerId: string,
   projectId: string,
   contentId: string,
-  data: Partial<Pick<ContentItem, "title" | "description" | "category" | "tags" | "keywords" | "author" | "translationKey" | "heroImageId" | "scheduledDate">>,
+  data: Partial<Pick<ContentItem, "title" | "description" | "category" | "tags" | "keywords" | "author" | "translationKey" | "heroImageId" | "scheduledDate" | "status">>,
 ): Promise<ContentItem> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}`, {
     method: "PUT",
