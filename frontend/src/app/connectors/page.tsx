@@ -38,15 +38,19 @@ import {
   Settings,
   Download,
 } from "lucide-react";
-import { CONNECTORS, FRAMEWORKS, CATEGORY_LABELS } from "./_lib/types";
-import type { SaveStatus, Framework, ConnectorCategory } from "./_lib/types";
+import { FRAMEWORKS, CATEGORY_LABELS, mergeWithIcons } from "./_lib/types";
+import type { SaveStatus, Framework, ConnectorDef } from "./_lib/types";
 import { GenericConnectorConfig, SaveButton, withSave } from "./_components/generic-connector-config";
+import { getConnectorTypes } from "@/lib/api";
 
 // ── Main Page Content ────────────────────────────────────────────
 
 function ConnectorsPageContent() {
   const { customerId, projectId, project, loading: projectLoading, refreshProjects } = useProject();
   const searchParams = useSearchParams();
+
+  // Connector type definitions — loaded from backend API
+  const [connectorDefs, setConnectorDefs] = useState<ConnectorDef[]>([]);
 
   // Git connector state
   const [connectorType, setConnectorType] = useState("git");
@@ -66,6 +70,14 @@ function ConnectorsPageContent() {
   const [connectorStatus, setConnectorStatus] = useState<SaveStatus>("idle");
   const [detailView, setDetailView] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+
+  // Load connector type definitions from backend
+  useEffect(() => {
+    if (!customerId || !projectId) return;
+    getConnectorTypes(customerId, projectId)
+      .then(({ types }) => setConnectorDefs(mergeWithIcons(types)))
+      .catch((err) => console.error("Failed to load connector types:", err));
+  }, [customerId, projectId]);
 
   // Generic connector config state — keyed by connector type
   const [configValues, setConfigValues] = useState<Record<string, Record<string, string>>>({});
@@ -162,7 +174,7 @@ function ConnectorsPageContent() {
 
     // Load all standard connectors generically
     const loadedConfigs: Record<string, Record<string, string>> = {};
-    for (const def of CONNECTORS) {
+    for (const def of connectorDefs) {
       if (!def.configKey || !def.fields) continue;
       const conn = findConn(def.id);
       const configData = conn?.[def.configKey as keyof typeof conn] as Record<string, string> | undefined;
@@ -265,7 +277,7 @@ function ConnectorsPageContent() {
   const isGitConnected = !!findConn("github")?.github?.installationId;
   const isConnected = useCallback((connectorId: string) => {
     if (connectorId === "git") return isGitConnected;
-    const def = CONNECTORS.find((c) => c.id === connectorId);
+    const def = connectorDefs.find((c) => c.id === connectorId);
     if (!def?.configKey) return false;
     const conn = findConn(connectorId);
     return !!conn?.[def.configKey as keyof typeof conn];
@@ -277,7 +289,7 @@ function ConnectorsPageContent() {
 
   // Generic test handler for any connector with fields
   const handleGenericTest = useCallback(async (connectorId: string) => {
-    const def = CONNECTORS.find((c) => c.id === connectorId);
+    const def = connectorDefs.find((c) => c.id === connectorId);
     if (!def?.fields || !def.configKey) return;
     const values = configValues[connectorId] ?? {};
     const allFilled = def.fields.every((f) => !!values[f.key]);
@@ -312,7 +324,7 @@ function ConnectorsPageContent() {
 
   // Generic save handler for any connector with fields
   const handleGenericSave = useCallback(async (connectorId: string) => {
-    const def = CONNECTORS.find((c) => c.id === connectorId);
+    const def = connectorDefs.find((c) => c.id === connectorId);
     if (!def?.fields || !def.configKey) return;
     const values = configValues[connectorId] ?? {};
 
@@ -334,7 +346,7 @@ function ConnectorsPageContent() {
 
   // Generic stream toggle handler
   const handleStreamToggle = useCallback(async (connectorId: string, streamId: string, enabled: boolean) => {
-    const def = CONNECTORS.find((c) => c.id === connectorId);
+    const def = connectorDefs.find((c) => c.id === connectorId);
     if (!def?.streams) return;
 
     const conn = findConn(connectorId);
@@ -383,7 +395,7 @@ function ConnectorsPageContent() {
 
   // Auto-load schemas when entering a detail view with schema discovery
   useEffect(() => {
-    const def = CONNECTORS.find((c) => c.id === detailView);
+    const def = connectorDefs.find((c) => c.id === detailView);
     if (def?.hasSchemaDiscovery && isConnected(def.id) && schemas.length === 0 && !schemasLoading && customerId && projectId) {
       handleLoadSchemas();
     }
@@ -392,7 +404,7 @@ function ConnectorsPageContent() {
 
   const getConnectorStatus = (id: string): "connected" | "not_connected" | "coming_soon" => {
     if (isConnected(id)) return "connected";
-    const def = CONNECTORS.find((c) => c.id === id);
+    const def = connectorDefs.find((c) => c.id === id);
     if (def?.comingSoon) return "coming_soon";
     return "not_connected";
   };
@@ -450,7 +462,7 @@ function ConnectorsPageContent() {
 
   // ── Detail View (single connector) ──────────────────────────────
   if (detailView) {
-    const connector = CONNECTORS.find((c) => c.id === detailView);
+    const connector = connectorDefs.find((c) => c.id === detailView);
     if (!connector) { setDetailView(null); return null; }
 
     return (
@@ -818,8 +830,8 @@ function ConnectorsPageContent() {
 
         {/* ── Connections Tab ──────────────────────────────────────── */}
         <TabsContent value="connections" className="mt-6 space-y-8">
-          {(["site", "ecommerce", "newsletter", "social", "media"] as ConnectorCategory[]).map((cat) => {
-            const items = CONNECTORS.filter((c) => c.category === cat);
+          {(["site", "ecommerce", "newsletter", "social", "media"] as string[]).map((cat) => {
+            const items = connectorDefs.filter((c) => c.category === cat);
             return (
               <div key={cat} className="space-y-1">
                 <div className="mb-3">

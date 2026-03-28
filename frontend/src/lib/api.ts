@@ -805,6 +805,18 @@ export function removeMediaUsage(
 
 // ── Connectors ───────────────────────────────────────────────────
 
+export function getConnectorTypes(
+  customerId: string,
+  projectId: string,
+): Promise<{ types: Array<{
+  id: string; name: string; category: string; description: string; comingSoon: boolean;
+  configKey?: string; fields?: Array<{ key: string; label: string; type: string; placeholder?: string }>;
+  hasSchemaDiscovery?: boolean; setupGuide?: string[];
+  streams?: Array<{ id: string; label: string; dataType: string; defaultEnabled: boolean }>;
+}> }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/types`);
+}
+
 export function testConnector(
   customerId: string,
   projectId: string,

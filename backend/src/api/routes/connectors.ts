@@ -1,32 +1,22 @@
 import type { FastifyInstance } from "fastify";
 import { createLogger } from "../../utils/logger.js";
 import { ShopwareSiteConnector } from "../../connectors/site/shopware.js";
-import { WordPressSiteConnector } from "../../connectors/site/wordpress.js";
 import { createSiteConnector } from "../../connectors/site/factory.js";
-import { ListmonkConnector } from "../../connectors/email/listmonk.js";
 import { findConnector } from "../../models/types.js";
+import { ListmonkConnector } from "../../connectors/email/listmonk.js";
+import { getConnectorTypes, getConnectorTester } from "../../connectors/registry.js";
 
 const log = createLogger("api:connectors");
 
-/** Registry of connector test functions — each returns { success, error?, ...info } */
-const CONNECTOR_TESTERS: Record<string, (config: Record<string, string>) => Promise<Record<string, unknown>>> = {
-  shopware: (config) => ShopwareSiteConnector.testConnection(config),
-  wordpress: (config) => WordPressSiteConnector.testConnection(config),
-  listmonk: async (config) => {
-    if (!config.baseUrl || !config.username || !config.password) {
-      return { success: false, error: "baseUrl, username, password are required" };
-    }
-    const connector = new ListmonkConnector({
-      baseUrl: config.baseUrl.replace(/\/+$/, ""),
-      username: config.username,
-      password: config.password,
-    });
-    return connector.testConnection();
-  },
-};
-
 export async function connectorRoutes(app: FastifyInstance) {
-  // POST /connectors/test — test connector credentials (generic)
+  // GET /connectors/types — list all connector type definitions (metadata, fields, streams)
+  app.get<{
+    Params: { customerId: string; projectId: string };
+  }>("/types", async () => {
+    return { types: getConnectorTypes() };
+  });
+
+  // POST /connectors/test — test connector credentials (generic, from registry)
   app.post<{
     Params: { customerId: string; projectId: string };
     Body: {
@@ -36,9 +26,9 @@ export async function connectorRoutes(app: FastifyInstance) {
   }>("/test", async (request, reply) => {
     const { type, config } = request.body;
 
-    const tester = CONNECTOR_TESTERS[type];
+    const tester = getConnectorTester(type);
     if (!tester) {
-      return reply.status(400).send({ success: false, error: `Connector type "${type}" not supported` });
+      return reply.status(400).send({ success: false, error: `Connector type "${type}" has no test function` });
     }
 
     try {
