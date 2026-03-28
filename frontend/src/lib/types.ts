@@ -253,9 +253,19 @@ export interface ConnectorConfig {
 
 export type ConnectorType = ConnectorConfig["type"];
 
+export type SourceStreamDataType = "content" | "reference" | "metrics" | "mixed";
+
+export interface SourceStreamDef {
+  id: string;
+  label: string;
+  dataType: SourceStreamDataType;
+  defaultEnabled: boolean;
+}
+
 export interface ConnectorInstance extends ConnectorConfig {
   id: string;
   label?: string;
+  enabledStreams?: string[];
 }
 
 export interface PipelineSettings {

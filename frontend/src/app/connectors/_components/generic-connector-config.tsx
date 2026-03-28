@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Loader2, Check, AlertCircle, Save } from "lucide-react";
 import type { ConnectorDef, SaveStatus } from "../_lib/types";
 
@@ -45,6 +46,8 @@ export function GenericConnectorConfig({
   saveStatus,
   onSave,
   isConnected,
+  enabledStreams,
+  onStreamToggle,
 }: {
   connector: ConnectorDef;
   values: Record<string, string>;
@@ -56,6 +59,8 @@ export function GenericConnectorConfig({
   saveStatus: SaveStatus;
   onSave: () => void;
   isConnected: boolean;
+  enabledStreams?: string[];
+  onStreamToggle?: (streamId: string, enabled: boolean) => void;
 }) {
   if (!connector.fields) return null;
   const allFilled = connector.fields.every((f) => !!values[f.key]);
@@ -105,6 +110,37 @@ export function GenericConnectorConfig({
             <p className="text-sm text-green-800 dark:text-green-300">
               Connected{testInfo ? ` — ${testInfo}` : ""}
             </p>
+          </div>
+        )}
+
+        {/* Source Streams */}
+        {isConnected && connector.streams && connector.streams.length > 0 && onStreamToggle && (
+          <div className="border-t pt-6 space-y-3">
+            <div>
+              <p className="text-sm font-medium">Source Streams</p>
+              <p className="text-xs text-muted-foreground">
+                Enable data streams to use as input sources
+              </p>
+            </div>
+            {connector.streams.map((stream) => {
+              const isEnabled = enabledStreams
+                ? enabledStreams.includes(stream.id)
+                : stream.defaultEnabled;
+              return (
+                <label key={stream.id} className="flex items-center justify-between gap-4 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{stream.label}</span>
+                    <Badge variant="secondary" className="text-[10px] font-normal">{stream.dataType}</Badge>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isEnabled}
+                    onChange={(e) => onStreamToggle(stream.id, e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                </label>
+              );
+            })}
           </div>
         )}
       </div>

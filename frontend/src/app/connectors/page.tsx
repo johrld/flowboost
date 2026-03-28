@@ -332,7 +332,28 @@ function ConnectorsPageContent() {
     }
   }, [configValues, upsertConnector]);
 
-  // Old per-connector handlers replaced by handleGenericTest / handleGenericSave
+  // Generic stream toggle handler
+  const handleStreamToggle = useCallback(async (connectorId: string, streamId: string, enabled: boolean) => {
+    const def = CONNECTORS.find((c) => c.id === connectorId);
+    if (!def?.streams) return;
+
+    const conn = findConn(connectorId);
+    // Current enabled streams, or defaults
+    const current = conn?.enabledStreams
+      ?? def.streams.filter((s) => s.defaultEnabled).map((s) => s.id);
+
+    const updated = enabled
+      ? [...new Set([...current, streamId])]
+      : current.filter((id) => id !== streamId);
+
+    // Get current config data to preserve it
+    const configData: Record<string, unknown> = {};
+    if (def.configKey && conn) {
+      configData[def.configKey] = conn[def.configKey as keyof typeof conn];
+    }
+
+    await upsertConnector({ type: connectorId, ...configData, enabledStreams: updated });
+  }, [findConn, upsertConnector]);
 
   const handleLmLoadData = async () => {
     if (!customerId || !projectId) return;
@@ -482,6 +503,8 @@ function ConnectorsPageContent() {
             saveStatus={saveStatus[connector.id] ?? "idle"}
             onSave={() => handleGenericSave(connector.id)}
             isConnected={isConnected(connector.id)}
+            enabledStreams={findConn(connector.id)?.enabledStreams}
+            onStreamToggle={(streamId, enabled) => handleStreamToggle(connector.id, streamId, enabled)}
           />
         )}
 
@@ -500,6 +523,8 @@ function ConnectorsPageContent() {
               saveStatus={saveStatus[connector.id] ?? "idle"}
               onSave={() => handleGenericSave(connector.id)}
               isConnected={isSwConnected}
+              enabledStreams={findConn(connector.id)?.enabledStreams}
+              onStreamToggle={(streamId, enabled) => handleStreamToggle(connector.id, streamId, enabled)}
             />
 
             {/* Schema Discovery (Shopware-specific) */}

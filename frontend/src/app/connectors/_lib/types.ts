@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { SourceStreamDef } from "@/lib/types";
 import {
   GitBranch,
   Globe,
@@ -39,6 +40,8 @@ export interface ConnectorDef {
   hasSchemaDiscovery?: boolean;
   /** Setup guide steps shown in the detail view sidebar */
   setupGuide?: string[];
+  /** Source data streams this connector can provide */
+  streams?: SourceStreamDef[];
 }
 
 export interface FrameworkDef {
@@ -55,7 +58,15 @@ export interface FrameworkDef {
 // ── Connector Definitions ────────────────────────────────────────
 
 export const CONNECTORS: ConnectorDef[] = [
-  { id: "git", name: "Git Repository", category: "site", icon: GitBranch, description: "Push content to a Git repository", comingSoon: false },
+  {
+    id: "git", name: "Git Repository", category: "site", icon: GitBranch,
+    description: "Push content to a Git repository", comingSoon: false,
+    streams: [
+      { id: "files", label: "File Inventory", dataType: "reference", defaultEnabled: true },
+      { id: "articles", label: "Published Articles", dataType: "content", defaultEnabled: false },
+      { id: "commits", label: "Commit Frequency", dataType: "metrics", defaultEnabled: false },
+    ],
+  },
   {
     id: "wordpress", name: "WordPress", category: "site", icon: Globe,
     description: "Publish directly via WordPress API", comingSoon: false,
@@ -70,6 +81,12 @@ export const CONNECTORS: ConnectorDef[] = [
       'Scroll to "Application Passwords"',
       'Enter a name (e.g. "FlowBoost") and click "Add New"',
       "Copy the generated password and paste it above",
+    ],
+    streams: [
+      { id: "posts", label: "Blog Posts", dataType: "content", defaultEnabled: true },
+      { id: "pages", label: "Pages", dataType: "content", defaultEnabled: false },
+      { id: "categories", label: "Categories", dataType: "reference", defaultEnabled: true },
+      { id: "comments", label: "Comments", dataType: "mixed", defaultEnabled: false },
     ],
   },
   { id: "webflow", name: "Webflow", category: "site", icon: Aperture, description: "Publish to Webflow CMS", comingSoon: true },
@@ -87,6 +104,13 @@ export const CONNECTORS: ConnectorDef[] = [
       "Permissions: Categories (View, Edit, Create), Shopping Experiences (View), Products (View), Media (View, Create)",
       "Settings → System → Integrations → Add Integration → assign role",
       "Copy Client ID and Client Secret (shown only once)",
+    ],
+    streams: [
+      { id: "products", label: "Product Catalog", dataType: "reference", defaultEnabled: true },
+      { id: "categories", label: "Category Tree", dataType: "reference", defaultEnabled: true },
+      { id: "descriptions", label: "Product Descriptions", dataType: "content", defaultEnabled: false },
+      { id: "reviews", label: "Customer Reviews", dataType: "mixed", defaultEnabled: false },
+      { id: "sales", label: "Sales Statistics", dataType: "metrics", defaultEnabled: false },
     ],
   },
   { id: "shopify", name: "Shopify", category: "ecommerce", icon: ShoppingBag, description: "Publish to Shopify blog and pages", comingSoon: true },
@@ -106,6 +130,12 @@ export const CONNECTORS: ConnectorDef[] = [
       "Settings → Users → New User → Type: API → Role: FlowBoost",
       "Copy username + API token (token shown only once)",
       "FlowBoost creates campaign drafts only — never sends automatically",
+    ],
+    streams: [
+      { id: "lists", label: "Lists & Templates", dataType: "reference", defaultEnabled: true },
+      { id: "campaigns", label: "Campaign Content", dataType: "content", defaultEnabled: false },
+      { id: "open-rates", label: "Open / Click Rates", dataType: "metrics", defaultEnabled: false },
+      { id: "bounces", label: "Bounce / Unsubscribe Rates", dataType: "metrics", defaultEnabled: false },
     ],
   },
   { id: "mailchimp", name: "Mailchimp", category: "newsletter", icon: Radio, description: "Create campaigns via Mailchimp API", comingSoon: true },
