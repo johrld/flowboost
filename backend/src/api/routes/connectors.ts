@@ -1,14 +1,32 @@
 import type { FastifyInstance } from "fastify";
 import { createLogger } from "../../utils/logger.js";
 import { ShopwareSiteConnector } from "../../connectors/site/shopware.js";
+import { WordPressSiteConnector } from "../../connectors/site/wordpress.js";
 import { createSiteConnector } from "../../connectors/site/factory.js";
 import { ListmonkConnector } from "../../connectors/email/listmonk.js";
 import { findConnector } from "../../models/types.js";
 
 const log = createLogger("api:connectors");
 
+/** Registry of connector test functions — each returns { success, error?, ...info } */
+const CONNECTOR_TESTERS: Record<string, (config: Record<string, string>) => Promise<Record<string, unknown>>> = {
+  shopware: (config) => ShopwareSiteConnector.testConnection(config),
+  wordpress: (config) => WordPressSiteConnector.testConnection(config),
+  listmonk: async (config) => {
+    if (!config.baseUrl || !config.username || !config.password) {
+      return { success: false, error: "baseUrl, username, password are required" };
+    }
+    const connector = new ListmonkConnector({
+      baseUrl: config.baseUrl.replace(/\/+$/, ""),
+      username: config.username,
+      password: config.password,
+    });
+    return connector.testConnection();
+  },
+};
+
 export async function connectorRoutes(app: FastifyInstance) {
-  // POST /connectors/test — test connector credentials
+  // POST /connectors/test — test connector credentials (generic)
   app.post<{
     Params: { customerId: string; projectId: string };
     Body: {
@@ -18,77 +36,20 @@ export async function connectorRoutes(app: FastifyInstance) {
   }>("/test", async (request, reply) => {
     const { type, config } = request.body;
 
-    if (type === "shopware") {
-      if (!config.shopUrl || !config.clientId || !config.clientSecret) {
-        return reply.status(400).send({ success: false, error: "shopUrl, clientId, clientSecret sind erforderlich" });
-      }
-
-      try {
-        // Normalize URL (remove trailing slash)
-        const shopUrl = config.shopUrl.replace(/\/+$/, "");
-
-        // Try to get OAuth token
-        const res = await fetch(`${shopUrl}/api/oauth/token`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            grant_type: "client_credentials",
-            client_id: config.clientId,
-            client_secret: config.clientSecret,
-          }),
-        });
-
-        if (!res.ok) {
-          const body = await res.text();
-          log.warn({ status: res.status, body }, "Shopware connection test failed");
-          return reply.status(200).send({
-            success: false,
-            error: res.status === 401
-              ? "Authentifizierung fehlgeschlagen -- Client ID oder Secret falsch"
-              : `Shopware API Fehler: ${res.status}`,
-          });
-        }
-
-        // Token works, try to get shop info
-        const tokenData = await res.json() as { access_token: string };
-        let shopName: string | undefined;
-        try {
-          const infoRes = await fetch(`${shopUrl}/api/_info/config`, {
-            headers: { Authorization: `Bearer ${tokenData.access_token}`, Accept: "application/json" },
-          });
-          if (infoRes.ok) {
-            const info = await infoRes.json() as { version?: string; title?: string };
-            shopName = info.title;
-          }
-        } catch {
-          // Info endpoint optional
-        }
-
-        log.info({ shopUrl, shopName }, "Shopware connection test successful");
-        return { success: true, shopName, shopUrl };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Verbindung fehlgeschlagen";
-        log.error({ err, shopUrl: config.shopUrl }, "Shopware connection test error");
-        return reply.status(200).send({ success: false, error: message });
-      }
+    const tester = CONNECTOR_TESTERS[type];
+    if (!tester) {
+      return reply.status(400).send({ success: false, error: `Connector type "${type}" not supported` });
     }
 
-    if (type === "listmonk") {
-      if (!config.baseUrl || !config.username || !config.password) {
-        return reply.status(400).send({ success: false, error: "baseUrl, username, password are required" });
-      }
-
-      const connector = new ListmonkConnector({
-        baseUrl: (config.baseUrl as string).replace(/\/+$/, ""),
-        username: config.username as string,
-        password: config.password as string,
-      });
-
-      const result = await connector.testConnection();
+    try {
+      const result = await tester(config as Record<string, string>);
+      log.info({ type, success: result.success }, "connector test");
       return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Connection failed";
+      log.error({ err, type }, "connector test error");
+      return reply.status(200).send({ success: false, error: message });
     }
-
-    return reply.status(400).send({ success: false, error: `Connector type "${type}" not supported` });
   });
 
   // GET /connectors/schemas — discover schemas from configured connector

@@ -34,6 +34,34 @@ export class ShopwareSiteConnector implements SiteConnector {
 
   constructor(private config: ShopwareConfig) {}
 
+  static async testConnection(config: Record<string, string>): Promise<{ success: boolean; error?: string; shopName?: string; shopUrl?: string }> {
+    if (!config.shopUrl || !config.clientId || !config.clientSecret) {
+      return { success: false, error: "shopUrl, clientId, clientSecret are required" };
+    }
+    const shopUrl = config.shopUrl.replace(/\/+$/, "");
+    try {
+      const res = await fetch(`${shopUrl}/api/oauth/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grant_type: "client_credentials", client_id: config.clientId, client_secret: config.clientSecret }),
+      });
+      if (!res.ok) {
+        return { success: false, error: res.status === 401 ? "Authentication failed — check Client ID or Secret" : `Shopware API error: ${res.status}` };
+      }
+      const tokenData = await res.json() as { access_token: string };
+      let shopName: string | undefined;
+      try {
+        const infoRes = await fetch(`${shopUrl}/api/_info/config`, {
+          headers: { Authorization: `Bearer ${tokenData.access_token}`, Accept: "application/json" },
+        });
+        if (infoRes.ok) shopName = ((await infoRes.json()) as { title?: string }).title;
+      } catch { /* optional */ }
+      return { success: true, shopName, shopUrl };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Connection failed" };
+    }
+  }
+
   // ── Auth ──────────────────────────────────────────────────
 
   private async getToken(): Promise<string> {
