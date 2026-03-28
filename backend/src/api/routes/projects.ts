@@ -83,7 +83,7 @@ export async function projectRoutes(app: FastifyInstance) {
       languages: languages ?? [{ code: defaultLanguage, name: defaultLanguage, enabled: true }],
       categories: categories ?? [],
       keywords: {},
-      connector: { type: "filesystem", filesystem: { outputDir: "./output" } },
+      connectors: [],
       pipeline: {
         defaultModel: "sonnet",
         maxRetriesPerPhase: 2,

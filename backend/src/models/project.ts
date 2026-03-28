@@ -2,11 +2,22 @@ import fs from "node:fs";
 import path from "node:path";
 import { Store } from "./store.js";
 import type { Project, ContentPlan, ApiKeys } from "./types.js";
+import { migrateConnectors } from "./types.js";
 import type { CustomerStore } from "./customer.js";
 
 export class ProjectStore extends Store<Project> {
   constructor(basePath: string) {
     super(basePath, "project.json");
+  }
+
+  /** Override get() to auto-migrate V1 connector → connectors array */
+  override get(id: string): Project | null {
+    const project = super.get(id);
+    if (!project) return null;
+    if (!project.connectors || project.connectors.length === 0) {
+      project.connectors = migrateConnectors(project);
+    }
+    return project;
   }
 
   getContentPlan(projectId: string): ContentPlan | null {

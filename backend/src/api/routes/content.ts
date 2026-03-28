@@ -13,6 +13,7 @@ import type {
   MediaAsset,
   SiteContentLangMeta,
 } from "../../models/types.js";
+import { findConnector } from "../../models/types.js";
 import { MediaService } from "../../services/media.js";
 // generateImageBuffer no longer used directly — MediaService.generate handles it
 
@@ -958,8 +959,10 @@ async function updateContentIndex(
   const indexStore = new ContentIndexStore(app.ctx.dataDir);
   const project = app.ctx.projectsFor(customerId).get(projectId);
 
-  const contentPath = project?.connector.github?.contentPath
-    ?? project?.connector.git?.contentPath
+  const ghConn = project ? findConnector(project, "github") : undefined;
+  const gitConn = project ? findConnector(project, "git") : undefined;
+  const contentPath = ghConn?.github?.contentPath
+    ?? gitConn?.git?.contentPath
     ?? "src/content/posts";
 
   const langMetas: SiteContentLangMeta[] = version.languages.map((v) => ({

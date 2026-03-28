@@ -251,6 +251,23 @@ export interface ConnectorConfig {
   };
 }
 
+export type ConnectorType = ConnectorConfig["type"];
+
+export type SourceStreamDataType = "content" | "reference" | "metrics" | "mixed";
+
+export interface SourceStreamDef {
+  id: string;
+  label: string;
+  dataType: SourceStreamDataType;
+  defaultEnabled: boolean;
+}
+
+export interface ConnectorInstance extends ConnectorConfig {
+  id: string;
+  label?: string;
+  enabledStreams?: string[];
+}
+
 export interface PipelineSettings {
   defaultModel: string;
   maxRetriesPerPhase?: number;
@@ -269,7 +286,8 @@ export interface Project {
   categories: Category[];
   keywords: Record<string, string[]>;
   competitors?: Competitor[];
-  connector: ConnectorConfig;
+  connector?: ConnectorConfig;
+  connectors: ConnectorInstance[];
   pipeline: PipelineSettings;
   publishFrequency?: {
     articlesPerWeek: number;

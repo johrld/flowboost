@@ -24,6 +24,30 @@ export class WordPressSiteConnector implements SiteConnector {
 
   constructor(private config: WordPressConfig) {}
 
+  static async testConnection(config: Record<string, string>): Promise<{ success: boolean; error?: string; siteName?: string; siteUrl?: string }> {
+    if (!config.siteUrl || !config.username || !config.applicationPassword) {
+      return { success: false, error: "siteUrl, username, applicationPassword are required" };
+    }
+    const siteUrl = config.siteUrl.replace(/\/+$/, "");
+    const authHeader = `Basic ${Buffer.from(`${config.username}:${config.applicationPassword}`).toString("base64")}`;
+    try {
+      const meRes = await fetch(`${siteUrl}/wp-json/wp/v2/users/me`, {
+        headers: { Authorization: authHeader, Accept: "application/json" },
+      });
+      if (!meRes.ok) {
+        return { success: false, error: meRes.status === 401 || meRes.status === 403 ? "Authentication failed — check username and Application Password" : `WordPress API error: ${meRes.status}` };
+      }
+      let siteName: string | undefined;
+      try {
+        const rootRes = await fetch(`${siteUrl}/wp-json/`, { headers: { Accept: "application/json" } });
+        if (rootRes.ok) siteName = ((await rootRes.json()) as { name?: string }).name;
+      } catch { /* optional */ }
+      return { success: true, siteName, siteUrl };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : "Connection failed" };
+    }
+  }
+
   private get authHeader(): string {
     return `Basic ${Buffer.from(`${this.config.username}:${this.config.applicationPassword}`).toString("base64")}`;
   }

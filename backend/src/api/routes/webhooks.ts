@@ -5,6 +5,7 @@ import { ContentIndexStore } from "../../models/content-index.js";
 import { SyncService } from "../../services/sync.js";
 import { createSiteConnector } from "../../connectors/site/factory.js";
 import { parseFrontmatter } from "../../utils/frontmatter.js";
+import { findConnector } from "../../models/types.js";
 
 const log = createLogger("webhooks");
 
@@ -141,7 +142,8 @@ async function handleGitHubPush(
   for (const customer of customers) {
     const projects = app.ctx.projectsFor(customer.id).list();
     for (const project of projects) {
-      const ghConfig = project.connector?.github;
+      const ghConn = findConnector(project, "github");
+      const ghConfig = ghConn?.github;
       if (
         ghConfig &&
         ghConfig.installationId === installationId &&
@@ -194,12 +196,12 @@ async function handleGitHubDisconnect(
   for (const customer of customers) {
     const projects = app.ctx.projectsFor(customer.id).list();
     for (const project of projects) {
-      if (
-        project.connector?.type === "github" &&
-        project.connector.github?.installationId === installationId
-      ) {
+      const ghConn2 = findConnector(project, "github");
+      if (ghConn2?.github?.installationId === installationId) {
+        // Remove the GitHub connector from the array
+        const updatedConnectors = (project.connectors ?? []).filter((c) => c.id !== ghConn2.id);
         app.ctx.projectsFor(customer.id).update(project.id, {
-          connector: { type: "filesystem" },
+          connectors: updatedConnectors,
           updatedAt: new Date().toISOString(),
         } as Partial<typeof project>);
         disconnected++;

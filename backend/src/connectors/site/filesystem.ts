@@ -4,6 +4,7 @@ import { createLogger } from "../../utils/logger.js";
 import type { ContentReader } from "../../services/sync.js";
 import type { SiteConnector, WriteResult, UnpublishResult } from "./types.js";
 import type { ContentItem, LanguageVariant, Project } from "../../models/types.js";
+import { findConnector } from "../../models/types.js";
 
 const log = createLogger("connector:filesystem");
 
@@ -29,11 +30,13 @@ export class FilesystemSiteConnector implements SiteConnector {
     versionDir: string,
   ): Promise<WriteResult> {
     const filesWritten: string[] = [];
-    const contentPath = project.connector.git?.contentPath
-      ?? project.connector.github?.contentPath
+    const gitConn = findConnector(project, "git");
+    const ghConn = findConnector(project, "github");
+    const contentPath = gitConn?.git?.contentPath
+      ?? ghConn?.github?.contentPath
       ?? "src/content/posts";
-    const assetsPath = project.connector.git?.assetsPath
-      ?? project.connector.github?.assetsPath
+    const assetsPath = gitConn?.git?.assetsPath
+      ?? ghConn?.github?.assetsPath
       ?? "src/assets/posts";
 
     try {

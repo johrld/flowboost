@@ -236,7 +236,9 @@ server.tool(
         github?: { installationId: number; owner: string; repo: string; branch: string };
       };
     };
-    const gh = project.connector?.github;
+    const connectors = (project as { connectors?: Array<{ type: string; github?: { installationId: number; owner: string; repo: string; branch: string } }> }).connectors ?? [];
+    const ghConn = connectors.find((c) => c.type === "github");
+    const gh = ghConn?.github ?? project.connector?.github;
     if (!gh) {
       return { content: [{ type: "text" as const, text: JSON.stringify({ error: "No GitHub connector configured" }) }] };
     }
