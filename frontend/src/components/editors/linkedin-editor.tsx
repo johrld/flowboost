@@ -20,6 +20,9 @@ import {
   ListOrdered,
   Undo2,
   Redo2,
+  ImageIcon,
+  Upload,
+  Trash2,
 } from "lucide-react";
 import { tiptapToLinkedIn } from "@/lib/linkedin-formatter";
 
@@ -51,14 +54,55 @@ export function LinkedInEditor({
   const [hashtagInput, setHashtagInput] = useState("");
   const [copied, setCopied] = useState(false);
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const valuesRef = useRef(values);
   valuesRef.current = values;
 
   const text = (values.text as string) ?? "";
   const hashtags = (values.hashtags as string[]) ?? [];
+  const images = (values.images as string[]) ?? [];
+
+  // Drop handler for images dragged from sidebar media library
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const currentImages = (valuesRef.current.images as string[]) ?? [];
+    // Check for image URL from sidebar
+    const url = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text/uri-list");
+    if (url && (url.startsWith("http") || url.startsWith("/")) && currentImages.length < 20) {
+      if (!currentImages.includes(url)) {
+        onChange({ ...valuesRef.current, images: [...currentImages, url] });
+      }
+      return;
+    }
+    // Check for dropped files
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
+    const newUrls = files.slice(0, 20 - currentImages.length).map((f) => URL.createObjectURL(f));
+    if (newUrls.length > 0) {
+      onChange({ ...valuesRef.current, images: [...currentImages, ...newUrls] });
+    }
+  }, [onChange]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDraggingOver(false);
+  }, []);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const addImage = (url: string) => {
+    onChange({ ...valuesRef.current, images: [...images, url] });
+  };
+  const removeImage = (index: number) => {
+    onChange({ ...valuesRef.current, images: images.filter((_, i) => i !== index) });
+  };
 
   // Live preview text (Unicode-formatted, updated on every keystroke)
-  const [previewText, setPreviewText] = useState("");
+  // Initialize from text value so preview works immediately on load
+  const [previewText, setPreviewText] = useState(text);
 
   // TipTap editor
   const editor = useEditor({
@@ -82,12 +126,15 @@ export function LinkedInEditor({
     },
   });
 
-  // Sync TipTap content when values.text changes externally (e.g. loading a version)
+  // Sync TipTap content when values.text changes externally (e.g. loading a version, after save)
   const lastExternalText = useRef(text);
-  if (editor && text !== lastExternalText.current && text !== editor.getText()) {
+  if (editor && text !== lastExternalText.current) {
     lastExternalText.current = text;
-    const html = text ? `<p>${text.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>` : "<p></p>";
-    editor.commands.setContent(html);
+    if (text !== editor.getText()) {
+      const html = text ? `<p>${text.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>` : "<p></p>";
+      editor.commands.setContent(html);
+    }
+    // Always update preview when text changes
     setPreviewText(tiptapToLinkedIn(editor.getJSON()).trim());
   }
 
@@ -133,46 +180,62 @@ export function LinkedInEditor({
   const avatarUrl = authorImage ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0A66C2&color=fff&size=96`;
 
   return (
-    <div className="space-y-4">
+    <div
+      className={`space-y-4 transition-colors ${isDraggingOver ? "ring-2 ring-primary ring-dashed rounded-lg bg-primary/5" : ""}`}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+    >
       {/* ── Side-by-Side: Editor | Preview ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* LEFT: Editor */}
         <div className="space-y-4">
-          {/* Toolbar */}
-          {editor && !readOnly && (
-            <div className="flex items-center gap-0.5 border rounded-md bg-muted/30 px-2 py-1.5">
-              <ToolbarBtn active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold">
-                <Bold className="h-4 w-4" />
-              </ToolbarBtn>
-              <ToolbarBtn active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic">
-                <Italic className="h-4 w-4" />
-              </ToolbarBtn>
-              <ToolbarBtn active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()} title="Strikethrough">
-                <Strikethrough className="h-4 w-4" />
-              </ToolbarBtn>
-              <div className="w-px h-5 bg-border mx-1" />
-              <ToolbarBtn active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Bullet List">
-                <List className="h-4 w-4" />
-              </ToolbarBtn>
-              <ToolbarBtn active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Numbered List">
-                <ListOrdered className="h-4 w-4" />
-              </ToolbarBtn>
-              <div className="w-px h-5 bg-border mx-1" />
-              <ToolbarBtn active={false} onClick={() => editor.chain().focus().undo().run()} title="Undo">
-                <Undo2 className="h-4 w-4" />
-              </ToolbarBtn>
-              <ToolbarBtn active={false} onClick={() => editor.chain().focus().redo().run()} title="Redo">
-                <Redo2 className="h-4 w-4" />
-              </ToolbarBtn>
-            </div>
-          )}
+          {/* Combined Editor Box: Toolbar + Text Area */}
+          <div className="border rounded-md bg-background overflow-hidden">
+            {/* Toolbar inside the box */}
+            {editor && !readOnly && (
+              <div className="flex items-center gap-0.5 border-b bg-muted/30 px-2 py-1.5">
+                <ToolbarBtn active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold">
+                  <Bold className="h-4 w-4" />
+                </ToolbarBtn>
+                <ToolbarBtn active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic">
+                  <Italic className="h-4 w-4" />
+                </ToolbarBtn>
+                <ToolbarBtn active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()} title="Strikethrough">
+                  <Strikethrough className="h-4 w-4" />
+                </ToolbarBtn>
+                <div className="w-px h-5 bg-border mx-1" />
+                <ToolbarBtn active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Bullet List">
+                  <List className="h-4 w-4" />
+                </ToolbarBtn>
+                <ToolbarBtn active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Numbered List">
+                  <ListOrdered className="h-4 w-4" />
+                </ToolbarBtn>
+                <div className="w-px h-5 bg-border mx-1" />
+                <ToolbarBtn active={false} onClick={() => editor.chain().focus().undo().run()} title="Undo">
+                  <Undo2 className="h-4 w-4" />
+                </ToolbarBtn>
+                <ToolbarBtn active={false} onClick={() => editor.chain().focus().redo().run()} title="Redo">
+                  <Redo2 className="h-4 w-4" />
+                </ToolbarBtn>
+                {/* Copy text in toolbar */}
+                <div className="flex-1" />
+                <button
+                  onClick={copyToClipboard}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted transition-colors"
+                  title="Copy with LinkedIn formatting"
+                >
+                  {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            )}
 
-          {/* Editor Area */}
-          <div className="border rounded-md bg-background">
+            {/* Text Editor */}
             <EditorContent
               editor={editor}
-              className="prose prose-sm max-w-none px-4 py-3 min-h-[250px] max-h-[500px] overflow-y-auto focus-within:ring-1 focus-within:ring-ring rounded-md [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[230px] [&_.ProseMirror_p]:my-1.5 [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-muted-foreground [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0"
+              className="prose prose-sm max-w-none px-4 py-3 min-h-[150px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[130px] [&_.ProseMirror_p]:my-1.5"
             />
           </div>
 
@@ -181,6 +244,77 @@ export function LinkedInEditor({
             <span className={`text-xs tabular-nums ${isOverLimit ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
               {charCount.toLocaleString()}/{CHAR_LIMIT.toLocaleString()}
             </span>
+          </div>
+
+          {/* Images — Drop Zone + Mini Gallery */}
+          <div className="space-y-2">
+            {images.length > 0 ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">Post Images</p>
+                  <span className="text-xs text-muted-foreground">{images.length}/20</span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {images.map((url, i) => (
+                    <div key={i} className="relative group aspect-square rounded-md overflow-hidden border bg-muted">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      {!readOnly && (
+                        <button
+                          onClick={() => removeImage(i)}
+                          className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {/* Add more slot */}
+                  {!readOnly && images.length < 20 && (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="aspect-square rounded-md border-2 border-dashed border-muted-foreground/25 flex items-center justify-center hover:border-muted-foreground/50 hover:bg-muted/50 transition-colors"
+                    >
+                      <ImageIcon className="h-4 w-4 text-muted-foreground/50" />
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : !readOnly ? (
+              /* Empty state — dashed drop zone */
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className={`w-full rounded-lg border-2 border-dashed py-6 flex flex-col items-center gap-2 transition-colors cursor-pointer ${
+                  isDraggingOver
+                    ? "border-primary bg-primary/10"
+                    : "border-muted-foreground/25 hover:border-muted-foreground/40 hover:bg-muted/30"
+                }`}
+              >
+                <div className={`flex items-center gap-1.5 ${isDraggingOver ? "text-primary" : "text-muted-foreground/50"}`}>
+                  <Upload className="h-4 w-4" />
+                  <ImageIcon className="h-4 w-4" />
+                </div>
+                <p className={`text-xs font-medium ${isDraggingOver ? "text-primary" : "text-muted-foreground/70"}`}>
+                  {isDraggingOver ? "Drop image here" : "Add images to your post"}
+                </p>
+                <p className="text-[10px] text-muted-foreground/50">
+                  {isDraggingOver ? "" : "Upload, drag from Media library, or click to browse"}
+                </p>
+              </button>
+            ) : null}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                for (const file of files) {
+                  addImage(URL.createObjectURL(file));
+                }
+                e.target.value = "";
+              }}
+            />
           </div>
 
           {/* Hashtags */}
@@ -220,13 +354,6 @@ export function LinkedInEditor({
             )}
           </div>
 
-          {/* Bottom Buttons */}
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={copyToClipboard}>
-              {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-              {copied ? "Copied!" : "Copy text"}
-            </Button>
-          </div>
         </div>
 
         {/* RIGHT: Preview */}
@@ -317,6 +444,11 @@ export function LinkedInEditor({
               )}
             </div>
 
+            {/* Image Grid — LinkedIn layout */}
+            {images.length > 0 && (
+              <LinkedInImageGrid images={images} />
+            )}
+
             {/* Engagement */}
             <div className="flex items-center justify-between border-t border-gray-100 px-4 py-1">
               <div className="flex items-center gap-1">
@@ -343,6 +475,57 @@ export function LinkedInEditor({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** LinkedIn image grid — mimics LinkedIn's actual multi-image layout */
+function LinkedInImageGrid({ images }: { images: string[] }) {
+  const count = images.length;
+  if (count === 0) return null;
+
+  // 1 image: full width
+  if (count === 1) {
+    return (
+      <div className="border-t border-b border-gray-100">
+        <img src={images[0]} alt="" className="w-full max-h-[400px] object-cover" />
+      </div>
+    );
+  }
+
+  // 2 images: side by side
+  if (count === 2) {
+    return (
+      <div className="border-t border-b border-gray-100 grid grid-cols-2 gap-0.5">
+        {images.map((url, i) => (
+          <img key={i} src={url} alt="" className="w-full aspect-square object-cover" />
+        ))}
+      </div>
+    );
+  }
+
+  // 3+ images: large left, stacked right, "+N more" overlay
+  const showMore = count > 4;
+  const visibleRight = images.slice(1, showMore ? 4 : count);
+
+  return (
+    <div className="border-t border-b border-gray-100 grid grid-cols-3 gap-0.5" style={{ maxHeight: 400 }}>
+      {/* Large image left (2/3 width) */}
+      <div className="col-span-2 row-span-2">
+        <img src={images[0]} alt="" className="w-full h-full object-cover" style={{ maxHeight: 400 }} />
+      </div>
+      {/* Stacked images right (1/3 width) */}
+      {visibleRight.map((url, i) => (
+        <div key={i} className="relative">
+          <img src={url} alt="" className="w-full h-full object-cover" style={{ maxHeight: 200 }} />
+          {/* "+N more" overlay on last visible image */}
+          {showMore && i === visibleRight.length - 1 && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <span className="text-white text-lg font-semibold">+{count - 4}</span>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

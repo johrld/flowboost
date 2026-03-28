@@ -4,6 +4,7 @@ import { use, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { marked } from "marked";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Card,
   CardContent,
@@ -45,6 +46,7 @@ import {
   restoreContent,
   getTopics,
   getContentMedia,
+  getMedia,
   getMediaFileUrl,
   generateHeroImage,
   uploadContentMedia,
@@ -60,7 +62,7 @@ import { InstagramEditor } from "@/components/editors/instagram-editor";
 import { TikTokEditor } from "@/components/editors/tiktok-editor";
 import { NewsletterEditor } from "@/components/editors/newsletter-editor";
 import { GenericEditor } from "@/components/editors/generic-editor";
-import type { ContentItem, ContentVersion, MediaAsset, Topic } from "@/lib/types";
+import type { ContentItem, ContentItemStatus, ContentVersion, MediaAsset, Topic } from "@/lib/types";
 import { MediaPicker } from "@/components/media-picker";
 import {
   DndContext,
@@ -475,7 +477,7 @@ export default function ContentEditorPage({
       if (data.versions && data.versions.length > 0) {
         const latest = data.versions[data.versions.length - 1];
         setActiveVersionId(latest.id);
-        await loadVersionContent(latest, data);
+        await loadVersionContent(latest, data, detectedMode);
         setAuthor(data.author ?? "");
       } else {
         // No versions — use ContentItem-level metadata
@@ -492,9 +494,10 @@ export default function ContentEditorPage({
   }, [customerId, projectId, id]);
 
   // Shared helper: load a version's files into the editor
-  const loadVersionContent = useCallback(async (version: ContentVersion, data: ContentItem) => {
+  const loadVersionContent = useCallback(async (version: ContentVersion, data: ContentItem, mode?: "markdown" | "json") => {
     // For JSON content types, load JSON instead of markdown
-    if (editorMode === "json") {
+    const effectiveMode = mode ?? editorMode;
+    if (effectiveMode === "json") {
       try {
         const jsonData = await getContentJson(customerId!, projectId!, id, version.id, version.languages[0]?.lang ?? "de");
         setJsonValues(jsonData);
@@ -963,6 +966,7 @@ export default function ContentEditorPage({
                 <Eye className="h-4 w-4" />
               </Button>
             )}
+            {/* Save Button */}
             {hasChanges ? (
               <Button
                 className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -979,48 +983,33 @@ export default function ContentEditorPage({
               </Button>
             )}
 
-            {item.status === "draft" && (
-              <Button onClick={() => handleAction("submit")} disabled={!!actionLoading}>
-                {actionLoading === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                Submit for Review
-              </Button>
-            )}
-            {item.status === "review" && (
-              <>
-                <Button onClick={() => handleAction("approve")} disabled={!!actionLoading}>
-                  {actionLoading === "approve" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                  Approve
-                </Button>
-                <Button variant="outline" onClick={() => handleAction("reject")} disabled={!!actionLoading}>
-                  {actionLoading === "reject" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
-                  Reject
-                </Button>
-              </>
-            )}
-            {item.status === "delivered" && (
-              <Button className="bg-green-600 hover:bg-green-700" onClick={() => handleAction("publish")} disabled={!!actionLoading}>
-                {actionLoading === "publish" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                Publish
-              </Button>
-            )}
-            {item.status === "published" && (
-              <>
-                <Button variant="outline" onClick={() => handleAction("update")} disabled={!!actionLoading}>
-                  {actionLoading === "update" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                  Re-Publish
-                </Button>
-                <Button variant="outline" className="text-muted-foreground" onClick={() => handleAction("archive")} disabled={!!actionLoading}>
-                  {actionLoading === "archive" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Archive className="mr-2 h-4 w-4" />}
-                  Archive
-                </Button>
-              </>
-            )}
-            {item.status === "archived" && (
-              <Button onClick={() => handleAction("restore")} disabled={!!actionLoading}>
-                {actionLoading === "restore" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
-                Restore
-              </Button>
-            )}
+            {/* Smart Action Button */}
+            <SmartActionButton
+              status={item.status}
+              loading={!!actionLoading}
+              platform={item.type === "social_post" ? (item.category ?? "linkedin") : item.type === "newsletter" ? "newsletter" : undefined}
+              onStatusChange={async (newStatus) => {
+                if (!customerId || !projectId) return;
+                setActionLoading(newStatus);
+                try {
+                  await updateContent(customerId, projectId, id, { status: newStatus as ContentItemStatus });
+                  await loadItem();
+                } catch (err) {
+                  console.error("Status change failed:", err);
+                } finally {
+                  setActionLoading(null);
+                }
+              }}
+              onPublish={async () => {
+                if (!customerId || !projectId) return;
+                setActionLoading("publish");
+                try {
+                  await handleAction("approve");
+                } finally {
+                  setActionLoading(null);
+                }
+              }}
+            />
           </div>
         </div>
       }
@@ -1715,6 +1704,124 @@ export default function ContentEditorPage({
   );
 }
 
+function SmartActionButton({
+  status,
+  loading,
+  platform,
+  onStatusChange,
+  onPublish,
+}: {
+  status: string;
+  loading: boolean;
+  platform?: string;
+  onStatusChange: (status: string) => void;
+  onPublish: () => void;
+}) {
+  const platformLabel = platform
+    ? platform.charAt(0).toUpperCase() + platform.slice(1)
+    : "Platform";
+  const publishLabel = `Publish on ${platformLabel}`;
+
+  const config: Record<string, { label: string; primary: string; className: string; items: Array<{ label: string; action: string; separator?: boolean }> }> = {
+    draft: {
+      label: "Submit for Review",
+      primary: "review",
+      className: "bg-blue-600 hover:bg-blue-700 text-white",
+      items: [
+        { label: "Submit for Review", action: "review" },
+        { label: "Mark as Approved", action: "approved" },
+        { label: publishLabel, action: "published", separator: true },
+      ],
+    },
+    review: {
+      label: "Approve",
+      primary: "approved",
+      className: "bg-emerald-600 hover:bg-emerald-700 text-white",
+      items: [
+        { label: "Approve", action: "approved" },
+        { label: publishLabel, action: "published" },
+        { label: "Back to Draft", action: "draft", separator: true },
+      ],
+    },
+    approved: {
+      label: publishLabel,
+      primary: "published",
+      className: "bg-green-600 hover:bg-green-700 text-white",
+      items: [
+        { label: publishLabel, action: "published" },
+        { label: "Back to Draft", action: "draft", separator: true },
+      ],
+    },
+    published: {
+      label: "Published",
+      primary: "",
+      className: "bg-green-600/10 text-green-700 border-green-200",
+      items: [
+        { label: "Archive", action: "archived" },
+        { label: "Back to Draft", action: "draft" },
+      ],
+    },
+    archived: {
+      label: "Restore",
+      primary: "draft",
+      className: "",
+      items: [
+        { label: "Restore to Draft", action: "draft" },
+      ],
+    },
+  };
+
+  const c = config[status] ?? config.draft;
+
+  return (
+    <div className="flex items-center">
+      {/* Primary button */}
+      <Button
+        className={`rounded-r-none ${c.className}`}
+        disabled={loading || !c.primary}
+        onClick={() => {
+          if (c.primary === "published") onPublish();
+          else if (c.primary) onStatusChange(c.primary);
+        }}
+      >
+        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        {c.label}
+      </Button>
+
+      {/* Dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button className={`rounded-l-none border-l border-white/20 px-2 ${c.className}`} disabled={loading}>
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {c.items.map((item, i) => (
+            <div key={item.action}>
+              {item.separator && <DropdownMenuSeparator />}
+              <DropdownMenuItem
+                onClick={() => {
+                  if (item.action === "published") onPublish();
+                  else onStatusChange(item.action);
+                }}
+              >
+                <span className={`mr-2 h-2 w-2 rounded-full ${
+                  item.action === "draft" ? "bg-yellow-500" :
+                  item.action === "review" ? "bg-blue-500" :
+                  item.action === "approved" ? "bg-emerald-500" :
+                  item.action === "published" ? "bg-green-600" :
+                  "bg-gray-400"
+                }`} />
+                {item.label}
+              </DropdownMenuItem>
+            </div>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
 function JsonEditorSwitch({
   contentTypeId,
   contentType,
@@ -1775,6 +1882,19 @@ function SocialMediaPanel({
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
+  // Load global media library (not just content-media)
+  const [globalMedia, setGlobalMedia] = useState<import("@/lib/types").MediaAsset[]>([]);
+  useEffect(() => {
+    getMedia(customerId, projectId, { type: "image", limit: 50 }).then((res) => setGlobalMedia(res.assets)).catch(() => {});
+  }, [customerId, projectId]);
+
+  // Combine: global media + content media (deduped by id)
+  const allMedia = useMemo(() => {
+    const ids = new Set(globalMedia.map((a) => a.id));
+    const extra = mediaAssets.filter((a) => !ids.has(a.id));
+    return [...globalMedia, ...extra];
+  }, [globalMedia, mediaAssets]);
+
   const handleUpload = async (file: File) => {
     setUploading(true);
     try {
@@ -1783,6 +1903,7 @@ function SocialMediaPanel({
       onImagesChange([...images, url]);
       const { assets } = await getContentMedia(customerId, projectId, contentId);
       onMediaAssetsChange(assets);
+      getMedia(customerId, projectId, { type: "image", limit: 50 }).then((res) => setGlobalMedia(res.assets)).catch(() => {});
     } catch (err) {
       console.error("Upload failed:", err);
     } finally {
@@ -1796,41 +1917,10 @@ function SocialMediaPanel({
 
   return (
     <div className="space-y-4">
-      <h3 className="font-semibold text-sm">Post Images ({images.length}/20)</h3>
+      <h3 className="font-semibold text-sm">Media Library</h3>
+      <p className="text-xs text-muted-foreground">Click an image to add it to your post ({images.length}/20 selected)</p>
 
-      {/* Image Grid */}
-      {images.length > 0 && (
-        <div className="grid grid-cols-2 gap-2">
-          {images.map((url, i) => (
-            <div key={i} className="relative group aspect-square rounded-md overflow-hidden border bg-muted">
-              <img src={url} alt="" className="w-full h-full object-cover" />
-              <button
-                onClick={() => removeImage(i)}
-                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <span className="text-xs">×</span>
-              </button>
-              {i === 0 && (
-                <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded">
-                  Cover
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {images.length === 0 && (
-        <div className="flex items-center justify-center rounded-md border border-dashed bg-muted/50 py-8">
-          <div className="text-center">
-            <ImageIcon className="mx-auto h-6 w-6 text-muted-foreground" />
-            <p className="mt-1 text-xs text-muted-foreground">No images yet</p>
-          </div>
-        </div>
-      )}
-
-      {/* Actions */}
+      {/* Upload + Generate */}
       <div className="grid grid-cols-2 gap-2">
         <Button
           variant="outline"
@@ -1853,8 +1943,10 @@ function SocialMediaPanel({
               const asset = await generateHeroImage(customerId, projectId, contentId, "Professional social media image, modern clean style");
               const url = getMediaFileUrl(customerId, projectId, asset.id);
               onImagesChange([...images, url]);
+              // Refresh both content media and global media
               const { assets } = await getContentMedia(customerId, projectId, contentId);
               onMediaAssetsChange(assets);
+              getMedia(customerId, projectId, { type: "image", limit: 50 }).then((res) => setGlobalMedia(res.assets)).catch(() => {});
             } catch (err) {
               console.error("Generate failed:", err);
             } finally {
@@ -1883,29 +1975,40 @@ function SocialMediaPanel({
       />
 
       {/* Existing media assets */}
-      {mediaAssets.length > 0 && (
+      {allMedia.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground">Content Media ({mediaAssets.length})</p>
+          <p className="text-xs text-muted-foreground">Available ({allMedia.length})</p>
           <div className="grid grid-cols-3 gap-1.5">
-            {mediaAssets.map((asset) => (
-              <button
-                key={asset.id}
-                type="button"
-                className="aspect-square rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary transition-all"
-                onClick={() => {
-                  const url = getMediaFileUrl(customerId, projectId, asset.id);
-                  if (!images.includes(url)) {
-                    onImagesChange([...images, url]);
-                  }
-                }}
-              >
-                <img
-                  src={getMediaFileUrl(customerId, projectId, asset.id)}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-              </button>
-            ))}
+            {allMedia.map((asset) => {
+              const url = getMediaFileUrl(customerId, projectId, asset.id);
+              const isSelected = images.includes(url);
+              return (
+                <button
+                  key={asset.id}
+                  type="button"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/plain", url);
+                    e.dataTransfer.effectAllowed = "copy";
+                  }}
+                  className={`relative aspect-square rounded-md overflow-hidden border bg-muted transition-all cursor-grab active:cursor-grabbing ${isSelected ? "ring-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"}`}
+                  onClick={() => {
+                    if (isSelected) {
+                      onImagesChange(images.filter((img) => img !== url));
+                    } else {
+                      onImagesChange([...images, url]);
+                    }
+                  }}
+                >
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  {isSelected && (
+                    <div className="absolute top-1 right-1 h-5 w-5 rounded-full bg-primary text-white flex items-center justify-center">
+                      <Check className="h-3 w-3" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

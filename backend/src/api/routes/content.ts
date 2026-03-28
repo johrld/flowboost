@@ -113,11 +113,11 @@ export async function contentRoutes(app: FastifyInstance) {
     return { ...item, versions };
   });
 
-  // PUT /content/:contentId — update metadata
+  // PUT /content/:contentId — update metadata (including status)
   app.put<{
     Params: { customerId: string; projectId: string; contentId: string };
     Body: Partial<Pick<ContentItem,
-      "title" | "description" | "category" | "tags" | "keywords" | "author" | "translationKey" | "heroImageId" | "scheduledDate"
+      "title" | "description" | "category" | "tags" | "keywords" | "author" | "translationKey" | "heroImageId" | "scheduledDate" | "status"
     >>;
   }>("/:contentId", async (request, reply) => {
     const { customerId, projectId, contentId } = request.params;
@@ -127,11 +127,15 @@ export async function contentRoutes(app: FastifyInstance) {
     const item = content.get(contentId);
     if (!item) return reply.status(404).send({ error: "Content not found" });
 
-    const updated = content.update(contentId, {
-      ...body,
-      updatedAt: new Date().toISOString(),
-    });
+    // Set timestamps on status transitions
+    const updates: Partial<ContentItem> = { ...body, updatedAt: new Date().toISOString() };
+    if (body.status && body.status !== item.status) {
+      if (body.status === "approved") updates.approvedAt = new Date().toISOString();
+      if (body.status === "published") updates.publishedAt = new Date().toISOString();
+      if (body.status === "archived") updates.archivedAt = new Date().toISOString();
+    }
 
+    const updated = content.update(contentId, updates);
     return updated;
   });
 

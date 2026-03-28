@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Send, Loader2, Sparkles } from "lucide-react";
+import { marked } from "marked";
 import type { ChatMessage } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
@@ -126,7 +127,14 @@ export function ContentChat({ customerId, projectId, contentId, onApplyUpdates }
                       : "bg-muted"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap leading-relaxed">{displayText(msg.content)}</p>
+                  {msg.role === "user" ? (
+                    <p className="whitespace-pre-wrap leading-relaxed">{displayText(msg.content)}</p>
+                  ) : (
+                    <div
+                      className="prose prose-sm max-w-none leading-relaxed [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_strong]:font-semibold [&_h1]:text-sm [&_h2]:text-sm [&_h3]:text-sm [&_hr]:my-2"
+                      dangerouslySetInnerHTML={{ __html: marked.parse(displayText(msg.content)) as string }}
+                    />
+                  )}
                   {updates && onApplyUpdates && (
                     <Button
                       size="sm"
