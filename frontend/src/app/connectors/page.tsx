@@ -25,9 +25,7 @@ import {
   getConnectorSchemas,
   importConnectorSchemas,
 } from "@/lib/api";
-import type { LucideIcon } from "lucide-react";
 import {
-  Save,
   Loader2,
   Check,
   AlertCircle,
@@ -36,101 +34,13 @@ import {
   ChevronLeft,
   ChevronDown,
   Info,
-  Globe,
-  Linkedin,
-  Instagram,
-  Music2,
-  Video,
-  ShoppingBag,
-  Aperture,
-  Radio,
   Cable,
   Settings,
   Download,
 } from "lucide-react";
-
-// ── Types ────────────────────────────────────────────────────────
-
-type SaveStatus = "idle" | "saving" | "saved" | "error";
-type ConnectorCategory = "site" | "ecommerce" | "newsletter" | "social" | "media";
-type Framework = "astro" | "hugo" | "nextjs" | "custom";
-
-interface ConnectorDef {
-  id: string;
-  name: string;
-  category: ConnectorCategory;
-  icon: LucideIcon;
-  description: string;
-  comingSoon: boolean;
-}
-
-interface FrameworkDef {
-  id: Framework;
-  name: string;
-  contentPath: string;
-  assetsPath: string;
-  categoriesPath: string;
-  authorsPath: string;
-  hint: string;
-  comingSoon: boolean;
-}
-
-const FRAMEWORKS: FrameworkDef[] = [
-  { id: "astro", name: "Astro", contentPath: "src/content/posts", assetsPath: "src/assets/posts", categoriesPath: "src/data/categories.json", authorsPath: "src/data/authors.json", hint: "Requires Content Collections configured to match FlowBoost's frontmatter schema.", comingSoon: false },
-  { id: "hugo", name: "Hugo", contentPath: "content/posts", assetsPath: "static/images", categoriesPath: "", authorsPath: "", hint: "Content must use Hugo's front matter format. Archetypes should match FlowBoost output.", comingSoon: true },
-  { id: "nextjs", name: "Next.js", contentPath: "posts", assetsPath: "public/images", categoriesPath: "", authorsPath: "", hint: "MDX files with compatible frontmatter. Requires a content layer (e.g. Contentlayer, Velite).", comingSoon: true },
-  { id: "custom", name: "Custom", contentPath: "", assetsPath: "", categoriesPath: "", authorsPath: "", hint: "Manually configure paths and ensure your project can process FlowBoost's markdown output.", comingSoon: true },
-];
-
-const CONNECTORS: ConnectorDef[] = [
-  { id: "git", name: "Git Repository", category: "site", icon: GitBranch, description: "Push content to a Git repository", comingSoon: false },
-  { id: "wordpress", name: "WordPress", category: "site", icon: Globe, description: "Publish directly via WordPress API", comingSoon: true },
-  { id: "webflow", name: "Webflow", category: "site", icon: Aperture, description: "Publish to Webflow CMS", comingSoon: true },
-  { id: "shopware", name: "Shopware 6", category: "ecommerce", icon: ShoppingBag, description: "Read Shopping Experiences, write CMS slots", comingSoon: false },
-  { id: "shopify", name: "Shopify", category: "ecommerce", icon: ShoppingBag, description: "Publish to Shopify blog and pages", comingSoon: true },
-  { id: "woocommerce", name: "WooCommerce", category: "ecommerce", icon: ShoppingBag, description: "Publish via WooCommerce REST API", comingSoon: true },
-  { id: "listmonk", name: "Listmonk", category: "newsletter", icon: Radio, description: "Create newsletter drafts via Listmonk API", comingSoon: false },
-  { id: "mailchimp", name: "Mailchimp", category: "newsletter", icon: Radio, description: "Create campaigns via Mailchimp API", comingSoon: true },
-  { id: "linkedin", name: "LinkedIn", category: "social", icon: Linkedin, description: "Post to LinkedIn", comingSoon: true },
-  { id: "instagram", name: "Instagram", category: "social", icon: Instagram, description: "Post to Instagram", comingSoon: true },
-  { id: "tiktok", name: "TikTok", category: "social", icon: Music2, description: "Post to TikTok", comingSoon: true },
-  { id: "x", name: "X (Twitter)", category: "social", icon: Radio, description: "Post to X", comingSoon: true },
-  { id: "youtube", name: "YouTube", category: "media", icon: Video, description: "Upload to YouTube", comingSoon: true },
-  { id: "spotify", name: "Spotify", category: "media", icon: Music2, description: "Publish to Spotify", comingSoon: true },
-];
-
-const CATEGORY_LABELS: Record<ConnectorCategory, { title: string; description: string }> = {
-  site: { title: "Site Delivery", description: "Publish articles, guides, and landing pages" },
-  ecommerce: { title: "E-Commerce", description: "Connect shop platforms for content and product data" },
-  newsletter: { title: "Newsletter", description: "Create and send email campaigns" },
-  social: { title: "Social Channels", description: "Distribute social media posts" },
-  media: { title: "Media Platforms", description: "Upload video and audio content" },
-};
-
-// ── Helpers ──────────────────────────────────────────────────────
-
-function SaveButton({ status, onClick }: { status: SaveStatus; onClick: () => void }) {
-  return (
-    <Button onClick={onClick} disabled={status === "saving"}>
-      {status === "saving" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-      {status === "saved" && <Check className="mr-2 h-4 w-4" />}
-      {status === "error" && <AlertCircle className="mr-2 h-4 w-4" />}
-      {status === "idle" && <Save className="mr-2 h-4 w-4" />}
-      {status === "saving" ? "Saving..." : status === "saved" ? "Saved" : status === "error" ? "Error — Retry" : "Save"}
-    </Button>
-  );
-}
-
-async function withSave(setStatus: (s: SaveStatus) => void, fn: () => Promise<void>) {
-  setStatus("saving");
-  try {
-    await fn();
-    setStatus("saved");
-    setTimeout(() => setStatus("idle"), 2000);
-  } catch {
-    setStatus("error");
-  }
-}
+import { CONNECTORS, FRAMEWORKS, CATEGORY_LABELS } from "./_lib/types";
+import type { SaveStatus, Framework, ConnectorCategory } from "./_lib/types";
+import { GenericConnectorConfig, SaveButton, withSave } from "./_components/generic-connector-config";
 
 // ── Main Page Content ────────────────────────────────────────────
 
@@ -157,31 +67,23 @@ function ConnectorsPageContent() {
   const [detailView, setDetailView] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
 
-  // Shopware connector state
-  const [swShopUrl, setSwShopUrl] = useState("");
-  const [swClientId, setSwClientId] = useState("");
-  const [swClientSecret, setSwClientSecret] = useState("");
-  const [swAsSource, setSwAsSource] = useState(false);
-  const [swTestStatus, setSwTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
-  const [swTestError, setSwTestError] = useState("");
-  const [swTestShopName, setSwTestShopName] = useState("");
-  const [swSaveStatus, setSwSaveStatus] = useState<SaveStatus>("idle");
-  const [swSchemas, setSwSchemas] = useState<Array<{ id: string; label: string; description: string; slots: unknown[] }>>([]);
-  const [swSchemasLoading, setSwSchemasLoading] = useState(false);
-  const [swSelectedSchemas, setSwSelectedSchemas] = useState<Set<string>>(new Set());
-  const [swImporting, setSwImporting] = useState(false);
-  const [swExpandedSchema, setSwExpandedSchema] = useState<string | null>(null);
-  // Map: connectorRef (schema.id) → content type ID (slug) for delete
-  const [swSchemaToTypeId, setSwSchemaToTypeId] = useState<Record<string, string>>({});
+  // Generic connector config state — keyed by connector type
+  const [configValues, setConfigValues] = useState<Record<string, Record<string, string>>>({});
+  const [testStatus, setTestStatus] = useState<Record<string, "idle" | "testing" | "success" | "error">>({});
+  const [testError, setTestError] = useState<Record<string, string>>({});
+  const [testInfo, setTestInfo] = useState<Record<string, string>>({});
+  const [saveStatus, setSaveStatus] = useState<Record<string, SaveStatus>>({});
+
+  // Schema discovery state (shared for all connectors with hasSchemaDiscovery)
+  const [schemas, setSchemas] = useState<Array<{ id: string; label: string; description: string; slots: unknown[] }>>([]);
+  const [schemasLoading, setSchemasLoading] = useState(false);
+  const [selectedSchemas, setSelectedSchemas] = useState<Set<string>>(new Set());
+  const [importing, setImporting] = useState(false);
+  const [expandedSchema, setExpandedSchema] = useState<string | null>(null);
+  const [schemaToTypeId, setSchemaToTypeId] = useState<Record<string, string>>({});
 
   // Listmonk connector state
-  const [lmBaseUrl, setLmBaseUrl] = useState("");
-  const [lmUsername, setLmUsername] = useState("");
-  const [lmPassword, setLmPassword] = useState("");
-  const [lmTestStatus, setLmTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
-  const [lmTestError, setLmTestError] = useState("");
-  const [lmListCount, setLmListCount] = useState(0);
-  const [lmSaveStatus, setLmSaveStatus] = useState<SaveStatus>("idle");
+  // Listmonk-specific data (templates + lists — not generic config)
   const [lmTemplates, setLmTemplates] = useState<Array<{ id: number; name: string; isDefault: boolean }>>([]);
   const [lmLists, setLmLists] = useState<Array<{ id: number; name: string; type: string; subscriberCount: number }>>([]);
   const [lmDataLoading, setLmDataLoading] = useState(false);
@@ -239,9 +141,11 @@ function ConnectorsPageContent() {
     await refreshProjects();
   }, [customerId, projectId, project, refreshProjects]);
 
-  // Populate state from project data
+  // Populate state from project data — generic for all connectors + GitHub special case
   useEffect(() => {
     if (!project || initialized) return;
+
+    // Load GitHub connector (special — has its own state)
     const ghConn = findConn("github");
     if (ghConn?.github) {
       setConnectorType("github");
@@ -255,18 +159,22 @@ function ConnectorsPageContent() {
       setGhCategoriesPath(ghConn.github.categoriesPath ?? "src/data/categories.json");
       setGhAuthorsPath(ghConn.github.authorsPath ?? "src/data/authors.json");
     }
-    const lmConn = findConn("listmonk");
-    if (lmConn?.listmonk) {
-      setLmBaseUrl(lmConn.listmonk.baseUrl ?? "");
-      setLmUsername(lmConn.listmonk.username ?? "");
-      setLmPassword(lmConn.listmonk.password ?? "");
+
+    // Load all standard connectors generically
+    const loadedConfigs: Record<string, Record<string, string>> = {};
+    for (const def of CONNECTORS) {
+      if (!def.configKey || !def.fields) continue;
+      const conn = findConn(def.id);
+      const configData = conn?.[def.configKey as keyof typeof conn] as Record<string, string> | undefined;
+      if (configData) {
+        const values: Record<string, string> = {};
+        for (const field of def.fields) {
+          values[field.key] = (configData[field.key] as string) ?? "";
+        }
+        loadedConfigs[def.id] = values;
+      }
     }
-    const swConn = findConn("shopware");
-    if (swConn?.shopware) {
-      setSwShopUrl(swConn.shopware.shopUrl ?? "");
-      setSwClientId(swConn.shopware.clientId ?? "");
-      setSwClientSecret(swConn.shopware.clientSecret ?? "");
-    }
+    setConfigValues(loadedConfigs);
     setInitialized(true);
   }, [project, initialized, findConn]);
 
@@ -353,43 +261,78 @@ function ConnectorsPageContent() {
     }
   };
 
-  // Connection status derived purely from project data (no local state dependency)
+  // Connection status derived purely from project data
   const isGitConnected = !!findConn("github")?.github?.installationId;
-  const isSwConnected = !!findConn("shopware")?.shopware?.shopUrl;
-  const isLmConnected = !!findConn("listmonk")?.listmonk?.baseUrl;
+  const isConnected = useCallback((connectorId: string) => {
+    if (connectorId === "git") return isGitConnected;
+    const def = CONNECTORS.find((c) => c.id === connectorId);
+    if (!def?.configKey) return false;
+    const conn = findConn(connectorId);
+    return !!conn?.[def.configKey as keyof typeof conn];
+  }, [findConn, isGitConnected]);
 
-  const handleLmTest = async () => {
-    if (!lmBaseUrl || !lmUsername || !lmPassword) return;
-    setLmTestStatus("testing");
-    setLmTestError("");
+  // Backward compat aliases
+  const isSwConnected = isConnected("shopware");
+  const isLmConnected = isConnected("listmonk");
+
+  // Generic test handler for any connector with fields
+  const handleGenericTest = useCallback(async (connectorId: string) => {
+    const def = CONNECTORS.find((c) => c.id === connectorId);
+    if (!def?.fields || !def.configKey) return;
+    const values = configValues[connectorId] ?? {};
+    const allFilled = def.fields.every((f) => !!values[f.key]);
+    if (!allFilled) return;
+
+    setTestStatus((prev) => ({ ...prev, [connectorId]: "testing" }));
+    setTestError((prev) => ({ ...prev, [connectorId]: "" }));
     try {
-      const result = await testConnector(customerId, projectId, {
-        type: "listmonk",
-        config: { baseUrl: lmBaseUrl.replace(/\/+$/, ""), username: lmUsername, password: lmPassword },
-      });
+      const config: Record<string, string> = {};
+      for (const field of def.fields) {
+        let val = values[field.key] ?? "";
+        if (field.type === "url") val = val.replace(/\/+$/, "");
+        config[field.key] = val;
+      }
+      const result = await testConnector(customerId, projectId, { type: connectorId, config });
       if (result.success) {
-        setLmTestStatus("success");
-        setLmListCount((result as { listCount?: number }).listCount ?? 0);
+        setTestStatus((prev) => ({ ...prev, [connectorId]: "success" }));
+        const infoStr = (result as Record<string, unknown>).shopName
+          ?? (result as Record<string, unknown>).siteName
+          ?? (result as Record<string, unknown>).listCount
+          ?? "";
+        setTestInfo((prev) => ({ ...prev, [connectorId]: String(infoStr) }));
       } else {
-        setLmTestStatus("error");
-        setLmTestError(result.error ?? "Unknown error");
+        setTestStatus((prev) => ({ ...prev, [connectorId]: "error" }));
+        setTestError((prev) => ({ ...prev, [connectorId]: result.error ?? "Unknown error" }));
       }
     } catch (err) {
-      setLmTestStatus("error");
-      setLmTestError(err instanceof Error ? err.message : "Connection failed");
+      setTestStatus((prev) => ({ ...prev, [connectorId]: "error" }));
+      setTestError((prev) => ({ ...prev, [connectorId]: err instanceof Error ? err.message : "Connection failed" }));
     }
-  };
+  }, [configValues, customerId, projectId]);
 
-  const handleLmSave = () => withSave(setLmSaveStatus, async () => {
-    await upsertConnector({
-      type: "listmonk",
-      listmonk: {
-        baseUrl: lmBaseUrl.replace(/\/+$/, ""),
-        username: lmUsername,
-        password: lmPassword,
-      },
-    });
-  });
+  // Generic save handler for any connector with fields
+  const handleGenericSave = useCallback(async (connectorId: string) => {
+    const def = CONNECTORS.find((c) => c.id === connectorId);
+    if (!def?.fields || !def.configKey) return;
+    const values = configValues[connectorId] ?? {};
+
+    setSaveStatus((prev) => ({ ...prev, [connectorId]: "saving" as SaveStatus }));
+    try {
+      const configData: Record<string, string> = {};
+      for (const field of def.fields) {
+        let val = values[field.key] ?? "";
+        if (field.type === "url") val = val.replace(/\/+$/, "");
+        configData[field.key] = val;
+      }
+      await upsertConnector({ type: connectorId, [def.configKey]: configData });
+      setSaveStatus((prev) => ({ ...prev, [connectorId]: "saved" as SaveStatus }));
+      setTimeout(() => setSaveStatus((prev) => ({ ...prev, [connectorId]: "idle" as SaveStatus })), 2000);
+    } catch {
+      setSaveStatus((prev) => ({ ...prev, [connectorId]: "error" as SaveStatus }));
+    }
+  }, [configValues, upsertConnector]);
+
+  // Old per-connector handlers replaced by handleGenericTest / handleGenericSave
 
   const handleLmLoadData = async () => {
     if (!customerId || !projectId) return;
@@ -417,66 +360,32 @@ function ConnectorsPageContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailView, isLmConnected]);
 
-  // Auto-load schemas when entering Shopware detail view
+  // Auto-load schemas when entering a detail view with schema discovery
   useEffect(() => {
-    if (detailView === "shopware" && isSwConnected && swSchemas.length === 0 && !swSchemasLoading && customerId && projectId) {
-      handleSwLoadSchemas();
+    const def = CONNECTORS.find((c) => c.id === detailView);
+    if (def?.hasSchemaDiscovery && isConnected(def.id) && schemas.length === 0 && !schemasLoading && customerId && projectId) {
+      handleLoadSchemas();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailView, isSwConnected]);
+  }, [detailView]);
 
   const getConnectorStatus = (id: string): "connected" | "not_connected" | "coming_soon" => {
-    if (id === "git" && isGitConnected) return "connected";
-    if (id === "shopware" && isSwConnected) return "connected";
-    if (id === "listmonk" && isLmConnected) return "connected";
+    if (isConnected(id)) return "connected";
     const def = CONNECTORS.find((c) => c.id === id);
     if (def?.comingSoon) return "coming_soon";
     return "not_connected";
   };
 
-  const handleSwTest = async () => {
-    if (!swShopUrl || !swClientId || !swClientSecret) return;
-    setSwTestStatus("testing");
-    setSwTestError("");
-    try {
-      const result = await testConnector(customerId, projectId, {
-        type: "shopware",
-        config: { shopUrl: swShopUrl.replace(/\/+$/, ""), clientId: swClientId, clientSecret: swClientSecret },
-      });
-      if (result.success) {
-        setSwTestStatus("success");
-        setSwTestShopName(result.shopName ?? "");
-      } else {
-        setSwTestStatus("error");
-        setSwTestError(result.error ?? "Unbekannter Fehler");
-      }
-    } catch (err) {
-      setSwTestStatus("error");
-      setSwTestError(err instanceof Error ? err.message : "Verbindung fehlgeschlagen");
-    }
-  };
-
-  const handleSwSave = () => withSave(setSwSaveStatus, async () => {
-    await upsertConnector({
-      type: "shopware",
-      shopware: {
-        shopUrl: swShopUrl.replace(/\/+$/, ""),
-        clientId: swClientId,
-        clientSecret: swClientSecret,
-      },
-    });
-  });
-
-  const handleSwLoadSchemas = async () => {
+  // Schema discovery handlers (generic, used by any connector with hasSchemaDiscovery)
+  const handleLoadSchemas = async () => {
     if (!customerId || !projectId) return;
-    setSwSchemasLoading(true);
+    setSchemasLoading(true);
     try {
       const [schemasResult, typesResult] = await Promise.all([
         getConnectorSchemas(customerId, projectId),
         import("@/lib/api").then((m) => m.getContentTypes(customerId, projectId)),
       ]);
-      setSwSchemas(schemasResult.schemas);
-      // Mark schemas that are already imported as content types
+      setSchemas(schemasResult.schemas);
       const types = typesResult as Array<{ id: string; connectorRef?: string }>;
       const importedIds = new Set<string>();
       const refToId: Record<string, string> = {};
@@ -486,27 +395,27 @@ function ConnectorsPageContent() {
           refToId[t.connectorRef] = t.id;
         }
       }
-      setSwSelectedSchemas(importedIds);
-      setSwSchemaToTypeId(refToId);
+      setSelectedSchemas(importedIds);
+      setSchemaToTypeId(refToId);
     } catch (err) {
       console.error("Schema discovery failed:", err);
     } finally {
-      setSwSchemasLoading(false);
+      setSchemasLoading(false);
     }
   };
 
-  const handleSwImportSchemas = async () => {
-    if (!customerId || !projectId || swSelectedSchemas.size === 0) return;
-    setSwImporting(true);
+  const handleImportSchemas = async () => {
+    if (!customerId || !projectId || selectedSchemas.size === 0) return;
+    setImporting(true);
     try {
-      const result = await importConnectorSchemas(customerId, projectId, Array.from(swSelectedSchemas));
-      alert(`${result.types?.length ?? 0} Content Types importiert`);
-      setSwSchemas([]);
+      const result = await importConnectorSchemas(customerId, projectId, Array.from(selectedSchemas));
+      alert(`${result.types?.length ?? 0} Content Types imported`);
+      setSchemas([]);
     } catch (err) {
       console.error("Schema import failed:", err);
-      alert("Import fehlgeschlagen");
+      alert("Import failed");
     } finally {
-      setSwImporting(false);
+      setImporting(false);
     }
   };
 
@@ -560,236 +469,41 @@ function ConnectorsPageContent() {
           )}
         </div>
 
-        {/* Listmonk Configuration */}
-        {connector.id === "listmonk" && (
-          <div className="flex gap-8">
-            <div className="flex-1 max-w-lg space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold">Connection</h2>
-                <p className="text-sm text-muted-foreground">Listmonk API credentials</p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Listmonk URL</Label>
-                  <Input value={lmBaseUrl} onChange={(e) => setLmBaseUrl(e.target.value)} placeholder="https://newsletter.example.com" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Username</Label>
-                  <Input value={lmUsername} onChange={(e) => setLmUsername(e.target.value)} placeholder="API username" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Password / API Token</Label>
-                  <Input type="password" value={lmPassword} onChange={(e) => setLmPassword(e.target.value)} placeholder="API token or password" />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Button variant="outline" onClick={handleLmTest} disabled={lmTestStatus === "testing" || !lmBaseUrl || !lmUsername || !lmPassword}>
-                  {lmTestStatus === "testing" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {lmTestStatus === "success" && <Check className="mr-2 h-4 w-4 text-green-600" />}
-                  {lmTestStatus === "error" && <AlertCircle className="mr-2 h-4 w-4 text-destructive" />}
-                  Test Connection
-                </Button>
-                <SaveButton status={lmSaveStatus} onClick={handleLmSave} />
-              </div>
-
-              {lmTestStatus === "success" && (
-                <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950">
-                  <Check className="h-4 w-4 text-green-600 shrink-0" />
-                  <p className="text-sm text-green-800 dark:text-green-300">
-                    Connected — {lmListCount} list{lmListCount !== 1 ? "s" : ""} found
-                  </p>
-                </div>
-              )}
-
-              {lmTestStatus === "error" && (
-                <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
-                  <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
-                  <p className="text-sm text-red-800 dark:text-red-300">{lmTestError}</p>
-                </div>
-              )}
-
-              {/* Templates + Lists */}
-              {isLmConnected && (
-                <div className="border-t pt-6 space-y-4">
-                  {lmDataLoading ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Loading templates and lists...
-                    </div>
-                  ) : (
-                    <>
-                      {lmTemplates.length > 0 && (
-                        <div>
-                          <h3 className="text-sm font-semibold mb-2">Templates</h3>
-                          <div className="rounded-lg border divide-y">
-                            {lmTemplates.map((t) => (
-                              <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                                <span className="flex-1">{t.name}</span>
-                                {t.isDefault && <Badge variant="secondary" className="text-[10px]">Default</Badge>}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {lmLists.length > 0 && (
-                        <div>
-                          <h3 className="text-sm font-semibold mb-2">Subscriber Lists</h3>
-                          <div className="rounded-lg border divide-y">
-                            {lmLists.map((l) => (
-                              <div key={l.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                                <span className="flex-1">{l.name}</span>
-                                <Badge variant="outline" className="text-[10px]">{l.type}</Badge>
-                                <span className="text-xs text-muted-foreground">{l.subscriberCount.toLocaleString()} subscribers</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <button type="button" onClick={handleLmLoadData} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                        Refresh
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Right: Setup Guide */}
-            <div className="w-80 shrink-0">
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950 sticky top-8">
-                <div className="flex gap-2 mb-3">
-                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Listmonk Setup</p>
-                </div>
-                <div className="text-xs text-blue-800 dark:text-blue-300 space-y-3">
-                  <div>
-                    <p className="font-medium">1. Create Role</p>
-                    <p className="opacity-80 mt-0.5">Settings &rarr; User Roles &rarr; New &rarr; Name: &quot;FlowBoost&quot;</p>
-                    <ul className="list-disc ml-4 mt-1 space-y-0.5 opacity-90">
-                      <li>Lists: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">lists:get_all</code></li>
-                      <li>Campaigns: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">campaigns:get</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">campaigns:manage</code></li>
-                      <li>Templates: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">templates:get</code></li>
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="font-medium">2. Create API User</p>
-                    <p className="opacity-80 mt-0.5">Settings &rarr; Users &rarr; New User &rarr; Type: API &rarr; Role: FlowBoost</p>
-                  </div>
-                  <div>
-                    <p className="font-medium">3. Copy Credentials</p>
-                    <p className="opacity-80 mt-0.5">Username + API token. Token is shown only once.</p>
-                  </div>
-                  <p className="opacity-70 border-t border-blue-200 dark:border-blue-800 pt-2 mt-2">FlowBoost creates campaign drafts only — never sends automatically.</p>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Generic Connector Configuration (for connectors with fields) */}
+        {connector.fields && connector.id !== "shopware" && (
+          <GenericConnectorConfig
+            connector={connector}
+            values={configValues[connector.id] ?? {}}
+            onValueChange={(key, val) => setConfigValues((prev) => ({ ...prev, [connector.id]: { ...prev[connector.id], [key]: val } }))}
+            testStatus={testStatus[connector.id] ?? "idle"}
+            testError={testError[connector.id] ?? ""}
+            testInfo={testInfo[connector.id] ?? ""}
+            onTest={() => handleGenericTest(connector.id)}
+            saveStatus={saveStatus[connector.id] ?? "idle"}
+            onSave={() => handleGenericSave(connector.id)}
+            isConnected={isConnected(connector.id)}
+          />
         )}
 
         {/* Shopware Configuration */}
+        {/* Shopware: generic config + connector-specific extras */}
         {connector.id === "shopware" && (
-          <div className="flex gap-8">
-            {/* Left: Form */}
-            <div className="flex-1 max-w-lg space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold">Connection</h2>
-                <p className="text-sm text-muted-foreground">Shopware 6 Admin API credentials</p>
-              </div>
+          <div className="space-y-6">
+            <GenericConnectorConfig
+              connector={connector}
+              values={configValues[connector.id] ?? {}}
+              onValueChange={(key, val) => setConfigValues((prev) => ({ ...prev, [connector.id]: { ...prev[connector.id], [key]: val } }))}
+              testStatus={testStatus[connector.id] ?? "idle"}
+              testError={testError[connector.id] ?? ""}
+              testInfo={testInfo[connector.id] ?? ""}
+              onTest={() => handleGenericTest(connector.id)}
+              saveStatus={saveStatus[connector.id] ?? "idle"}
+              onSave={() => handleGenericSave(connector.id)}
+              isConnected={isSwConnected}
+            />
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Shop URL</Label>
-                  <Input
-                    value={swShopUrl}
-                    onChange={(e) => setSwShopUrl(e.target.value)}
-                    placeholder="https://my-shop.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Client ID</Label>
-                  <Input
-                    value={swClientId}
-                    onChange={(e) => setSwClientId(e.target.value)}
-                    placeholder="Integration Client ID"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Client Secret</Label>
-                  <Input
-                    type="password"
-                    value={swClientSecret}
-                    onChange={(e) => setSwClientSecret(e.target.value)}
-                    placeholder="Integration Client Secret"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  onClick={handleSwTest}
-                  disabled={swTestStatus === "testing" || !swShopUrl || !swClientId || !swClientSecret}
-                >
-                  {swTestStatus === "testing" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {swTestStatus === "success" && <Check className="mr-2 h-4 w-4 text-green-600" />}
-                  {swTestStatus === "error" && <AlertCircle className="mr-2 h-4 w-4 text-destructive" />}
-                  Test Connection
-                </Button>
-                <SaveButton status={swSaveStatus} onClick={handleSwSave} />
-              </div>
-
-              {swTestStatus === "success" && (
-                <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950">
-                  <Check className="h-4 w-4 text-green-600 shrink-0" />
-                  <p className="text-sm text-green-800 dark:text-green-300">
-                    Connected{swTestShopName ? ` — ${swTestShopName}` : ""}
-                  </p>
-                </div>
-              )}
-
-              {swTestStatus === "error" && (
-                <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
-                  <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
-                  <p className="text-sm text-red-800 dark:text-red-300">{swTestError}</p>
-                </div>
-              )}
-
-              {/* Use as Source */}
-              {isSwConnected && (
-                <div className="border-t pt-6">
-                  <label className="flex items-center justify-between gap-4 rounded-lg border p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-                    <div>
-                      <p className="text-sm font-medium">Use as Source</p>
-                      <p className="text-xs text-muted-foreground">
-                        Make Shopware content (products, categories) available as input sources in Flows
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={swAsSource}
-                      onChange={async (e) => {
-                        setSwAsSource(e.target.checked);
-                        await upsertConnector({
-                          type: "shopware",
-                          useAsSource: e.target.checked,
-                          shopware: {
-                            shopUrl: swShopUrl.replace(/\/+$/, ""),
-                            clientId: swClientId,
-                            clientSecret: swClientSecret,
-                          },
-                        });
-                      }}
-                      className="h-4 w-4 rounded border-gray-300"
-                    />
-                  </label>
-                </div>
-              )}
-
-              {/* Schema Discovery */}
-              {isSwConnected && (
+            {/* Schema Discovery (Shopware-specific) */}
+            {isSwConnected && (
                 <div className="border-t pt-6 space-y-4">
                   <div>
                     <h2 className="text-lg font-semibold">CMS Layouts</h2>
@@ -798,23 +512,23 @@ function ConnectorsPageContent() {
                     </p>
                   </div>
 
-                  {swSchemasLoading ? (
+                  {schemasLoading ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" /> Loading layouts...
                     </div>
-                  ) : swSchemas.length > 0 ? (
+                  ) : schemas.length > 0 ? (
                     <div className="space-y-3">
                       <div className="rounded-lg border divide-y max-h-[400px] overflow-y-auto">
-                        {swSchemas.map((schema) => {
+                        {schemas.map((schema) => {
                           const slots = schema.slots as Array<{ id: string; label: string; type: string }>;
-                          const isExpanded = swExpandedSchema === schema.id;
-                          const isImported = swSelectedSchemas.has(schema.id);
+                          const isExpanded = expandedSchema === schema.id;
+                          const isImported = selectedSchemas.has(schema.id);
                           return (
                             <div key={schema.id}>
                               <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-muted/50">
                                 <button
                                   type="button"
-                                  onClick={() => setSwExpandedSchema(isExpanded ? null : schema.id)}
+                                  onClick={() => setExpandedSchema(isExpanded ? null : schema.id)}
                                   className="flex-1 flex items-center gap-2 min-w-0 text-left"
                                 >
                                   <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${isExpanded ? "rotate-180" : "-rotate-90"}`} />
@@ -830,17 +544,17 @@ function ConnectorsPageContent() {
                                     className="h-7 text-xs text-destructive hover:text-destructive shrink-0"
                                     onClick={async () => {
                                       if (!customerId || !projectId) return;
-                                      const typeId = swSchemaToTypeId[schema.id];
+                                      const typeId = schemaToTypeId[schema.id];
                                       if (!typeId) return;
                                       try {
                                         const { deleteContentType } = await import("@/lib/api");
                                         await deleteContentType(customerId, projectId, typeId);
-                                        const next = new Set(swSelectedSchemas);
+                                        const next = new Set(selectedSchemas);
                                         next.delete(schema.id);
-                                        setSwSelectedSchemas(next);
-                                        const nextMap = { ...swSchemaToTypeId };
+                                        setSelectedSchemas(next);
+                                        const nextMap = { ...schemaToTypeId };
                                         delete nextMap[schema.id];
-                                        setSwSchemaToTypeId(nextMap);
+                                        setSchemaToTypeId(nextMap);
                                       } catch { /* ignore */ }
                                     }}
                                   >
@@ -855,12 +569,12 @@ function ConnectorsPageContent() {
                                       if (!customerId || !projectId) return;
                                       try {
                                         const result = await importConnectorSchemas(customerId, projectId, [schema.id]);
-                                        const next = new Set(swSelectedSchemas);
+                                        const next = new Set(selectedSchemas);
                                         next.add(schema.id);
-                                        setSwSelectedSchemas(next);
+                                        setSelectedSchemas(next);
                                         // Track the created type ID for later removal
                                         if (result.types?.[0]) {
-                                          setSwSchemaToTypeId((prev) => ({
+                                          setSchemaToTypeId((prev) => ({
                                             ...prev,
                                             [schema.id]: (result.types[0] as { id: string }).id,
                                           }));
@@ -891,9 +605,9 @@ function ConnectorsPageContent() {
                         })}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{swSelectedSchemas.size} imported</span>
+                        <span>{selectedSchemas.size} imported</span>
                         <span>&middot;</span>
-                        <button type="button" onClick={handleSwLoadSchemas} className="hover:text-foreground transition-colors">
+                        <button type="button" onClick={handleLoadSchemas} className="hover:text-foreground transition-colors">
                           Refresh
                         </button>
                       </div>
@@ -901,7 +615,7 @@ function ConnectorsPageContent() {
                   ) : (
                     <Button
                       variant="outline"
-                      onClick={handleSwLoadSchemas}
+                      onClick={handleLoadSchemas}
                     >
                       <Download className="mr-2 h-4 w-4" />
                       Load Schemas
@@ -909,37 +623,6 @@ function ConnectorsPageContent() {
                   )}
                 </div>
               )}
-            </div>
-
-            {/* Right: Setup Guide */}
-            <div className="w-80 shrink-0">
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950 sticky top-8">
-                <div className="flex gap-2 mb-3">
-                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Shopware Setup</p>
-                </div>
-                <div className="text-xs text-blue-800 dark:text-blue-300 space-y-3">
-                  <div>
-                    <p className="font-medium">1. Create Role</p>
-                    <p className="opacity-80 mt-0.5">Settings &rarr; System &rarr; Users & Permissions &rarr; Roles &rarr; New Role &quot;FlowBoost&quot;</p>
-                  </div>
-                  <div>
-                    <p className="font-medium">Permissions:</p>
-                    <ul className="list-disc ml-4 mt-1 space-y-0.5 opacity-90">
-                      <li>Catalogues &rarr; Categories: View, Edit, Create</li>
-                      <li>Content &rarr; Shopping Experiences: View</li>
-                      <li>Catalogues &rarr; Products: View</li>
-                      <li>Content &rarr; Media: View, Create</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="font-medium">2. Create Integration</p>
-                    <p className="opacity-80 mt-0.5">Settings &rarr; System &rarr; Integrations &rarr; Add Integration &rarr; Assign role &quot;FlowBoost&quot;</p>
-                  </div>
-                  <p className="opacity-70 border-t border-blue-200 dark:border-blue-800 pt-2 mt-2">Client Secret is shown only once. No admin access required.</p>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1166,7 +849,7 @@ function ConnectorsPageContent() {
                             >
                               Connect
                             </Button>
-                          ) : (connector.id === "shopware" || connector.id === "listmonk") && status === "not_connected" ? (
+                          ) : connector.fields && status === "not_connected" ? (
                             <Button
                               variant="outline"
                               size="sm"
