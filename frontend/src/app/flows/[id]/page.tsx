@@ -649,6 +649,25 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
           {/* ── Content Tab ───────────────────────── */}
           {bottomTab === "content" && (
             <div>
+              {/* Briefing */}
+              <div className="mb-4">
+                <textarea
+                  value={topic?.briefing ?? ""}
+                  onChange={(e) => {
+                    if (topic) setTopic({ ...topic, briefing: e.target.value });
+                  }}
+                  onBlur={async () => {
+                    if (!customerId || !projectId || !topic) return;
+                    try {
+                      await updateTopic(customerId, projectId, id, { briefing: topic.briefing ?? "" } as Partial<import("@/lib/types").Topic>);
+                    } catch { /* ignore */ }
+                  }}
+                  placeholder="Describe what this campaign is about — target audience, goals, key messages, tone..."
+                  className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none min-h-[80px]"
+                  rows={3}
+                />
+              </div>
+
               {/* Onboarding Checklist */}
               {(outputs.length === 0 || inputs.length === 0) && (
                 <div className="rounded-xl bg-muted/30 p-4 mb-4">

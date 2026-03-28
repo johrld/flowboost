@@ -302,6 +302,7 @@ export interface Topic {
   status: TopicStatus;
   title: string;
   category: string;
+  briefing?: string;
   direction?: string;
   userNotes?: string;
   priority: number;

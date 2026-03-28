@@ -1020,24 +1020,56 @@ export async function contentRoutes(app: FastifyInstance) {
     const role = contentType?.agent?.role ?? `You are a professional content editor for the "${project.name}" project.`;
     const guidelines = contentType?.agent?.guidelines ?? "";
 
+    // Load Project Brief + Brand Voice (always available)
+    const projects = app.ctx.projectsFor(customerId);
+    const projectBrief = projects.getProjectBrief(projectId);
+    const brandVoice = projects.getEffectiveBrandVoice(projectId, app.ctx.customers, customerId);
+
+    // Load Flow context (briefing, sources, chat distillation)
+    let flowContext = "";
+    const flowId = item.flowId ?? item.topicId;
+    if (flowId) {
+      try {
+        const topics = app.ctx.topicsFor(customerId, projectId);
+        const flow = topics.get(flowId);
+        if (flow) {
+          const { buildFlowContext } = await import("../../pipeline/flow-context.js");
+          const { readChat: readFlowChat } = await import("../../models/chat.js");
+          const flowChatMessages = readFlowChat(topics.entityDir(flowId));
+          const fc = buildFlowContext(flow, flowChatMessages);
+          const parts: string[] = [];
+          if (flow.briefing) parts.push(`### Briefing\n${flow.briefing}`);
+          if (fc) parts.push(fc);
+          flowContext = parts.join("\n\n");
+        }
+      } catch { /* ignore — flow context is optional */ }
+    }
+
     // Build chat messages
     const { readChat, appendChat } = await import("../../models/chat.js");
     const chatDir = content.entityDir(contentId);
     const history = readChat(chatDir);
 
-    // System prompt with current content
+    // System prompt with project context + flow context + current content
     const systemPrompt = [
       role,
       "",
-      "You are helping the user refine this content piece. The current content is shown below.",
+      "You are helping the user refine this content piece. You have full context about the project, campaign, and sources.",
+      "",
+      // Project-level context (always available)
+      projectBrief ? `## Project Brief\n${projectBrief.slice(0, 1500)}` : "",
+      brandVoice ? `## Brand Voice\n${brandVoice.slice(0, 1500)}` : "",
+      // Flow-level context (campaign-specific)
+      flowContext ? `## Campaign Context\n${flowContext.slice(0, 3000)}` : "",
       "",
       `## Current Content`,
       currentContent.slice(0, 4000),
       "",
-      guidelines ? `## Guidelines\n${guidelines}` : "",
+      guidelines ? `## Content Type Guidelines\n${guidelines}` : "",
       "",
       "## Your Task",
-      "Help the user refine the content. If they ask for changes, include a JSON block with the updated field values:",
+      "Help the user refine the content. You know the project brief, brand voice, campaign context (briefing, sources, discussions), and content type guidelines.",
+      "If they ask for changes, include a JSON block with the updated field values:",
       "```json",
       '{"updates": {"text": "...", "hashtags": ["..."]}}',
       "```",

@@ -169,7 +169,7 @@ export async function topicRoutes(app: FastifyInstance) {
 
       const body = (request.body ?? {}) as Record<string, unknown>;
       const safeFields = [
-        "title", "category", "direction", "userNotes", "status",
+        "title", "category", "briefing", "direction", "userNotes", "status",
       ];
       const updates: Record<string, unknown> = {};
 
