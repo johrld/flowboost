@@ -1,6 +1,14 @@
 import type { Customer, Project, Topic, Category, Author, PipelineRun, ContentItem, ContentVersion, ContentType, ContentItemStatus, ContentIndex, ChatMessage, FlowInput, MediaAsset } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
+
+export async function getHealth(): Promise<{
+  status: string;
+  claude: { authenticated: boolean; method: string | null; subscriptionType?: string };
+}> {
+  const res = await fetch(`${API_URL}/health`);
+  return res.json();
+}
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { ...init?.headers as Record<string, string> };
