@@ -59,6 +59,23 @@ export class ContentStore extends Store<ContentItem> {
     return updated;
   }
 
+  /** Overwrite files in an existing version (for draft editing without creating new version) */
+  overwriteVersionFiles(contentId: string, versionId: string, langFiles: Record<string, { contentPath: string; content: string }>): void {
+    const versionDir = this.getVersionDir(contentId, versionId);
+    for (const [, { contentPath, content }] of Object.entries(langFiles)) {
+      const filePath = path.join(versionDir, contentPath);
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, content, "utf-8");
+    }
+  }
+
+  deleteVersion(contentId: string, versionId: string): boolean {
+    const dir = path.join(this.entityDir(contentId), "versions", versionId);
+    if (!fs.existsSync(dir)) return false;
+    fs.rmSync(dir, { recursive: true });
+    return true;
+  }
+
   getVersionDir(contentId: string, versionId: string): string {
     return path.join(this.entityDir(contentId), "versions", versionId);
   }

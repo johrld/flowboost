@@ -543,20 +543,25 @@ export async function contentRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: "Content file not found on disk" });
     }
 
-    const markdown = fs.readFileSync(filePath, "utf-8");
-    return reply.type("text/markdown; charset=utf-8").send(markdown);
+    const fileContent = fs.readFileSync(filePath, "utf-8");
+    const contentType = filePath.endsWith(".json") ? "application/json" : "text/markdown; charset=utf-8";
+    return reply.type(contentType).send(fileContent);
   });
 
-  // POST /content/:contentId/versions — create new version from editor
+  // POST /content/:contentId/versions — save content (smart: overwrite draft or create new)
+  // - If current version is unpublished draft → overwrite files in place
+  // - If current version is published or created by pipeline → create new version
+  // - Body: { forceNew?: boolean } to explicitly create a new version
   app.post<{
     Params: { customerId: string; projectId: string; contentId: string };
-    Body: { files: Record<string, string>; createdBy?: "pipeline" | "user" | "sync"; createdByName?: string };
+    Body: { files: Record<string, string>; createdBy?: "pipeline" | "user" | "sync"; createdByName?: string; forceNew?: boolean };
   }>("/:contentId/versions", async (request, reply) => {
     const { customerId, projectId, contentId } = request.params;
-    const { files, createdBy = "user", createdByName } = request.body as {
+    const { files, createdBy = "user", createdByName, forceNew = false } = request.body as {
       files: Record<string, string>;
       createdBy?: "pipeline" | "user" | "sync";
       createdByName?: string;
+      forceNew?: boolean;
     };
     const content = app.ctx.contentFor(customerId, projectId);
 
@@ -567,6 +572,10 @@ export async function contentRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "At least one file is required" });
     }
 
+    // Detect if content is JSON or Markdown
+    const firstFileContent = Object.values(files)[0] ?? "";
+    const isJsonContent = firstFileContent.trimStart().startsWith("{");
+
     // Parse each language file
     const languages: LanguageVariant[] = [];
     let totalWordCount = 0;
@@ -574,57 +583,108 @@ export async function contentRoutes(app: FastifyInstance) {
     let hasFaq = false;
     let hasAnswerCapsule = false;
 
-    for (const [lang, markdown] of Object.entries(files)) {
-      const fmMatch = markdown.match(/^---\n([\s\S]*?)\n---/);
-      const fm = fmMatch?.[1] ?? "";
-      const body = markdown.replace(/^---\n[\s\S]*?\n---\n*/, "");
-
-      // Extract metadata from frontmatter
-      const titleMatch = fm.match(/^title:\s*"(.+?)"\s*$/m);
-      const descMatch = fm.match(/^description:\s*"(.+?)"\s*$/m);
-      const title = titleMatch?.[1] ?? item.title;
-      const description = descMatch?.[1] ?? item.description ?? "";
-
-      // Slug: from frontmatter, or from existing version, or from translationKey/id
+    for (const [lang, fileContent] of Object.entries(files)) {
       const existingVersion = content.getLatestVersion(contentId);
       const existingLang = existingVersion?.languages.find((l) => l.lang === lang);
       const slug = existingLang?.slug ?? item.translationKey ?? item.id;
 
-      // Calculate metrics
-      const words = body.split(/\s+/).filter(Boolean).length;
-      const headings = (body.match(/^##\s+/gm) ?? []).length;
-      totalWordCount += words;
-      totalHeadingCount += headings;
-      if (fm.includes("faq:")) hasFaq = true;
-      if (body.trimStart().startsWith(">")) hasAnswerCapsule = true;
+      if (isJsonContent) {
+        // JSON content (social, email, custom) — parse JSON for metadata
+        let jsonData: Record<string, unknown> = {};
+        try { jsonData = JSON.parse(fileContent); } catch { /* ignore */ }
+        const text = (jsonData.text ?? jsonData.caption ?? jsonData.body ?? "") as string;
+        const words = text.split(/\s+/).filter(Boolean).length;
+        totalWordCount += words;
 
-      const contentPath = `content/${lang}/${slug}.md`;
-      languages.push({ lang, slug, title, description, contentPath, wordCount: words });
+        // Derive contentTypeId from item
+        const ctId = item.type === "social_post" ? `${item.category ?? "linkedin"}-post`
+          : item.type === "newsletter" ? "newsletter"
+          : "content";
+        const contentPath = `content/${lang}/${ctId}.json`;
+        languages.push({ lang, slug, title: item.title, description: (text).slice(0, 160), contentPath, wordCount: words });
+      } else {
+        // Markdown content (articles) — parse frontmatter
+        const fmMatch = fileContent.match(/^---\n([\s\S]*?)\n---/);
+        const fm = fmMatch?.[1] ?? "";
+        const body = fileContent.replace(/^---\n[\s\S]*?\n---\n*/, "");
+
+        const titleMatch = fm.match(/^title:\s*"(.+?)"\s*$/m);
+        const descMatch = fm.match(/^description:\s*"(.+?)"\s*$/m);
+        const title = titleMatch?.[1] ?? item.title;
+        const description = descMatch?.[1] ?? item.description ?? "";
+
+        const words = body.split(/\s+/).filter(Boolean).length;
+        const headings = (body.match(/^##\s+/gm) ?? []).length;
+        totalWordCount += words;
+        totalHeadingCount += headings;
+        if (fm.includes("faq:")) hasFaq = true;
+        if (body.trimStart().startsWith(">")) hasAnswerCapsule = true;
+
+        const contentPath = `content/${lang}/${slug}.md`;
+        languages.push({ lang, slug, title, description, contentPath, wordCount: words });
+      }
     }
 
-    // Create version
-    const version = content.createVersion(contentId, {
-      contentId,
-      languages,
-      assets: [],
-      text: {
-        wordCount: totalWordCount,
-        headingCount: totalHeadingCount,
-        hasFaq,
-        hasAnswerCapsule,
-      },
-      createdAt: new Date().toISOString(),
-      createdBy,
-      ...(createdByName ? { createdByName } : {}),
-    });
+    // Smart save: always overwrite current version unless forceNew is set
+    // User edits always overwrite. New version only on explicit request or pipeline.
+    const currentVersion = item.currentVersionId ? content.getVersion(contentId, item.currentVersionId) : null;
+    const canOverwrite = currentVersion && !forceNew && createdBy === "user";
 
-    // Write markdown files to version directory
-    const versionDir = content.getVersionDir(contentId, version.id);
-    for (const [lang] of Object.entries(files)) {
-      const langVariant = languages.find((l) => l.lang === lang)!;
-      const filePath = path.join(versionDir, langVariant.contentPath);
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, files[lang]);
+    let version: import("../../models/types.js").ContentVersion;
+
+    if (canOverwrite) {
+      // Overwrite existing draft — update files + metadata in place
+      const langFiles: Record<string, { contentPath: string; content: string }> = {};
+      for (const [lang] of Object.entries(files)) {
+        const langVariant = languages.find((l) => l.lang === lang)!;
+        langFiles[lang] = { contentPath: langVariant.contentPath, content: files[lang] };
+      }
+      content.overwriteVersionFiles(contentId, currentVersion.id, langFiles);
+
+      // Update version metadata
+      content.updateVersion(contentId, currentVersion.id, {
+        languages,
+        ...(isJsonContent ? {} : {
+          text: {
+            wordCount: totalWordCount,
+            headingCount: totalHeadingCount,
+            hasFaq,
+            hasAnswerCapsule,
+          },
+        }),
+      });
+
+      version = content.getVersion(contentId, currentVersion.id)!;
+      log.info({ contentId, versionId: version.id, mode: "overwrite" }, "version updated in place");
+    } else {
+      // Create new version (published version exists, or pipeline/forceNew)
+      version = content.createVersion(contentId, {
+        contentId,
+        languages,
+        assets: [],
+        ...(isJsonContent ? {} : {
+          text: {
+            wordCount: totalWordCount,
+            headingCount: totalHeadingCount,
+            hasFaq,
+            hasAnswerCapsule,
+          },
+        }),
+        createdAt: new Date().toISOString(),
+        createdBy,
+        ...(createdByName ? { createdByName } : {}),
+      });
+
+      // Write files to new version directory
+      const versionDir = content.getVersionDir(contentId, version.id);
+      for (const [lang] of Object.entries(files)) {
+        const langVariant = languages.find((l) => l.lang === lang)!;
+        const filePath = path.join(versionDir, langVariant.contentPath);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, files[lang]);
+      }
+
+      log.info({ contentId, versionId: version.id, versionNumber: version.versionNumber, mode: "new" }, "version created");
     }
 
     // Update currentVersionId + auto-transition to draft
@@ -637,11 +697,44 @@ export async function contentRoutes(app: FastifyInstance) {
     }
     content.update(contentId, updates as Partial<ContentItem>);
 
-    log.info(
-      { contentId, versionId: version.id, versionNumber: version.versionNumber, langs: languages.map((l) => l.lang) },
-      "version created",
-    );
     return version;
+  });
+
+  // DELETE /content/:contentId/versions/:versionId — delete a version
+  app.delete<{
+    Params: { customerId: string; projectId: string; contentId: string; versionId: string };
+  }>("/:contentId/versions/:versionId", async (request, reply) => {
+    const { customerId, projectId, contentId, versionId } = request.params;
+    const content = app.ctx.contentFor(customerId, projectId);
+    const item = content.get(contentId);
+    if (!item) return reply.status(404).send({ error: "Content not found" });
+
+    const version = content.getVersion(contentId, versionId);
+    if (!version) return reply.status(404).send({ error: "Version not found" });
+
+    // Don't delete published versions
+    if (version.publishedAt) {
+      return reply.status(400).send({ error: "Cannot delete a published version" });
+    }
+
+    // Don't delete the only version
+    const allVersions = content.getVersions(contentId);
+    if (allVersions.length <= 1) {
+      return reply.status(400).send({ error: "Cannot delete the only version" });
+    }
+
+    content.deleteVersion(contentId, versionId);
+
+    // If we deleted the current version, switch to the latest remaining
+    if (item.currentVersionId === versionId) {
+      const latest = content.getLatestVersion(contentId);
+      if (latest) {
+        content.update(contentId, { currentVersionId: latest.id, updatedAt: new Date().toISOString() });
+      }
+    }
+
+    log.info({ contentId, versionId }, "version deleted");
+    return { message: "Version deleted", versionId };
   });
 
   // ─── Content Media (references to global Media Library) ────────
@@ -877,6 +970,112 @@ export async function contentRoutes(app: FastifyInstance) {
 
     log.info({ contentId, assetId }, "media asset unlinked from content");
     return { message: "Asset unlinked", assetId };
+  });
+
+  // ── Content Refinement Chat ──────────────────────────────────
+
+  // POST /content/:contentId/chat — chat with AI about this content
+  app.post<{
+    Params: { customerId: string; projectId: string; contentId: string };
+    Body: { message: string };
+  }>("/:contentId/chat", async (request, reply) => {
+    const { customerId, projectId, contentId } = request.params;
+    const { message } = (request.body ?? {}) as { message?: string };
+    if (!message?.trim()) return reply.status(400).send({ error: "Message is required" });
+
+    const content = app.ctx.contentFor(customerId, projectId);
+    const item = content.get(contentId);
+    if (!item) return reply.status(404).send({ error: "Content not found" });
+
+    const project = app.ctx.projectsFor(customerId).get(projectId);
+    if (!project) return reply.status(404).send({ error: "Project not found" });
+
+    // Load current content values
+    let currentContent = "";
+    const latestVersion = content.getLatestVersion(contentId);
+    if (latestVersion?.languages?.[0]) {
+      const versionDir = content.getVersionDir(contentId, latestVersion.id);
+      const filePath = path.join(versionDir, latestVersion.languages[0].contentPath);
+      if (fs.existsSync(filePath)) {
+        currentContent = fs.readFileSync(filePath, "utf-8");
+      }
+    }
+
+    // Load content type for role/guidelines
+    const { ContentTypeStore } = await import("../../models/content-type.js");
+    const ctStore = new ContentTypeStore(
+      path.join(app.ctx.dataDir, "customers", customerId, "projects", projectId),
+    );
+
+    // Derive content type ID
+    const ctId = item.type === "social_post" ? `${item.category ?? "linkedin"}-post`
+      : item.type === "newsletter" ? "newsletter"
+      : "blog-post";
+    const contentType = ctStore.get(ctId);
+
+    const role = contentType?.agent?.role ?? `You are a professional content editor for the "${project.name}" project.`;
+    const guidelines = contentType?.agent?.guidelines ?? "";
+
+    // Build chat messages
+    const { readChat, appendChat } = await import("../../models/chat.js");
+    const chatDir = content.entityDir(contentId);
+    const history = readChat(chatDir);
+
+    // System prompt with current content
+    const systemPrompt = [
+      role,
+      "",
+      "You are helping the user refine this content piece. The current content is shown below.",
+      "",
+      `## Current Content`,
+      currentContent.slice(0, 4000),
+      "",
+      guidelines ? `## Guidelines\n${guidelines}` : "",
+      "",
+      "## Your Task",
+      "Help the user refine the content. If they ask for changes, include a JSON block with the updated field values:",
+      "```json",
+      '{"updates": {"text": "...", "hashtags": ["..."]}}',
+      "```",
+      "Only include fields that should change.",
+    ].filter(Boolean).join("\n");
+
+    // Append user message
+    appendChat(chatDir, { role: "user", content: message.trim(), ts: new Date().toISOString() });
+
+    // Run agent
+    // Build conversation context into prompt
+    const recentChat = [...history.slice(-8), { role: "user" as const, content: message.trim(), ts: new Date().toISOString() }];
+    const chatContext = recentChat.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n");
+    const fullPrompt = `${systemPrompt}\n\n## Conversation\n\n${chatContext}\n\nAssistant:`;
+
+    const { runSimpleAgent } = await import("../../pipeline/engine.js");
+    const response = await runSimpleAgent(fullPrompt, {
+      model: project.pipeline.defaultModel,
+    });
+
+    // Append assistant response
+    appendChat(chatDir, { role: "assistant", content: response.text, ts: new Date().toISOString() });
+
+    return {
+      role: "assistant" as const,
+      content: response.text,
+      ts: new Date().toISOString(),
+    };
+  });
+
+  // GET /content/:contentId/chat — get chat history
+  app.get<{
+    Params: { customerId: string; projectId: string; contentId: string };
+  }>("/:contentId/chat", async (request, reply) => {
+    const { customerId, projectId, contentId } = request.params;
+    const content = app.ctx.contentFor(customerId, projectId);
+    const item = content.get(contentId);
+    if (!item) return reply.status(404).send({ error: "Content not found" });
+
+    const { readChat } = await import("../../models/chat.js");
+    const chatDir = content.entityDir(contentId);
+    return readChat(chatDir);
   });
 }
 

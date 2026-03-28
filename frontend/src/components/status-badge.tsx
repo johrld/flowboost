@@ -127,11 +127,11 @@ const contentTypeConfig: Record<ContentType, { label: string; className: string 
   newsletter: { label: "Newsletter", className: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
 };
 
-export function ContentTypeBadge({ type }: { type: ContentType }) {
+export function ContentTypeBadge({ type, label }: { type: ContentType; label?: string }) {
   const config = contentTypeConfig[type];
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${config.className}`}>
-      {config.label}
+      {label ?? config.label}
     </span>
   );
 }

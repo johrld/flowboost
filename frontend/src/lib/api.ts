@@ -467,16 +467,42 @@ export async function getContentFile(
   return res.text();
 }
 
+export async function getContentJson(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  versionId: string,
+  lang: string,
+): Promise<Record<string, unknown>> {
+  const res = await fetch(
+    `${API_URL}/customers/${customerId}/projects/${projectId}/content/${contentId}/versions/${versionId}/file?lang=${lang}`,
+  );
+  if (!res.ok) throw new Error(`Failed to load content data: ${res.status}`);
+  return res.json() as Promise<Record<string, unknown>>;
+}
+
 export function createContentVersion(
   customerId: string,
   projectId: string,
   contentId: string,
   files: Record<string, string>,
   createdByName?: string,
+  forceNew?: boolean,
 ): Promise<ContentVersion> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/versions`, {
     method: "POST",
-    body: JSON.stringify({ files, createdBy: "user", ...(createdByName ? { createdByName } : {}) }),
+    body: JSON.stringify({ files, createdBy: "user", ...(createdByName ? { createdByName } : {}), ...(forceNew ? { forceNew: true } : {}) }),
+  });
+}
+
+export function deleteContentVersion(
+  customerId: string,
+  projectId: string,
+  contentId: string,
+  versionId: string,
+): Promise<{ message: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/content/${contentId}/versions/${versionId}`, {
+    method: "DELETE",
   });
 }
 
