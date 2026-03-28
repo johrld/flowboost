@@ -1,7 +1,7 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, MessageSquare } from "lucide-react";
+import { Settings, MessageSquare, ImageIcon } from "lucide-react";
 
 interface ContentDetailLayoutProps {
   /** Full-width header (back button, status, actions) */
@@ -10,16 +10,19 @@ interface ContentDetailLayoutProps {
   children: React.ReactNode;
   /** Content for the Metadata sidebar tab */
   metadataPanel: React.ReactNode;
+  /** Content for the Media sidebar tab (optional — only shown when provided) */
+  mediaPanel?: React.ReactNode;
   /** Content for the AI Chat sidebar tab (placeholder if absent) */
   chatPanel?: React.ReactNode;
   /** Which sidebar tab to show by default */
-  defaultSidebarTab?: "metadata" | "chat";
+  defaultSidebarTab?: "metadata" | "media" | "chat";
 }
 
 export function ContentDetailLayout({
   header,
   children,
   metadataPanel,
+  mediaPanel,
   chatPanel,
   defaultSidebarTab = "metadata",
 }: ContentDetailLayoutProps) {
@@ -49,6 +52,12 @@ export function ContentDetailLayout({
                   <Settings className="h-3.5 w-3.5" />
                   Metadata
                 </TabsTrigger>
+                {mediaPanel && (
+                  <TabsTrigger value="media" className="flex-1 gap-1.5">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    Media
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="chat" className="flex-1 gap-1.5">
                   <MessageSquare className="h-3.5 w-3.5" />
                   AI Chat
@@ -62,6 +71,15 @@ export function ContentDetailLayout({
             >
               {metadataPanel}
             </TabsContent>
+
+            {mediaPanel && (
+              <TabsContent
+                value="media"
+                className="flex-1 overflow-y-auto p-6 space-y-6"
+              >
+                {mediaPanel}
+              </TabsContent>
+            )}
 
             <TabsContent
               value="chat"

@@ -109,7 +109,7 @@ export async function runContentPipeline(
         slug,
         title: (output.subject as string) ?? topic.title,
         description: primaryText.slice(0, 160),
-        contentPath: "",
+        contentPath: `content/${project.defaultLanguage}/${contentTypeId}.json`,
         wordCount: primaryText.split(/\s+/).length,
       }],
       assets: [],

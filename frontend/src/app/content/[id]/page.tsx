@@ -3,6 +3,7 @@
 import { use, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { marked } from "marked";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
@@ -24,11 +25,15 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContentStatusBadge, ContentTypeBadge } from "@/components/status-badge";
 import { ContentDetailLayout } from "@/components/content-detail-layout";
+import { ContentChat } from "@/components/content-chat";
 import { TiptapEditor } from "@/components/tiptap-editor";
 import { useProject } from "@/lib/project-context";
 import {
   getContentItem,
   getContentFile,
+  getContentJson,
+  getContentTypes,
+  deleteContentVersion,
   updateContent,
   createContentVersion,
   submitContent,
@@ -48,6 +53,13 @@ import {
   linkMediaToContent,
   reconcileContentMedia,
 } from "@/lib/api";
+import type { ContentTypeDefinition } from "@/lib/api";
+import { LinkedInEditor } from "@/components/editors/linkedin-editor";
+import { XEditor } from "@/components/editors/x-editor";
+import { InstagramEditor } from "@/components/editors/instagram-editor";
+import { TikTokEditor } from "@/components/editors/tiktok-editor";
+import { NewsletterEditor } from "@/components/editors/newsletter-editor";
+import { GenericEditor } from "@/components/editors/generic-editor";
 import type { ContentItem, ContentVersion, MediaAsset, Topic } from "@/lib/types";
 import { MediaPicker } from "@/components/media-picker";
 import {
@@ -362,6 +374,7 @@ export default function ContentEditorPage({
   const [originalContent, setOriginalContent] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [versionPopoverOpen, setVersionPopoverOpen] = useState(false);
+  const [deleteVersionId, setDeleteVersionId] = useState<{ id: string; number: number } | null>(null);
 
   // Topic scheduling
   const [topic, setTopic] = useState<Topic | null>(null);
@@ -375,6 +388,13 @@ export default function ContentEditorPage({
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const mediaPickerResolveRef = useRef<((url: string | null) => void) | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Editor mode: "markdown" for articles, "json" for social/email/custom
+  const [editorMode, setEditorMode] = useState<"markdown" | "json">("markdown");
+  const [jsonValues, setJsonValues] = useState<Record<string, unknown>>({});
+  const [originalJsonValues, setOriginalJsonValues] = useState<Record<string, unknown>>({});
+  const [contentTypeId, setContentTypeId] = useState<string | null>(null);
+  const [contentTypeDef, setContentTypeDef] = useState<ContentTypeDefinition | null>(null);
 
   // Track which languages the user actually edited (vs TiptapEditor roundtrip noise)
   const userEditedLangs = useRef<Set<string>>(new Set());
@@ -405,6 +425,27 @@ export default function ContentEditorPage({
       const data = await getContentItem(customerId, projectId, id);
       setItem(data);
       setVersions(data.versions ?? []);
+
+      // Determine editor mode from content type
+      const isArticle = data.type === "article" || data.type === "guide";
+      const detectedMode = isArticle ? "markdown" : "json";
+      setEditorMode(detectedMode);
+
+      // Load content type definition for JSON editors
+      if (!isArticle) {
+        try {
+          const types = await getContentTypes(customerId!, projectId!);
+          // Derive contentTypeId from item type + category
+          const ctId = data.type === "social_post" ? `${data.category ?? "linkedin"}-post`
+            : data.type === "newsletter" ? "newsletter"
+            : "blog-post";
+          const ct = types.find((t) => t.id === ctId);
+          if (ct) {
+            setContentTypeId(ctId);
+            setContentTypeDef(ct);
+          }
+        } catch { /* ignore */ }
+      }
 
       // Load topic
       if (data.topicId) {
@@ -452,6 +493,19 @@ export default function ContentEditorPage({
 
   // Shared helper: load a version's files into the editor
   const loadVersionContent = useCallback(async (version: ContentVersion, data: ContentItem) => {
+    // For JSON content types, load JSON instead of markdown
+    if (editorMode === "json") {
+      try {
+        const jsonData = await getContentJson(customerId!, projectId!, id, version.id, version.languages[0]?.lang ?? "de");
+        setJsonValues(jsonData);
+        setOriginalJsonValues(jsonData);
+      } catch {
+        setJsonValues({});
+        setOriginalJsonValues({});
+      }
+      return; // Skip markdown loading
+    }
+
     const rawContent: Record<string, string> = {};
     await Promise.all(
       version.languages.map(async (lang) => {
@@ -485,7 +539,7 @@ export default function ContentEditorPage({
     if (version.languages.length > 0) {
       setActiveLang(version.languages[0].lang);
     }
-  }, [customerId, projectId, id]);
+  }, [customerId, projectId, id, editorMode]);
 
   useEffect(() => {
     loadItem();
@@ -506,6 +560,25 @@ export default function ContentEditorPage({
   // Save metadata + body (creates new version if body changed)
   const handleSave = async () => {
     if (!item) return;
+
+    // JSON editor mode — save structured content
+    if (editorMode === "json") {
+      setSaving(true);
+      try {
+        const lang = item.versions?.[item.versions.length - 1]?.languages?.[0]?.lang ?? "de";
+        await createContentVersion(customerId!, projectId!, id, {
+          [lang]: JSON.stringify(jsonValues, null, 2),
+        }, "user");
+        setOriginalJsonValues(jsonValues);
+        await loadItem();
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : "Save failed");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     try {
@@ -859,9 +932,11 @@ export default function ContentEditorPage({
   const metaDirty = origMeta
     ? title !== origMeta.title || description !== origMeta.description || category !== origMeta.category || author !== (item.author ?? "")
     : title !== (item.title ?? "") || description !== (item.description ?? "") || category !== (item.category ?? "") || author !== (item.author ?? "");
-  const hasChanges = metaDirty || bodyDirty;
+  const jsonDirty = editorMode === "json" && JSON.stringify(jsonValues) !== JSON.stringify(originalJsonValues);
+  const hasChanges = editorMode === "json" ? jsonDirty : (metaDirty || bodyDirty);
 
   return (
+    <>
     <ContentDetailLayout
       header={
         <div className="flex items-center gap-4">
@@ -872,7 +947,7 @@ export default function ContentEditorPage({
           </Link>
           <div className="flex-1 flex items-center gap-2">
             <ContentStatusBadge status={item.status} />
-            <ContentTypeBadge type={item.type} />
+            <ContentTypeBadge type={item.type} label={contentTypeDef?.label} />
             {activeVersion && (
               <span className={`text-xs ${isViewingOldVersion ? "text-violet-600 font-medium" : "text-muted-foreground"}`}>
                 v{activeVersion.versionNumber}{isViewingOldVersion ? ` (latest: v${latestVersion!.versionNumber})` : ""}
@@ -883,9 +958,11 @@ export default function ContentEditorPage({
             </span>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="icon" onClick={handlePreview} title="Preview">
-              <Eye className="h-4 w-4" />
-            </Button>
+            {editorMode === "markdown" && (
+              <Button variant="outline" size="icon" onClick={handlePreview} title="Preview">
+                <Eye className="h-4 w-4" />
+              </Button>
+            )}
             {hasChanges ? (
               <Button
                 className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -982,7 +1059,7 @@ export default function ContentEditorPage({
                         <button
                           type="button"
                           key={v.id}
-                          className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors hover:bg-muted ${isActive ? "bg-muted" : ""}`}
+                          className={`group flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors hover:bg-muted ${isActive ? "bg-muted" : ""}`}
                           onClick={() => {
                             switchVersion(v.id);
                             setVersionPopoverOpen(false);
@@ -1004,12 +1081,54 @@ export default function ContentEditorPage({
                           {isPublished && (
                             <span className="ml-auto text-[10px] text-green-600 shrink-0">live</span>
                           )}
+                          {!isPublished && versions.length > 1 && (
+                            <button
+                              type="button"
+                              className="ml-auto text-muted-foreground/50 hover:text-red-500 shrink-0 p-0.5 rounded hover:bg-red-50"
+                              title="Delete version"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setVersionPopoverOpen(false);
+                                setDeleteVersionId({ id: v.id, number: v.versionNumber });
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
                         </button>
                       );
                     })}
                   </div>
                 </PopoverContent>
               </Popover>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs text-muted-foreground h-7 mt-1"
+                onClick={async () => {
+                  if (!customerId || !projectId || !item) return;
+                  try {
+                    const lang = versions[versions.length - 1]?.languages?.[0]?.lang ?? "de";
+                    if (editorMode === "json") {
+                      await createContentVersion(customerId, projectId, id, {
+                        [lang]: JSON.stringify(jsonValues, null, 2),
+                      }, undefined, true);
+                    } else {
+                      // Markdown: build file from current editor state
+                      const md = editorContent[activeLang] ?? "";
+                      await createContentVersion(customerId, projectId, id, {
+                        [activeLang]: md,
+                      }, undefined, true);
+                    }
+                    await loadItem();
+                  } catch (err) {
+                    console.error("Create version failed:", err);
+                  }
+                }}
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                Save as new version
+              </Button>
             </div>
           )}
 
@@ -1055,40 +1174,46 @@ export default function ContentEditorPage({
             </div>
           )}
 
-          {/* Metadata */}
+          {/* Metadata — conditional fields based on editor mode */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Metadata</h3>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-              />
-              <p className="text-xs text-muted-foreground">
-                {description.length}/160 characters
-              </p>
-            </div>
+            {/* Description + Category only for articles */}
+            {editorMode === "markdown" && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {description.length}/160 characters
+                  </p>
+                </div>
 
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.labels.de ?? cat.labels.en ?? cat.id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.labels.de ?? cat.labels.en ?? cat.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
 
-            <div className="space-y-2">
+            {/* Author — only for articles (social uses connector account, not author) */}
+            {editorMode === "markdown" && <div className="space-y-2">
               <Label htmlFor="author">Author</Label>
               {authors.length > 0 ? (
                 <Select value={author} onValueChange={setAuthor}>
@@ -1111,11 +1236,11 @@ export default function ContentEditorPage({
                   placeholder="Author name"
                 />
               )}
-            </div>
+            </div>}
           </div>
 
-          {/* Hero Image */}
-          <div className="space-y-3">
+          {/* Hero Image (markdown mode only) */}
+          {editorMode === "markdown" && (<div className="space-y-3">
             <h3 className="font-semibold text-sm">Hero Image</h3>
 
             {/* Preview */}
@@ -1299,7 +1424,7 @@ export default function ContentEditorPage({
                 Remove image
               </Button>
             )}
-          </div>
+          </div>)}
 
           {/* Delivery Info */}
           {(item.deliveryRef || item.deliveryUrl) && (
@@ -1362,6 +1487,29 @@ export default function ContentEditorPage({
             </div>
           </div>
         </>
+      }
+      mediaPanel={editorMode === "json" ? (
+        <SocialMediaPanel
+          customerId={customerId!}
+          projectId={projectId!}
+          contentId={id}
+          images={((jsonValues.images ?? jsonValues.media ?? []) as string[])}
+          onImagesChange={(images) => setJsonValues((prev) => ({ ...prev, images }))}
+          mediaAssets={mediaAssets}
+          onMediaAssetsChange={setMediaAssets}
+        />
+      ) : undefined}
+      chatPanel={
+        <ContentChat
+          customerId={customerId!}
+          projectId={projectId!}
+          contentId={id}
+          onApplyUpdates={(updates) => {
+            if (editorMode === "json") {
+              setJsonValues((prev) => ({ ...prev, ...updates }));
+            }
+          }}
+        />
       }
       defaultSidebarTab="metadata"
     >
@@ -1444,77 +1592,323 @@ export default function ContentEditorPage({
           </div>
         )}
 
-        {/* Title */}
-        <div className="space-y-1.5">
-          <Label htmlFor="editor-title" className="text-xs text-muted-foreground">Title</Label>
-          <Input
-            id="editor-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Article title…"
-            className="text-xl font-bold h-auto py-2"
+        {editorMode === "markdown" ? (
+          <>
+            {/* Title */}
+            <div className="space-y-1.5">
+              <Label htmlFor="editor-title" className="text-xs text-muted-foreground">Title</Label>
+              <Input
+                id="editor-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Article title…"
+                className="text-xl font-bold h-auto py-2"
+              />
+              <p className="text-xs text-muted-foreground">{title.length}/70 characters</p>
+            </div>
+
+            {/* Language Tabs + Editor */}
+            <Tabs value={activeLang} onValueChange={setActiveLang}>
+              <TabsList>
+                {activeVersion?.languages.map((lang) => (
+                  <TabsTrigger key={lang.lang} value={lang.lang}>
+                    {lang.lang.toUpperCase()}
+                    {lang.wordCount ? (
+                      <span className="ml-1 text-[10px] text-muted-foreground">({lang.wordCount}w)</span>
+                    ) : null}
+                  </TabsTrigger>
+                )) ?? (
+                  <>
+                    <TabsTrigger value="de">DE</TabsTrigger>
+                    <TabsTrigger value="en">EN</TabsTrigger>
+                    <TabsTrigger value="es">ES</TabsTrigger>
+                  </>
+                )}
+              </TabsList>
+
+              {(activeVersion?.languages ?? [{ lang: "de", slug: "", title: "", description: "", contentPath: "" }]).map((lang) => (
+                <TabsContent key={lang.lang} value={lang.lang} className="mt-4">
+                  {editorContent[lang.lang] ? (
+                    <TiptapEditor
+                      content={editorContent[lang.lang]}
+                      onChange={(md) => {
+                        userEditedLangs.current.add(lang.lang);
+                        setEditorContent((prev) => ({ ...prev, [lang.lang]: md }));
+                      }}
+                      onImageUpload={async (file) => {
+                        const asset = await uploadContentMedia(customerId, projectId, item!.id, file, "inline");
+                        return getMediaFileUrl(customerId, projectId, asset.id);
+                      }}
+                      onImageBrowse={() => {
+                        return new Promise<string | null>((resolve) => {
+                          mediaPickerResolveRef.current = resolve;
+                          setMediaPickerOpen(true);
+                        });
+                      }}
+                    />
+                  ) : (
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center p-12 text-center">
+                        <p className="text-sm text-muted-foreground">
+                          No content for {lang.lang.toUpperCase()} yet
+                        </p>
+                        <Button variant="outline" size="sm" className="mt-3">
+                          Generate Translation
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+              ))}
+            </Tabs>
+
+            {/* FAQ Section */}
+            <FaqSection faqs={faqs} setFaqs={setFaqs} />
+          </>
+        ) : (
+          /* JSON editor mode — render platform-specific editor */
+          <JsonEditorSwitch
+            contentTypeId={contentTypeId}
+            contentType={contentTypeDef}
+            values={jsonValues}
+            onChange={setJsonValues}
+            projectName={item.title}
+            authorName={authors[0]?.name}
+            authorRole={typeof authors[0]?.role === "string" ? authors[0].role : authors[0]?.role?.en ?? authors[0]?.role?.de}
+            authorImage={authors[0]?.image}
+            readOnly={false}
           />
-          <p className="text-xs text-muted-foreground">{title.length}/70 characters</p>
-        </div>
-
-        {/* Language Tabs + Editor */}
-        <Tabs value={activeLang} onValueChange={setActiveLang}>
-          <TabsList>
-            {activeVersion?.languages.map((lang) => (
-              <TabsTrigger key={lang.lang} value={lang.lang}>
-                {lang.lang.toUpperCase()}
-                {lang.wordCount ? (
-                  <span className="ml-1 text-[10px] text-muted-foreground">({lang.wordCount}w)</span>
-                ) : null}
-              </TabsTrigger>
-            )) ?? (
-              <>
-                <TabsTrigger value="de">DE</TabsTrigger>
-                <TabsTrigger value="en">EN</TabsTrigger>
-                <TabsTrigger value="es">ES</TabsTrigger>
-              </>
-            )}
-          </TabsList>
-
-          {(activeVersion?.languages ?? [{ lang: "de", slug: "", title: "", description: "", contentPath: "" }]).map((lang) => (
-            <TabsContent key={lang.lang} value={lang.lang} className="mt-4">
-              {editorContent[lang.lang] ? (
-                <TiptapEditor
-                  content={editorContent[lang.lang]}
-                  onChange={(md) => {
-                    userEditedLangs.current.add(lang.lang);
-                    setEditorContent((prev) => ({ ...prev, [lang.lang]: md }));
-                  }}
-                  onImageUpload={async (file) => {
-                    const asset = await uploadContentMedia(customerId, projectId, item!.id, file, "inline");
-                    return getMediaFileUrl(customerId, projectId, asset.id);
-                  }}
-                  onImageBrowse={() => {
-                    return new Promise<string | null>((resolve) => {
-                      mediaPickerResolveRef.current = resolve;
-                      setMediaPickerOpen(true);
-                    });
-                  }}
-                />
-              ) : (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center p-12 text-center">
-                    <p className="text-sm text-muted-foreground">
-                      No content for {lang.lang.toUpperCase()} yet
-                    </p>
-                    <Button variant="outline" size="sm" className="mt-3">
-                      Generate Translation
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-          ))}
-        </Tabs>
-
-        {/* FAQ Section */}
-        <FaqSection faqs={faqs} setFaqs={setFaqs} />
+        )}
       </div>
     </ContentDetailLayout>
+    <Dialog open={!!deleteVersionId} onOpenChange={(open) => { if (!open) setDeleteVersionId(null); }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Delete Version?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          <strong>Version {deleteVersionId?.number} will be permanently deleted.</strong>{" "}
+          This action cannot be undone.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" size="sm" onClick={() => setDeleteVersionId(null)}>Cancel</Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={async () => {
+              if (!deleteVersionId) return;
+              try {
+                await deleteContentVersion(customerId!, projectId!, id, deleteVersionId.id);
+                setDeleteVersionId(null);
+                await loadItem();
+              } catch (err) {
+                console.error("Delete version failed:", err);
+              }
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
+  );
+}
+
+function JsonEditorSwitch({
+  contentTypeId,
+  contentType,
+  values,
+  onChange,
+  projectName,
+  authorName,
+  authorRole,
+  authorImage,
+  readOnly,
+}: {
+  contentTypeId: string | null;
+  contentType: ContentTypeDefinition | null;
+  values: Record<string, unknown>;
+  onChange: (values: Record<string, unknown>) => void;
+  projectName?: string;
+  authorName?: string;
+  authorRole?: string;
+  authorImage?: string;
+  readOnly?: boolean;
+}) {
+  const commonProps = { values, onChange, projectName, authorName, authorRole, authorImage, readOnly };
+  switch (contentTypeId) {
+    case "linkedin-post":
+      return <LinkedInEditor {...commonProps} />;
+    case "x-post":
+      return <XEditor {...commonProps} />;
+    case "instagram-post":
+      return <InstagramEditor {...commonProps} />;
+    case "tiktok-post":
+      return <TikTokEditor {...commonProps} />;
+    case "newsletter":
+      return <NewsletterEditor {...commonProps} />;
+    default:
+      return <GenericEditor values={values} onChange={onChange} contentType={contentType} readOnly={readOnly} />;
+  }
+}
+
+/** Media panel for social/email editors — image gallery with upload, mediathek, AI generate */
+function SocialMediaPanel({
+  customerId,
+  projectId,
+  contentId,
+  images,
+  onImagesChange,
+  mediaAssets,
+  onMediaAssetsChange,
+}: {
+  customerId: string;
+  projectId: string;
+  contentId: string;
+  images: string[];
+  onImagesChange: (images: string[]) => void;
+  mediaAssets: import("@/lib/types").MediaAsset[];
+  onMediaAssetsChange: (assets: import("@/lib/types").MediaAsset[]) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const asset = await uploadContentMedia(customerId, projectId, contentId, file);
+      const url = getMediaFileUrl(customerId, projectId, asset.id);
+      onImagesChange([...images, url]);
+      const { assets } = await getContentMedia(customerId, projectId, contentId);
+      onMediaAssetsChange(assets);
+    } catch (err) {
+      console.error("Upload failed:", err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeImage = (index: number) => {
+    onImagesChange(images.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="font-semibold text-sm">Post Images ({images.length}/20)</h3>
+
+      {/* Image Grid */}
+      {images.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {images.map((url, i) => (
+            <div key={i} className="relative group aspect-square rounded-md overflow-hidden border bg-muted">
+              <img src={url} alt="" className="w-full h-full object-cover" />
+              <button
+                onClick={() => removeImage(i)}
+                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <span className="text-xs">×</span>
+              </button>
+              {i === 0 && (
+                <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded">
+                  Cover
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {images.length === 0 && (
+        <div className="flex items-center justify-center rounded-md border border-dashed bg-muted/50 py-8">
+          <div className="text-center">
+            <ImageIcon className="mx-auto h-6 w-6 text-muted-foreground" />
+            <p className="mt-1 text-xs text-muted-foreground">No images yet</p>
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs"
+          disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          {uploading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}
+          Upload
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs"
+          disabled={generating}
+          onClick={async () => {
+            setGenerating(true);
+            try {
+              const asset = await generateHeroImage(customerId, projectId, contentId, "Professional social media image, modern clean style");
+              const url = getMediaFileUrl(customerId, projectId, asset.id);
+              onImagesChange([...images, url]);
+              const { assets } = await getContentMedia(customerId, projectId, contentId);
+              onMediaAssetsChange(assets);
+            } catch (err) {
+              console.error("Generate failed:", err);
+            } finally {
+              setGenerating(false);
+            }
+          }}
+        >
+          {generating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
+          AI Generate
+        </Button>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={async (e) => {
+          const files = Array.from(e.target.files ?? []);
+          for (const file of files) {
+            await handleUpload(file);
+          }
+          e.target.value = "";
+        }}
+      />
+
+      {/* Existing media assets */}
+      {mediaAssets.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">Content Media ({mediaAssets.length})</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {mediaAssets.map((asset) => (
+              <button
+                key={asset.id}
+                type="button"
+                className="aspect-square rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary transition-all"
+                onClick={() => {
+                  const url = getMediaFileUrl(customerId, projectId, asset.id);
+                  if (!images.includes(url)) {
+                    onImagesChange([...images, url]);
+                  }
+                }}
+              >
+                <img
+                  src={getMediaFileUrl(customerId, projectId, asset.id)}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

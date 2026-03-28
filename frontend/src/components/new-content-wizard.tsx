@@ -139,7 +139,7 @@ export function NewContentWizard({
         title: title.trim(),
         category: category.trim() || undefined,
         userNotes: notes.trim() || undefined,
-        format,
+        direction: format || undefined,
       });
 
       handleOpenChange(false);
