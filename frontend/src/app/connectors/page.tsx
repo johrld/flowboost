@@ -212,36 +212,63 @@ function ConnectorsPageContent() {
     }
   }, [detailView, ghInstallationId, ghRepos.length, loadGhRepos]);
 
+  // Helper to find a connector by type in the project's connectors array
+  const findConn = useCallback((type: string) => {
+    return (project?.connectors ?? []).find((c) => c.type === type);
+  }, [project?.connectors]);
+
+  // Helper to add or update a connector in the array and save to project
+  const upsertConnector = useCallback(async (connectorData: Record<string, unknown> & { type: string }) => {
+    if (!customerId || !projectId || !project) return;
+    const existing = (project.connectors ?? []);
+    const idx = existing.findIndex((c) => c.type === connectorData.type);
+    const id = idx >= 0 ? existing[idx].id : crypto.randomUUID();
+    const instance = { id, ...connectorData };
+    const connectors = idx >= 0
+      ? existing.map((c, i) => i === idx ? instance : c)
+      : [...existing, instance];
+    await updateProject(customerId, projectId, { connectors } as Partial<typeof project>);
+    await refreshProjects();
+  }, [customerId, projectId, project, refreshProjects]);
+
+  // Helper to remove a connector from the array
+  const removeConnector = useCallback(async (type: string) => {
+    if (!customerId || !projectId || !project) return;
+    const connectors = (project.connectors ?? []).filter((c) => c.type !== type);
+    await updateProject(customerId, projectId, { connectors } as Partial<typeof project>);
+    await refreshProjects();
+  }, [customerId, projectId, project, refreshProjects]);
+
   // Populate state from project data
   useEffect(() => {
     if (!project || initialized) return;
-    setConnectorType(project.connector?.type ?? "git");
-    if (project.connector?.github) {
-      setGhInstallationId(project.connector.github.installationId);
-      setGhOwner(project.connector.github.owner);
-      setGhRepo(project.connector.github.repo);
-      setGhBranch(project.connector.github.branch);
-      setFramework((project.connector.github as { framework?: Framework }).framework ?? "astro");
-      setGhContentPath(project.connector.github.contentPath);
-      setGhAssetsPath(project.connector.github.assetsPath);
-      setGhCategoriesPath(project.connector.github.categoriesPath ?? "src/data/categories.json");
-      setGhAuthorsPath(project.connector.github.authorsPath ?? "src/data/authors.json");
+    const ghConn = findConn("github");
+    if (ghConn?.github) {
+      setConnectorType("github");
+      setGhInstallationId(ghConn.github.installationId);
+      setGhOwner(ghConn.github.owner);
+      setGhRepo(ghConn.github.repo);
+      setGhBranch(ghConn.github.branch);
+      setFramework((ghConn.github as { framework?: Framework }).framework ?? "astro");
+      setGhContentPath(ghConn.github.contentPath);
+      setGhAssetsPath(ghConn.github.assetsPath);
+      setGhCategoriesPath(ghConn.github.categoriesPath ?? "src/data/categories.json");
+      setGhAuthorsPath(ghConn.github.authorsPath ?? "src/data/authors.json");
     }
-    // Load Listmonk config
-    if (project.connector?.listmonk) {
-      setLmBaseUrl(project.connector.listmonk.baseUrl ?? "");
-      setLmUsername(project.connector.listmonk.username ?? "");
-      setLmPassword(project.connector.listmonk.password ?? "");
+    const lmConn = findConn("listmonk");
+    if (lmConn?.listmonk) {
+      setLmBaseUrl(lmConn.listmonk.baseUrl ?? "");
+      setLmUsername(lmConn.listmonk.username ?? "");
+      setLmPassword(lmConn.listmonk.password ?? "");
     }
-    // Load Shopware config
-    if (project.connector?.shopware) {
-      setSwShopUrl(project.connector.shopware.shopUrl ?? "");
-      setSwClientId(project.connector.shopware.clientId ?? "");
-      setSwClientSecret(project.connector.shopware.clientSecret ?? "");
-      setSwAsSource(project.connector.useAsSource ?? false);
+    const swConn = findConn("shopware");
+    if (swConn?.shopware) {
+      setSwShopUrl(swConn.shopware.shopUrl ?? "");
+      setSwClientId(swConn.shopware.clientId ?? "");
+      setSwClientSecret(swConn.shopware.clientSecret ?? "");
     }
     setInitialized(true);
-  }, [project, initialized]);
+  }, [project, initialized, findConn]);
 
   // Handle GitHub OAuth callback
   useEffect(() => {
@@ -253,9 +280,7 @@ function ConnectorsPageContent() {
       const id = Number(installId);
       setGhInstallationId(id);
       setConnectorType("github");
-      updateProject(customerId, projectId, {
-        connector: { type: "github", github: { installationId: id, owner: "", repo: "", branch: "main", contentPath: "src/content/posts", assetsPath: "src/assets/posts" } },
-      });
+      upsertConnector({ type: "github", github: { installationId: id, owner: "", repo: "", branch: "main", contentPath: "src/content/posts", assetsPath: "src/assets/posts" } });
       loadGhRepos(id);
       window.history.replaceState({}, "", "/connectors?tab=connections");
     }
@@ -294,28 +319,24 @@ function ConnectorsPageContent() {
     setGhRepos([]);
     setGhBranches([]);
     if (customerId && projectId) {
-      await updateProject(customerId, projectId, {
-        connector: { type: "git" },
-      });
+      await removeConnector("github");
     }
   };
 
   const saveConnector = () => withSave(setConnectorStatus, async () => {
     if (connectorType === "github" && ghInstallationId) {
-      await updateProject(customerId, projectId, {
-        connector: {
-          type: "github",
-          github: {
-            installationId: ghInstallationId,
-            owner: ghOwner,
-            repo: ghRepo,
-            branch: ghBranch,
-            framework,
-            contentPath: ghContentPath,
-            assetsPath: ghAssetsPath,
-            categoriesPath: ghCategoriesPath,
-            authorsPath: ghAuthorsPath,
-          },
+      await upsertConnector({
+        type: "github",
+        github: {
+          installationId: ghInstallationId,
+          owner: ghOwner,
+          repo: ghRepo,
+          branch: ghBranch,
+          framework,
+          contentPath: ghContentPath,
+          assetsPath: ghAssetsPath,
+          categoriesPath: ghCategoriesPath,
+          authorsPath: ghAuthorsPath,
         },
       });
     }
@@ -332,15 +353,10 @@ function ConnectorsPageContent() {
     }
   };
 
-  const isGitConnected = connectorType === "github" && !!ghInstallationId;
-
-  const isSwConnected = (project?.connector?.type === "shopware" && !!project?.connector?.shopware?.shopUrl)
-    || (swTestStatus === "success")
-    || (swSaveStatus === "saved" && !!swShopUrl && !!swClientId && !!swClientSecret);
-
-  const isLmConnected = (project?.connector?.type === "listmonk" && !!project?.connector?.listmonk?.baseUrl)
-    || (lmTestStatus === "success")
-    || (lmSaveStatus === "saved" && !!lmBaseUrl && !!lmUsername && !!lmPassword);
+  // Connection status derived purely from project data (no local state dependency)
+  const isGitConnected = !!findConn("github")?.github?.installationId;
+  const isSwConnected = !!findConn("shopware")?.shopware?.shopUrl;
+  const isLmConnected = !!findConn("listmonk")?.listmonk?.baseUrl;
 
   const handleLmTest = async () => {
     if (!lmBaseUrl || !lmUsername || !lmPassword) return;
@@ -365,17 +381,14 @@ function ConnectorsPageContent() {
   };
 
   const handleLmSave = () => withSave(setLmSaveStatus, async () => {
-    await updateProject(customerId, projectId, {
-      connector: {
-        type: "listmonk",
-        listmonk: {
-          baseUrl: lmBaseUrl.replace(/\/+$/, ""),
-          username: lmUsername,
-          password: lmPassword,
-        },
+    await upsertConnector({
+      type: "listmonk",
+      listmonk: {
+        baseUrl: lmBaseUrl.replace(/\/+$/, ""),
+        username: lmUsername,
+        password: lmPassword,
       },
     });
-    await refreshProjects();
   });
 
   const handleLmLoadData = async () => {
@@ -398,11 +411,11 @@ function ConnectorsPageContent() {
   // Auto-load Listmonk data when entering detail view (with connected project)
   useEffect(() => {
     if (detailView === "listmonk" && isLmConnected && lmTemplates.length === 0 && !lmDataLoading && customerId && projectId
-        && project?.connector?.type === "listmonk") {
+        && findConn("listmonk")) {
       handleLmLoadData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailView, isLmConnected, project?.connector?.type]);
+  }, [detailView, isLmConnected]);
 
   // Auto-load schemas when entering Shopware detail view
   useEffect(() => {
@@ -444,17 +457,14 @@ function ConnectorsPageContent() {
   };
 
   const handleSwSave = () => withSave(setSwSaveStatus, async () => {
-    await updateProject(customerId, projectId, {
-      connector: {
-        type: "shopware",
-        shopware: {
-          shopUrl: swShopUrl.replace(/\/+$/, ""),
-          clientId: swClientId,
-          clientSecret: swClientSecret,
-        },
+    await upsertConnector({
+      type: "shopware",
+      shopware: {
+        shopUrl: swShopUrl.replace(/\/+$/, ""),
+        clientId: swClientId,
+        clientSecret: swClientSecret,
       },
     });
-    await refreshProjects();
   });
 
   const handleSwLoadSchemas = async () => {
@@ -762,20 +772,15 @@ function ConnectorsPageContent() {
                       checked={swAsSource}
                       onChange={async (e) => {
                         setSwAsSource(e.target.checked);
-                        if (customerId && projectId) {
-                          await updateProject(customerId, projectId, {
-                            connector: {
-                              type: "shopware",
-                              useAsSource: e.target.checked,
-                              shopware: {
-                                shopUrl: swShopUrl.replace(/\/+$/, ""),
-                                clientId: swClientId,
-                                clientSecret: swClientSecret,
-                              },
-                            },
-                          });
-                          await refreshProjects();
-                        }
+                        await upsertConnector({
+                          type: "shopware",
+                          useAsSource: e.target.checked,
+                          shopware: {
+                            shopUrl: swShopUrl.replace(/\/+$/, ""),
+                            clientId: swClientId,
+                            clientSecret: swClientSecret,
+                          },
+                        });
                       }}
                       className="h-4 w-4 rounded border-gray-300"
                     />
@@ -1183,7 +1188,7 @@ function ConnectorsPageContent() {
             );
           })}
           {/* Schema Import */}
-          {project?.connector?.type === "shopware" || project?.connector?.type === "wordpress" ? (
+          {findConn("shopware") || findConn("wordpress") ? (
             <div className="space-y-3 pt-4 border-t">
               <div className="flex items-center justify-between">
                 <div>

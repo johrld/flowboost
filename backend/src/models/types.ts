@@ -43,14 +43,11 @@ export interface Project {
   // Competitors
   competitors?: Competitor[];
 
-  // Connector configuration (V1 — kept for backward compatibility)
-  connector: ConnectorConfig;
+  // Connector configuration (V1 — kept for backward compatibility, auto-migrated to connectors[])
+  connector?: ConnectorConfig;
 
-  // Multi-Connector configuration (V2 — optional, takes precedence when set)
-  connectors?: {
-    site: SiteConnectorConfig;
-    social?: SocialChannelConfig[];
-  };
+  // Multi-Connector configuration — array of independent connector instances
+  connectors: ConnectorInstance[];
 
   // Pipeline settings
   pipeline: PipelineSettings;
@@ -115,6 +112,41 @@ export interface ConnectorConfig {
     username: string;
     password: string;
   };
+}
+
+export type ConnectorType = ConnectorConfig["type"];
+
+export interface ConnectorInstance extends ConnectorConfig {
+  id: string;
+  label?: string;
+}
+
+// ─── Connector Helpers ──────────────────────────────────────────
+
+/** Migrate V1 single connector to connectors array (idempotent) */
+export function migrateConnectors(project: Project): ConnectorInstance[] {
+  if (project.connectors?.length > 0) return project.connectors;
+  if (project.connector?.type) {
+    return [{ id: crypto.randomUUID(), ...project.connector }];
+  }
+  return [];
+}
+
+/** Find a connector by type in the connectors array */
+export function findConnector(project: Project, type: ConnectorType): ConnectorInstance | undefined {
+  return project.connectors.find((c) => c.type === type);
+}
+
+/** Find a connector by ID in the connectors array */
+export function findConnectorById(project: Project, id: string): ConnectorInstance | undefined {
+  return project.connectors.find((c) => c.id === id);
+}
+
+/** Get the primary site delivery connector (first git/github/filesystem/shopware/wordpress) */
+export function getSiteConnector(project: Project): ConnectorInstance | undefined {
+  return project.connectors.find((c) =>
+    ["git", "github", "filesystem", "shopware", "wordpress"].includes(c.type),
+  );
 }
 
 export interface PipelineSettings {

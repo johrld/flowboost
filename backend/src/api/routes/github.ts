@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { isConfigured, listRepos, listBranches, getFileContent } from "../../services/github.js";
 import { createLogger } from "../../utils/logger.js";
+import { findConnector } from "../../models/types.js";
 
 /**
  * GitHub App auth routes (/auth/github/*) and API routes (/github/*).
@@ -189,12 +190,11 @@ async function disconnectInstallation(
   for (const customer of customers) {
     const projects = app.ctx.projectsFor(customer.id).list();
     for (const project of projects) {
-      if (
-        project.connector?.type === "github" &&
-        project.connector.github?.installationId === installationId
-      ) {
+      const ghConn = findConnector(project, "github");
+      if (ghConn?.github?.installationId === installationId) {
+        const updatedConnectors = (project.connectors ?? []).filter((c) => c.id !== ghConn.id);
         app.ctx.projectsFor(customer.id).update(project.id, {
-          connector: { type: "filesystem" },
+          connectors: updatedConnectors,
           updatedAt: new Date().toISOString(),
         } as Partial<typeof project>);
         disconnected++;

@@ -3,6 +3,7 @@ import os from "node:os";
 import fs from "node:fs";
 import { simpleGit } from "simple-git";
 import type { Project, PipelineRun, Topic, ChatMessage } from "../models/types.js";
+import { findConnector } from "../models/types.js";
 import type { ConnectorSchema } from "../connectors/site/types.js";
 import { readChat } from "../models/chat.js";
 import { buildFlowContext } from "./flow-context.js";
@@ -95,8 +96,9 @@ export class PipelineContext {
   async prepareRepo(): Promise<string> {
     if (this._repoDir) return this._repoDir;
 
-    if (this.project.connector.type === "github") {
-      const gh = this.project.connector.github;
+    const ghConn = findConnector(this.project, "github");
+    if (ghConn?.github) {
+      const gh = ghConn.github;
       if (!gh) throw new Error("GitHub connector configured but no github config found");
 
       const cloneUrl = await getCloneUrl(gh.installationId, gh.owner, gh.repo);

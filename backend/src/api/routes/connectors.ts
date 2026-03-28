@@ -3,6 +3,7 @@ import { createLogger } from "../../utils/logger.js";
 import { ShopwareSiteConnector } from "../../connectors/site/shopware.js";
 import { createSiteConnector } from "../../connectors/site/factory.js";
 import { ListmonkConnector } from "../../connectors/email/listmonk.js";
+import { findConnector } from "../../models/types.js";
 
 const log = createLogger("api:connectors");
 
@@ -102,23 +103,27 @@ export async function connectorRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: "Project not found" });
     }
 
-    const connectorType = project.connector?.type;
-    if (connectorType !== "shopware" && connectorType !== "wordpress") {
-      return reply.status(400).send({ error: "Kein Connector mit Schema Discovery konfiguriert" });
+    // Find a connector with schema discovery (Shopware or WordPress)
+    const swConn = findConnector(project, "shopware");
+    const wpConn = findConnector(project, "wordpress");
+    const discoveryConn = swConn ?? wpConn;
+
+    if (!discoveryConn) {
+      return reply.status(400).send({ error: "No connector with schema discovery configured" });
     }
 
     try {
-      const connector = createSiteConnector(project);
+      const connector = createSiteConnector(project, { connectorType: discoveryConn.type });
       if (!connector.discoverSchemas) {
-        return reply.status(400).send({ error: "Connector unterstützt keine Schema Discovery" });
+        return reply.status(400).send({ error: "Connector does not support schema discovery" });
       }
 
       const schemas = await connector.discoverSchemas();
-      log.info({ connectorType, schemaCount: schemas.length }, "schemas discovered");
+      log.info({ connectorType: discoveryConn.type, schemaCount: schemas.length }, "schemas discovered");
       return { schemas };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Schema Discovery fehlgeschlagen";
-      log.error({ err, connectorType }, "schema discovery failed");
+      const message = err instanceof Error ? err.message : "Schema discovery failed";
+      log.error({ err, connectorType: discoveryConn.type }, "schema discovery failed");
       return reply.status(500).send({ error: message });
     }
   });
@@ -141,16 +146,12 @@ export async function connectorRoutes(app: FastifyInstance) {
     const project = projects.get(projectId);
     if (!project) return reply.status(404).send({ error: "Project not found" });
 
-    if (project.connector?.type !== "shopware") {
-      return reply.status(400).send({ error: "Nur Shopware-Connector unterstützt Browse" });
+    const swConn = findConnector(project, "shopware");
+    if (!swConn?.shopware) {
+      return reply.status(400).send({ error: "No Shopware connector configured" });
     }
 
-    const sw = project.connector.shopware;
-    if (!sw?.shopUrl || !sw?.clientId || !sw?.clientSecret) {
-      return reply.status(400).send({ error: "Shopware-Connector nicht konfiguriert" });
-    }
-
-    const connector = new ShopwareSiteConnector(sw);
+    const connector = new ShopwareSiteConnector(swConn.shopware);
 
     try {
       if (entity === "products") {
@@ -160,9 +161,9 @@ export async function connectorRoutes(app: FastifyInstance) {
         const result = await browseCategories(connector, search);
         return result;
       }
-      return reply.status(400).send({ error: `Unbekannte Entity: ${entity}` });
+      return reply.status(400).send({ error: `Unknown entity: ${entity}` });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Browse fehlgeschlagen";
+      const message = err instanceof Error ? err.message : "Browse failed";
       log.error({ err, entity }, "connector browse failed");
       return reply.status(500).send({ error: message });
     }
@@ -180,16 +181,12 @@ export async function connectorRoutes(app: FastifyInstance) {
     const project = projects.get(projectId);
     if (!project) return reply.status(404).send({ error: "Project not found" });
 
-    if (project.connector?.type !== "shopware") {
-      return reply.status(400).send({ error: "Nur Shopware-Connector unterstützt Browse" });
+    const swConn = findConnector(project, "shopware");
+    if (!swConn?.shopware) {
+      return reply.status(400).send({ error: "No Shopware connector configured" });
     }
 
-    const sw = project.connector.shopware;
-    if (!sw?.shopUrl || !sw?.clientId || !sw?.clientSecret) {
-      return reply.status(400).send({ error: "Shopware-Connector nicht konfiguriert" });
-    }
-
-    const connector = new ShopwareSiteConnector(sw);
+    const connector = new ShopwareSiteConnector(swConn.shopware);
 
     try {
       if (entity === "products") {
@@ -213,17 +210,13 @@ export async function connectorRoutes(app: FastifyInstance) {
     const project = projects.get(projectId);
     if (!project) return reply.status(404).send({ error: "Project not found" });
 
-    if (project.connector?.type === "listmonk") {
-      const lm = project.connector.listmonk;
-      if (!lm?.baseUrl || !lm?.username || !lm?.password) {
-        return reply.status(400).send({ error: "Listmonk connector not configured" });
-      }
-      const connector = new ListmonkConnector(lm);
-      const templates = await connector.getTemplates();
-      return { templates };
+    const lmConn = findConnector(project, "listmonk");
+    if (!lmConn?.listmonk) {
+      return reply.status(400).send({ error: "No Listmonk connector configured" });
     }
-
-    return reply.status(400).send({ error: "No email connector configured" });
+    const connector = new ListmonkConnector(lmConn.listmonk);
+    const templates = await connector.getTemplates();
+    return { templates };
   });
 
   // GET /connectors/lists — list subscriber lists from email connector (Listmonk)
@@ -235,17 +228,13 @@ export async function connectorRoutes(app: FastifyInstance) {
     const project = projects.get(projectId);
     if (!project) return reply.status(404).send({ error: "Project not found" });
 
-    if (project.connector?.type === "listmonk") {
-      const lm = project.connector.listmonk;
-      if (!lm?.baseUrl || !lm?.username || !lm?.password) {
-        return reply.status(400).send({ error: "Listmonk connector not configured" });
-      }
-      const connector = new ListmonkConnector(lm);
-      const lists = await connector.getLists();
-      return { lists };
+    const lmConn = findConnector(project, "listmonk");
+    if (!lmConn?.listmonk) {
+      return reply.status(400).send({ error: "No Listmonk connector configured" });
     }
-
-    return reply.status(400).send({ error: "No email connector configured" });
+    const lmConnector = new ListmonkConnector(lmConn.listmonk);
+    const lists = await lmConnector.getLists();
+    return { lists };
   });
 }
 

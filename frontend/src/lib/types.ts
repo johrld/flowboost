@@ -251,6 +251,13 @@ export interface ConnectorConfig {
   };
 }
 
+export type ConnectorType = ConnectorConfig["type"];
+
+export interface ConnectorInstance extends ConnectorConfig {
+  id: string;
+  label?: string;
+}
+
 export interface PipelineSettings {
   defaultModel: string;
   maxRetriesPerPhase?: number;
@@ -269,7 +276,8 @@ export interface Project {
   categories: Category[];
   keywords: Record<string, string[]>;
   competitors?: Competitor[];
-  connector: ConnectorConfig;
+  connector?: ConnectorConfig;
+  connectors: ConnectorInstance[];
   pipeline: PipelineSettings;
   publishFrequency?: {
     articlesPerWeek: number;
