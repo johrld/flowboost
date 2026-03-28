@@ -25,24 +25,30 @@ FlowBoost is an AI-powered content pipeline. Users create **Flows** (creative wo
 ## User Flow
 
 ```
-1. CREATE FLOW         User creates a Flow with a title ("Atemtechnik für Einsteiger")
+1. CREATE FLOW         User creates a Flow (= campaign) with a title
        │
-2. ADD SOURCES         Upload PDFs, paste URLs, record voice memos, add images
+2. WRITE BRIEFING      Describe the campaign: audience, goals, key messages, tone
+       │               Central document that all AI agents read
+       │
+3. ADD SOURCES         Upload PDFs, paste URLs, record voice memos, add images
        │               Each source is auto-processed (summarized, transcribed, described)
        │
-3. BRAINSTORM          Chat with AI about direction, tone, key points
+4. BRAINSTORM          Chat with AI about direction, tone, key points
        │               Chat distillation extracts decisions automatically
        │
-4. SELECT CONTENT      Choose what to produce: Blog Post, LinkedIn, Newsletter, etc.
+5. CREATE CONTENT      Add content pieces: Blog Post, LinkedIn, Newsletter, etc.
        │               Each is a ContentType — defines fields, agent, pipeline
        │
-5. CREATE WITH AI      Click "Create with AI" on any content type
+6. GENERATE WITH AI    Click "Create with AI" per piece or "Generate All"
        │               ├── LinkedIn/Instagram/Newsletter → 1 agent, instant
        │               └── Blog Post → 6 agents, multi-phase (research → publish)
+       │               All agents receive: Briefing + Sources + Chat + Brand Voice
        │
-6. EDIT + REFINE       Review AI output in editor, chat for refinement
+7. EDIT + REFINE       Platform-native editor (LinkedIn preview, tweet preview, etc.)
+       │               AI Chat sidebar knows full campaign context
        │
-7. APPROVE + DELIVER   Connector writes to platform (GitHub PR, WordPress, etc.)
+8. PUBLISH             Smart action button: Submit → Approve → Publish on LinkedIn
+                       Status management via dropdown or action button
 ```
 
 ## Core Principles
@@ -64,7 +70,7 @@ Customer
        ├── content-types/ (JSON definitions)
        │
        ├── Flow (1:N)  ← "Topic" in code
-       │    ├── title, category, direction
+       │    ├── title, category, briefing, direction
        │    ├── inputs[] (sources: text, URLs, PDFs, audio, images)
        │    ├── chat + chatDistillation
        │    ├── enrichment? (optional SEO research cache)

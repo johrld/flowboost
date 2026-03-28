@@ -207,6 +207,7 @@ export interface Topic {
   status: "proposed" | "approved" | "rejected" | "in_production" | "produced" | "archived";
   title: string;
   category: string;
+  briefing?: string;          // Free-form briefing text — the central "what is this about" document
   direction?: string;         // Creative direction / angle (generic, applies to any content type)
   userNotes?: string;
   priority: number;

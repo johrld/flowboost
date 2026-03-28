@@ -147,15 +147,26 @@ Agents access FlowBoost tools via a stdio MCP server (`tools/mcp-stdio-server.ts
 Every agent receives context in layers:
 
 ```
-1. Project Level (always)
-   Brand Voice, Style Guide, Project Brief, Pipeline Settings
+1. Project Level (always injected — no MCP needed)
+   ├── Project Brief (from Settings → AI Context)
+   ├── Brand Voice (project-level > customer-level fallback)
+   └── Pipeline Settings (model, retries)
 
-2. Flow Level (from the user's Flow)
-   Title, Direction, Source Summaries, Chat Distillation, Enrichment
+2. Flow Level (from the user's Flow/Campaign)
+   ├── Briefing (free-form campaign description)
+   ├── Source Summaries (processed inputs: PDFs, URLs, transcripts)
+   ├── Chat Distillation (key decisions, must-includes, rejected ideas)
+   ├── Direction (creative angle)
+   └── Enrichment (optional SEO: keywords, intent, competitors)
 
 3. ContentType Level (defines agent behavior)
-   Role, Guidelines, Field Constraints, Output Schema
+   ├── Agent Role ("Senior LinkedIn strategist")
+   ├── Guidelines (markdown: structure, tone, dos/don'ts)
+   ├── Field Constraints (char limits, word counts)
+   └── Output Schema (auto-generated JSON format)
 ```
+
+**The Content Refinement Chat** (sidebar in every editor) receives all three layers automatically. Project Brief and Brand Voice are read directly in the backend — no MCP tool calls needed. This means the AI always knows your brand, your campaign goals, and your sources.
 
 ### Prompt Files
 
