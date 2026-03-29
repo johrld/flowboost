@@ -79,6 +79,8 @@ export default function FlowsPage() {
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"cards" | "board" | "list">("cards");
+  const [filterFlow, setFilterFlow] = useState<string>("all");
+  const [filterType, setFilterType] = useState<string>("all");
 
   const loadData = useCallback(async () => {
     if (!customerId || !projectId) return;
@@ -102,6 +104,30 @@ export default function FlowsPage() {
     acc[fid].push(item);
     return acc;
   }, {});
+
+  // Apply filters
+  const filteredContent = contentItems.filter((item) => {
+    if (filterFlow !== "all") {
+      const fid = item.flowId ?? item.topicId;
+      if (fid !== filterFlow) return false;
+    }
+    if (filterType !== "all") {
+      if (filterType === "social") {
+        if (item.type !== "social_post") return false;
+      } else if (filterType === "article") {
+        if (item.type !== "article" && item.type !== "guide") return false;
+      } else if (filterType === "newsletter") {
+        if (item.type !== "newsletter") return false;
+      } else {
+        // Filter by category (linkedin, instagram, etc.)
+        if (item.category !== filterType) return false;
+      }
+    }
+    return true;
+  });
+
+  // Content type options for filter
+  const typeOptions = Array.from(new Set(contentItems.map((i) => i.category ?? i.type))).sort();
 
   if (projectLoading || loading) {
     return (
@@ -146,6 +172,42 @@ export default function FlowsPage() {
           </button>
         </div>
       </div>
+
+      {/* Filters — shown for board and list views */}
+      {viewMode !== "cards" && (
+        <div className="flex items-center gap-3">
+          <select
+            value={filterFlow}
+            onChange={(e) => setFilterFlow(e.target.value)}
+            className="h-8 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="all">All Flows</option>
+            {activeFlows.map((f) => (
+              <option key={f.id} value={f.id}>{f.title}</option>
+            ))}
+          </select>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="h-8 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="all">All Types</option>
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>
+                {({ linkedin: "LinkedIn", instagram: "Instagram", x: "X", tiktok: "TikTok", article: "Article", guide: "Guide", newsletter: "Newsletter", social_post: "Social" } as Record<string, string>)[t] ?? t}
+              </option>
+            ))}
+          </select>
+          {(filterFlow !== "all" || filterType !== "all") && (
+            <button
+              onClick={() => { setFilterFlow("all"); setFilterType("all"); }}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── Views ── */}
       {activeFlows.length === 0 ? (
@@ -214,7 +276,7 @@ export default function FlowsPage() {
             { key: "review", label: "Review", statuses: ["review", "approved", "delivered"] },
             { key: "published", label: "Published", statuses: ["published", "updating"] },
           ].map((col) => {
-            const colItems = contentItems.filter((i) => col.statuses.includes(i.status));
+            const colItems = filteredContent.filter((i) => col.statuses.includes(i.status));
             return (
               <div key={col.key} className="space-y-2">
                 <div className="flex items-center justify-between px-1 pb-1">
@@ -266,7 +328,7 @@ export default function FlowsPage() {
               </tr>
             </thead>
             <tbody>
-              {contentItems.map((item) => {
+              {filteredContent.map((item) => {
                 const flow = topics.find((t) => t.id === (item.flowId ?? item.topicId));
                 return (
                   <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
@@ -293,7 +355,7 @@ export default function FlowsPage() {
                   </tr>
                 );
               })}
-              {contentItems.length === 0 && (
+              {filteredContent.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground text-xs">No content pieces yet</td></tr>
               )}
             </tbody>
