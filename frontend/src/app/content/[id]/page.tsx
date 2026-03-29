@@ -960,6 +960,52 @@ export default function ContentEditorPage({
             <span className="text-xs text-muted-foreground">
               Updated: {new Date(item.updatedAt).toLocaleDateString("de-DE")}
             </span>
+            {/* Language switcher in header (multi-language content types only) */}
+            {editorMode === "markdown" && (contentTypeDef?.localization?.mode ?? "multi") === "multi" && (
+              <div className="flex items-center gap-0.5 ml-2 border rounded-md px-1 py-0.5">
+                {(() => {
+                  const versionLangs = activeVersion?.languages ?? [];
+                  const versionLangCodes = new Set(versionLangs.map((l) => l.lang));
+                  const localLangs = Object.keys(editorContent).filter((l) => !versionLangCodes.has(l));
+                  const allLangs = [...versionLangs.map((l) => l.lang), ...localLangs];
+                  return allLangs.map((lc) => (
+                    <button
+                      key={lc}
+                      onClick={() => setActiveLang(lc)}
+                      className={`px-2 py-0.5 text-xs rounded transition-colors ${activeLang === lc ? "bg-primary text-primary-foreground font-medium" : "text-muted-foreground hover:bg-muted"}`}
+                    >
+                      {lc.toUpperCase()}
+                    </button>
+                  ));
+                })()}
+                {(() => {
+                  const allExisting = new Set([
+                    ...(activeVersion?.languages.map((l) => l.lang) ?? []),
+                    ...Object.keys(editorContent),
+                  ]);
+                  const available = projectLanguages.filter((l) => !allExisting.has(l.code));
+                  if (available.length === 0) return null;
+                  return (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted rounded transition-colors">+</button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        {available.map((l) => (
+                          <DropdownMenuItem key={l.code} onClick={() => {
+                            setEditorContent((prev) => ({ ...prev, [l.code]: `# ${title}\n\n` }));
+                            setMetaByLang((prev) => ({ ...prev, [l.code]: { title, description: "", category: category || "", tags: "", keywords: "", author: author || "", faqs: [] } }));
+                            setActiveLang(l.code);
+                          }}>
+                            {l.code.toUpperCase()} — {l.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                })()}
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             {editorMode === "markdown" && (
@@ -1488,21 +1534,35 @@ export default function ContentEditorPage({
 
             {/* Language Tabs + Editor */}
             <Tabs value={activeLang} onValueChange={setActiveLang}>
+              {/* Language tabs moved to header — hidden here */}
+              {false && (
               <TabsList>
-                {activeVersion?.languages.map((lang) => (
-                  <TabsTrigger key={lang.lang} value={lang.lang}>
-                    {lang.lang.toUpperCase()}
-                    {lang.wordCount ? (
-                      <span className="ml-1 text-[10px] text-muted-foreground">({lang.wordCount}w)</span>
-                    ) : null}
-                  </TabsTrigger>
-                )) ?? (
-                  <TabsTrigger value="de">DE</TabsTrigger>
-                )}
+                {(() => {
+                  // Combine version languages + locally added languages (from editorContent keys)
+                  const versionLangs = activeVersion?.languages ?? [];
+                  const versionLangCodes = new Set(versionLangs.map((l) => l.lang));
+                  const localLangs = Object.keys(editorContent).filter((l) => !versionLangCodes.has(l));
+                  const allLangs = [...versionLangs.map((l) => l.lang), ...localLangs];
+
+                  return allLangs.map((langCode) => {
+                    const vLang = versionLangs.find((l) => l.lang === langCode);
+                    return (
+                      <TabsTrigger key={langCode} value={langCode}>
+                        {langCode.toUpperCase()}
+                        {vLang?.wordCount ? (
+                          <span className="ml-1 text-[10px] text-muted-foreground">({vLang.wordCount}w)</span>
+                        ) : null}
+                      </TabsTrigger>
+                    );
+                  });
+                })()}
                 {/* Add language button */}
                 {(() => {
-                  const existingLangs = new Set(activeVersion?.languages.map((l) => l.lang) ?? []);
-                  const availableLangs = projectLanguages.filter((l) => !existingLangs.has(l.code));
+                  const allExisting = new Set([
+                    ...(activeVersion?.languages.map((l) => l.lang) ?? []),
+                    ...Object.keys(editorContent),
+                  ]);
+                  const availableLangs = projectLanguages.filter((l) => !allExisting.has(l.code));
                   if (availableLangs.length === 0) return null;
                   return (
                     <DropdownMenu>
@@ -1516,7 +1576,6 @@ export default function ContentEditorPage({
                           <DropdownMenuItem
                             key={lang.code}
                             onClick={() => {
-                              // Add empty content for this language
                               setEditorContent((prev) => ({ ...prev, [lang.code]: `# ${title}\n\n` }));
                               setMetaByLang((prev) => ({
                                 ...prev,
@@ -1533,8 +1592,9 @@ export default function ContentEditorPage({
                   );
                 })()}
               </TabsList>
+              )}
 
-              {(activeVersion?.languages ?? [{ lang: "de", slug: "", title: "", description: "", contentPath: "" }]).map((lang) => (
+              {[...(activeVersion?.languages ?? [{ lang: "de", slug: "", title: "", description: "", contentPath: "" }]), ...Object.keys(editorContent).filter((l) => !(activeVersion?.languages ?? []).some((vl) => vl.lang === l)).map((l) => ({ lang: l, slug: "", title: "", description: "", contentPath: "" }))].map((lang) => (
                 <TabsContent key={lang.lang} value={lang.lang} className="mt-4">
                   {editorContent[lang.lang] ? (
                     <TiptapEditor
