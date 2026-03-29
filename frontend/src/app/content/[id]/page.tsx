@@ -962,7 +962,7 @@ export default function ContentEditorPage({
           </Link>
           <div className="flex-1 flex items-center gap-2">
             <ContentStatusBadge status={item.status} />
-            <ContentTypeBadge type={item.type} label={contentTypeDef?.label} />
+            <ContentTypeBadge type={item.type} label={contentTypeDef?.label} connectorType={contentTypeDef?.connectorType} />
             {activeVersion && (
               <span className={`text-xs ${isViewingOldVersion ? "text-violet-600 font-medium" : "text-muted-foreground"}`}>
                 v{activeVersion.versionNumber}{isViewingOldVersion ? ` (latest: v${latestVersion!.versionNumber})` : ""}
@@ -1869,10 +1869,6 @@ function JsonEditorSwitch({
     case "newsletter":
       return <NewsletterEditor {...commonProps} />;
     default:
-      // Connector-imported content types with slot structure
-      if (contentType?.connectorType === "shopware" || contentType?.connectorType === "wordpress") {
-        return <ShopwareEditor values={values} onChange={onChange} contentType={contentType} readOnly={readOnly} />;
-      }
       return <GenericEditor values={values} onChange={onChange} contentType={contentType} readOnly={readOnly} />;
   }
 }

@@ -42,6 +42,8 @@ export interface ConnectorSlot {
     imageAspectRatio?: string;
     maxItems?: number;
   };
+  /** Example content from an existing page using this slot (for AI context) */
+  exampleContent?: string;
 }
 
 // ─── Site Connector Interface ────────────────────────────────

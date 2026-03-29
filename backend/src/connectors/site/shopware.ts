@@ -204,14 +204,56 @@ export class ShopwareSiteConnector implements SiteConnector {
             else if (slot.type === "product-slider" || slot.type === "product-listing") slotType = "product-list";
             else if (slot.type === "text") slotType = "html";
 
+            // Extract default content from slot config (Ansatz B: content in layout)
+            let defaultContent: string | undefined;
+            const slotConfig = slot.config as Record<string, { source?: string; value?: unknown }> | undefined;
+            if (slotConfig?.content?.value && typeof slotConfig.content.value === "string") {
+              defaultContent = slotConfig.content.value;
+            }
+
             slots.push({
               id: slotId,
               label,
               type: slotType,
-              required: false, // All Shopware slots are optional
+              required: false,
+              exampleContent: defaultContent,
             });
           }
         }
+      }
+
+      // Try to find a category using this layout for real content (Ansatz A: content in slotConfig)
+      try {
+        const catResult = await this.apiPost<{
+          data: Array<{ id: string; slotConfig?: Record<string, Record<string, { source?: string; value?: unknown }>> }>;
+        }>("/search/category", {
+          filter: [{ type: "equals", field: "cmsPageId", value: page.id }],
+          limit: 1,
+          includes: { category: ["id", "slotConfig"] },
+        });
+
+        const category = catResult.data?.[0];
+        if (category?.slotConfig) {
+          // Map slotConfig overrides to our slot IDs
+          for (const slot of slots) {
+            // slotConfig keys are Shopware's internal slot UUIDs, not our s{N}-... IDs
+            // We need to match by position — iterate all slotConfig entries
+            // For now, match by checking if any slotConfig entry has content
+            for (const [, config] of Object.entries(category.slotConfig)) {
+              const content = config?.content?.value;
+              if (content && typeof content === "string" && content.length > 10) {
+                // Heuristic: match slots without exampleContent to available slotConfig entries
+                if (!slot.exampleContent) {
+                  slot.exampleContent = content;
+                  break;
+                }
+              }
+            }
+          }
+          log.info({ layoutId: page.id, categoryId: category.id }, "loaded example content from category slotConfig");
+        }
+      } catch {
+        log.debug({ layoutId: page.id }, "no category found for example content");
       }
 
       schemas.push({
@@ -225,6 +267,7 @@ export class ShopwareSiteConnector implements SiteConnector {
       log.info({ layoutId: page.id, name: page.name, slots: slots.length }, "layout discovered");
     }
 
+    schemas.sort((a, b) => a.label.localeCompare(b.label));
     log.info({ layoutCount: schemas.length }, "Shopware schema discovery complete");
     return schemas;
   }

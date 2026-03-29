@@ -1,4 +1,5 @@
 import type { TopicStatus, PhaseStatus, ContentItemStatus, ContentType, ContentStatus } from "@/lib/types";
+import { ShoppingBag, Globe } from "lucide-react";
 
 // ── Topic Status Badge ───────────────────────────────────────────
 
@@ -127,10 +128,16 @@ const contentTypeConfig: Record<ContentType, { label: string; className: string 
   newsletter: { label: "Newsletter", className: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
 };
 
-export function ContentTypeBadge({ type, label }: { type: ContentType; label?: string }) {
+const CONNECTOR_BADGE_ICONS: Record<string, React.ReactNode> = {
+  shopware: <ShoppingBag className="h-3 w-3 mr-0.5" />,
+  wordpress: <Globe className="h-3 w-3 mr-0.5" />,
+};
+
+export function ContentTypeBadge({ type, label, connectorType }: { type: ContentType; label?: string; connectorType?: string }) {
   const config = contentTypeConfig[type];
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${config.className}`}>
+      {connectorType && CONNECTOR_BADGE_ICONS[connectorType]}
       {label ?? config.label}
     </span>
   );

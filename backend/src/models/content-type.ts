@@ -37,6 +37,8 @@ export interface CustomFieldDefinition {
     imageAspectRatio?: string;
     options?: string[];
   };
+  /** Example content from an existing page (for AI context during generation) */
+  exampleContent?: string;
 }
 
 export interface ContentTypeAgent {
@@ -185,8 +187,11 @@ export class ContentTypeStore {
   importFromConnector(
     projectId: string,
     connectorType: string,
-    schemas: Array<{ id: string; label: string; description?: string; category: string; slots: Array<{ id: string; label: string; type: string; required: boolean; constraints?: Record<string, unknown> }> }>,
+    schemas: Array<{ id: string; label: string; description?: string; category: string; slots: Array<{ id: string; label: string; type: string; required: boolean; constraints?: Record<string, unknown>; exampleContent?: string }> }>,
   ): CustomContentType[] {
+    // Load default agent/pipeline from builtin template (if available)
+    const defaultCt = connectorType === "shopware" ? this.get("shopware-landing-page") : null;
+
     const imported: CustomContentType[] = [];
     for (const schema of schemas) {
       const fields: CustomFieldDefinition[] = schema.slots.map((slot, i) => ({
@@ -196,18 +201,35 @@ export class ContentTypeStore {
         required: slot.required,
         sortOrder: i,
         constraints: slot.constraints as CustomFieldDefinition["constraints"],
+        exampleContent: slot.exampleContent,
       }));
 
-      const ct = this.create({
-        projectId,
-        label: schema.label,
-        description: schema.description,
-        category: schema.category as CustomContentType["category"],
-        source: "connector",
-        connectorType,
-        connectorRef: schema.id,
-        fields,
-      });
+      // Check if a content type with this connectorRef already exists → update instead of create
+      const existing = this.list().find((ct) => ct.connectorRef === schema.id && ct.connectorType === connectorType);
+      let ct: CustomContentType;
+      if (existing) {
+        ct = this.update(existing.id, {
+          label: schema.label,
+          description: schema.description,
+          fields,
+          agent: existing.agent ?? defaultCt?.agent,
+          pipeline: existing.pipeline ?? defaultCt?.pipeline,
+        })!;
+        log.info({ id: existing.id, label: schema.label }, "connector content type updated");
+      } else {
+        ct = this.create({
+          projectId,
+          label: schema.label,
+          description: schema.description,
+          category: schema.category as CustomContentType["category"],
+          source: "connector",
+          connectorType,
+          connectorRef: schema.id,
+          fields,
+          agent: defaultCt?.agent,
+          pipeline: defaultCt?.pipeline,
+        });
+      }
       imported.push(ct);
     }
     return imported;

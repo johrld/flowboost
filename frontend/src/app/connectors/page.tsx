@@ -115,7 +115,7 @@ function ConnectorsPageContent() {
   const loadGhBranches = useCallback(async (owner: string, repo: string) => {
     if (!ghInstallationId) return;
     setGhLoadingBranches(true);
-    try { setGhBranches(await getGitHubBranches(ghInstallationId, owner, repo)); } catch { /* ignore */ }
+    try { setGhBranches(await getGitHubBranches(ghInstallationId, owner, repo)); } catch (err) { console.error("connector action failed:", err); }
     setGhLoadingBranches(false);
   }, [ghInstallationId]);
 
@@ -156,26 +156,28 @@ function ConnectorsPageContent() {
     setTestStatus((prev) => { const next = { ...prev }; delete next[type]; return next; });
   }, [customerId, projectId, refreshProjects]);
 
-  // Populate state from project data — generic for all connectors + GitHub special case
+  // Sync config values from project data whenever project or connectorDefs change
   useEffect(() => {
-    if (!project || initialized) return;
+    if (!project || connectorDefs.length === 0) return;
 
     // Load GitHub connector (special — has its own state)
-    const ghConn = findConn("github");
-    if (ghConn?.github) {
-      setConnectorType("github");
-      setGhInstallationId(ghConn.github.installationId);
-      setGhOwner(ghConn.github.owner);
-      setGhRepo(ghConn.github.repo);
-      setGhBranch(ghConn.github.branch);
-      setFramework((ghConn.github as { framework?: Framework }).framework ?? "astro");
-      setGhContentPath(ghConn.github.contentPath);
-      setGhAssetsPath(ghConn.github.assetsPath);
-      setGhCategoriesPath(ghConn.github.categoriesPath ?? "src/data/categories.json");
-      setGhAuthorsPath(ghConn.github.authorsPath ?? "src/data/authors.json");
+    if (!initialized) {
+      const ghConn = findConn("github");
+      if (ghConn?.github) {
+        setConnectorType("github");
+        setGhInstallationId(ghConn.github.installationId);
+        setGhOwner(ghConn.github.owner);
+        setGhRepo(ghConn.github.repo);
+        setGhBranch(ghConn.github.branch);
+        setFramework((ghConn.github as { framework?: Framework }).framework ?? "astro");
+        setGhContentPath(ghConn.github.contentPath);
+        setGhAssetsPath(ghConn.github.assetsPath);
+        setGhCategoriesPath(ghConn.github.categoriesPath ?? "src/data/categories.json");
+        setGhAuthorsPath(ghConn.github.authorsPath ?? "src/data/authors.json");
+      }
     }
 
-    // Load all standard connectors generically
+    // Always reload standard connector configs from project data
     const loadedConfigs: Record<string, Record<string, string>> = {};
     for (const def of connectorDefs) {
       if (!def.configKey || !def.fields) continue;
@@ -192,7 +194,7 @@ function ConnectorsPageContent() {
     setConfigValues(loadedConfigs);
     setInitialized(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project, initialized]);
+  }, [project?.connectors, connectorDefs]);
 
   // Handle GitHub OAuth callback
   useEffect(() => {
@@ -607,14 +609,12 @@ function ConnectorsPageContent() {
                                       if (!typeId) return;
                                       try {
                                         const { deleteContentType } = await import("@/lib/api");
+                                        console.log("[REMOVE] clicking remove for", schema.id, "typeId:", typeId);
                                         await deleteContentType(customerId, projectId, typeId);
-                                        const next = new Set(selectedSchemas);
-                                        next.delete(schema.id);
-                                        setSelectedSchemas(next);
-                                        const nextMap = { ...schemaToTypeId };
-                                        delete nextMap[schema.id];
-                                        setSchemaToTypeId(nextMap);
-                                      } catch { /* ignore */ }
+                                        console.log("[REMOVE] deleted successfully");
+                                        setSelectedSchemas((prev) => { const next = new Set(prev); next.delete(schema.id); return next; });
+                                        setSchemaToTypeId((prev) => { const next = { ...prev }; delete next[schema.id]; return next; });
+                                      } catch (err) { console.error("remove failed:", err); }
                                     }}
                                   >
                                     Remove
@@ -624,24 +624,22 @@ function ConnectorsPageContent() {
                                     variant="outline"
                                     size="sm"
                                     className="h-7 text-xs shrink-0"
+                                    disabled={importing}
                                     onClick={async () => {
                                       if (!customerId || !projectId) return;
+                                      setImporting(true);
                                       try {
                                         const result = await importConnectorSchemas(customerId, projectId, [schema.id], activeSchemaConnector);
-                                        const next = new Set(selectedSchemas);
-                                        next.add(schema.id);
-                                        setSelectedSchemas(next);
-                                        // Track the created type ID for later removal
                                         if (result.types?.[0]) {
-                                          setSchemaToTypeId((prev) => ({
-                                            ...prev,
-                                            [schema.id]: (result.types[0] as { id: string }).id,
-                                          }));
+                                          const newId = (result.types[0] as { id: string }).id;
+                                          setSelectedSchemas((prev) => new Set([...prev, schema.id]));
+                                          setSchemaToTypeId((prev) => ({ ...prev, [schema.id]: newId }));
                                         }
-                                      } catch { /* ignore */ }
+                                      } catch (err) { console.error("import failed:", err); }
+                                      finally { setImporting(false); }
                                     }}
                                   >
-                                    Import
+                                    {importing ? <><Loader2 className="mr-1 h-3 w-3 animate-spin" />Importing...</> : "Import"}
                                   </Button>
                                 )}
                               </div>

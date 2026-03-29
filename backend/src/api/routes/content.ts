@@ -64,6 +64,7 @@ export async function contentRoutes(app: FastifyInstance) {
     Params: { customerId: string; projectId: string };
     Body: {
       type: ContentType;
+      contentTypeId?: string;
       title: string;
       description?: string;
       category?: string;
@@ -84,6 +85,7 @@ export async function contentRoutes(app: FastifyInstance) {
       customerId,
       projectId,
       type: body.type ?? "article",
+      contentTypeId: body.contentTypeId,
       status: "planned",
       title: body.title ?? "",
       description: body.description,
