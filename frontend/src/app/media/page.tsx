@@ -95,6 +95,10 @@ export default function MediaPage() {
 
   // ── Data loading ───────────────────────────────────────────────
 
+  // Ref for search to avoid re-creating loadData on every keystroke
+  const searchRef = useRef(search);
+  searchRef.current = search;
+
   const loadData = useCallback(async () => {
     if (!customerId || !projectId) return;
     try {
@@ -103,7 +107,7 @@ export default function MediaPage() {
           type: filterType !== "all" ? filterType : undefined,
           source: filterSource !== "all" ? filterSource : undefined,
           tags: filterTag !== "all" ? filterTag : undefined,
-          search: search || undefined,
+          search: searchRef.current || undefined,
         }),
         api.getMediaTags(customerId, projectId),
       ]);
@@ -112,7 +116,7 @@ export default function MediaPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load media");
     }
-  }, [customerId, projectId, filterType, filterSource, filterTag, search]);
+  }, [customerId, projectId, filterType, filterSource, filterTag]);
 
   useEffect(() => {
     if (!customerId || !projectId) return;
@@ -120,6 +124,13 @@ export default function MediaPage() {
     setError(null);
     loadData().finally(() => setLoading(false));
   }, [customerId, projectId, loadData]);
+
+  // Debounced search — reload after 300ms of no typing
+  useEffect(() => {
+    const timer = setTimeout(() => { loadData(); }, 300);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   // ── Upload handler ─────────────────────────────────────────────
 
