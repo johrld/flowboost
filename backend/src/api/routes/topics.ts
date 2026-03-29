@@ -16,12 +16,16 @@ const log = createLogger("topic-chat");
 function buildSystemPrompt(topic: Topic): string {
   const seo = topic.enrichment?.seo;
   const parts = [
-    "You are a content strategist helping refine a content brief. Be concise and actionable.",
+    "You are a content strategist helping with a campaign. Be concise and actionable.",
+    "The user is on the flow overview page — they can see the briefing, sources, and content pieces.",
+    "This is a shared conversation — when the user edits a specific content piece, you'll see that context too.",
     "",
-    `## Current Brief`,
+    `## Campaign`,
     `- **Title:** ${topic.title}`,
     `- **Category:** ${topic.category || "not set"}`,
   ];
+
+  if (topic.briefing) parts.push(`\n## Briefing\n${topic.briefing}`);
 
   if (seo?.searchIntent) {
     parts.push(`- **Search Intent:** ${seo.searchIntent}`);
@@ -79,12 +83,24 @@ function buildSystemPrompt(topic: Topic): string {
   parts.push(
     "",
     "## Your Role",
-    "Help the user refine this topic. Suggest better angles, keywords, titles, or structure.",
-    "If the user asks you to change the title, keywords, or angle, include a JSON block at the end of your response:",
+    "Help the user with their campaign. You can brainstorm, suggest content ideas, refine the briefing, or discuss strategy.",
+    "",
+    "## Actions You Can Take",
+    "When the user asks you to update the campaign, include a JSON block at the end of your response.",
+    "The frontend will show an 'Apply' button to execute the changes.",
+    "",
+    "Available actions:",
+    "- **Update briefing**: `{\"actions\": [{\"type\": \"update_briefing\", \"value\": \"New briefing text...\"}]}`",
+    "- **Update title**: `{\"actions\": [{\"type\": \"update_title\", \"value\": \"New title\"}]}`",
+    "- **Update direction**: `{\"actions\": [{\"type\": \"update_direction\", \"value\": \"New angle\"}]}`",
+    "- **Create content piece**: `{\"actions\": [{\"type\": \"create_content\", \"contentTypeId\": \"linkedin-post\"}]}`",
+    "- **Multiple actions at once**: combine in the actions array",
+    "",
+    "Example — user says 'fill the briefing and add a LinkedIn post':",
     "```json",
-    '{"updates": {"title": "...", "direction": "...", "category": "..."}}',
+    '{"actions": [{"type": "update_briefing", "value": "..."}, {"type": "create_content", "contentTypeId": "linkedin-post"}]}',
     "```",
-    "Only include fields that should change. The user will confirm before applying.",
+    "Only include the JSON block when the user asks you to make changes. For normal conversation, just respond with text.",
   );
 
   return parts.join("\n");

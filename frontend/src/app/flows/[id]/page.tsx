@@ -877,8 +877,68 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-3 prose-blockquote:my-2 prose-a:text-primary">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          <ReactMarkdown>{msg.content.replace(/```json\s*\n?\{[\s\S]*?\}\s*\n?```/g, "").trim()}</ReactMarkdown>
                         </div>
+                        {/* Apply Actions Button */}
+                        {(() => {
+                          const jsonMatch = msg.content.match(/```json\s*\n?([\s\S]*?)\n?```/);
+                          if (!jsonMatch) return null;
+                          try {
+                            const parsed = JSON.parse(jsonMatch[1]) as { actions?: Array<{ type: string; value?: string; contentTypeId?: string; updates?: Record<string, unknown> }>; updates?: Record<string, unknown> };
+                            const actions = parsed.actions ?? (parsed.updates ? [{ type: "update_content", updates: parsed.updates }] : []);
+                            if (actions.length === 0) return null;
+                            // Show what will change
+                            const actionLabels: Record<string, string> = {
+                              update_briefing: "Briefing",
+                              update_title: "Title",
+                              update_direction: "Direction",
+                              create_content: "Create content piece",
+                              update_content: "Content",
+                            };
+                            return (
+                              <div className="mt-2 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-950/30 p-3 space-y-2">
+                                {actions.map((a, idx) => (
+                                  <div key={idx} className="text-xs">
+                                    <span className="font-medium text-violet-700 dark:text-violet-400">{actionLabels[a.type] ?? a.type}:</span>{" "}
+                                    <span className="text-foreground/80">
+                                      {a.value ? (a.value.length > 150 ? a.value.slice(0, 150) + "..." : a.value) : a.contentTypeId ?? JSON.stringify(a.updates ?? {}).slice(0, 100)}
+                                    </span>
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-1.5 text-xs font-medium text-violet-600 hover:text-violet-700 bg-violet-100 hover:bg-violet-200 dark:bg-violet-900 dark:hover:bg-violet-800 px-3 py-1.5 rounded-lg transition-colors w-full justify-center"
+                                onClick={async () => {
+                                  if (!customerId || !projectId || !topic) return;
+                                  for (const action of actions) {
+                                    try {
+                                      if (action.type === "update_briefing" && action.value) {
+                                        await updateTopic(customerId, projectId, id, { briefing: action.value } as Partial<Topic>);
+                                        setTopic((prev) => prev ? { ...prev, briefing: action.value } : prev);
+                                      } else if (action.type === "update_title" && action.value) {
+                                        await updateTopic(customerId, projectId, id, { title: action.value } as Partial<Topic>);
+                                        setTopic((prev) => prev ? { ...prev, title: action.value! } : prev);
+                                      } else if (action.type === "update_direction" && action.value) {
+                                        await updateTopic(customerId, projectId, id, { direction: action.value } as Partial<Topic>);
+                                        setTopic((prev) => prev ? { ...prev, direction: action.value } : prev);
+                                      } else if (action.type === "create_content" && action.contentTypeId) {
+                                        const { createContent } = await import("@/lib/api");
+                                        const catMap: Record<string, string> = { "blog-post": "article", "linkedin-post": "social_post", "instagram-post": "social_post", "x-post": "social_post", "tiktok-post": "social_post", "newsletter": "newsletter" };
+                                        const platMap: Record<string, string> = { "linkedin-post": "linkedin", "instagram-post": "instagram", "x-post": "x", "tiktok-post": "tiktok" };
+                                        await createContent(customerId, projectId, { type: (catMap[action.contentTypeId] ?? "article") as import("@/lib/types").ContentType, title: topic.title, category: platMap[action.contentTypeId], flowId: id });
+                                      }
+                                    } catch (err) { console.error("Action failed:", err); }
+                                  }
+                                  await loadData();
+                                }}
+                              >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Apply {actions.length > 1 ? `${actions.length} changes` : "changes"}
+                                </button>
+                              </div>
+                            );
+                          } catch { return null; }
+                        })()}
                         <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"

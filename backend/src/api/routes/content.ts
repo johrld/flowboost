@@ -1055,43 +1055,56 @@ export async function contentRoutes(app: FastifyInstance) {
       } catch { /* ignore — flow context is optional */ }
     }
 
-    // Build chat messages
+    // Use the FLOW chat (shared across all content pieces in the same flow)
     const { readChat, appendChat } = await import("../../models/chat.js");
-    const chatDir = content.entityDir(contentId);
+    const topics = app.ctx.topicsFor(customerId, projectId);
+    const chatDir = flowId ? topics.entityDir(flowId) : content.entityDir(contentId);
     const history = readChat(chatDir);
 
-    // System prompt with project context + flow context + current content
+    // Content type label for context awareness
+    const contentLabel = contentType?.label ?? item.type.replace("_", " ");
+
+    // System prompt — tells AI where the user currently is
     const systemPrompt = [
       role,
       "",
-      "You are helping the user refine this content piece. You have full context about the project, campaign, and sources.",
+      `You are helping the user with their "${project.name}" project. The user is currently editing a **${contentLabel}**.`,
+      "You have full context about the project, campaign, sources, and all content pieces.",
+      "This is a shared conversation across the entire flow — you may have discussed other content pieces before.",
       "",
-      // Project-level context (always available)
+      // Project-level context
       projectBrief ? `## Project Brief\n${projectBrief.slice(0, 1500)}` : "",
       brandVoice ? `## Brand Voice\n${brandVoice.slice(0, 1500)}` : "",
-      // Flow-level context (campaign-specific)
+      // Flow-level context
       flowContext ? `## Campaign Context\n${flowContext.slice(0, 3000)}` : "",
       "",
-      `## Current Content`,
-      currentContent.slice(0, 4000),
+      `## Currently Editing: ${contentLabel}`,
+      `Title: ${item.title}`,
+      currentContent ? `Current content:\n${currentContent.slice(0, 4000)}` : "No content yet.",
       "",
-      guidelines ? `## Content Type Guidelines\n${guidelines}` : "",
+      guidelines ? `## ${contentLabel} Guidelines\n${guidelines}` : "",
       "",
       "## Your Task",
-      "Help the user refine the content. You know the project brief, brand voice, campaign context (briefing, sources, discussions), and content type guidelines.",
-      "If they ask for changes, include a JSON block with the updated field values:",
-      "```json",
-      '{"updates": {"text": "...", "hashtags": ["..."]}}',
-      "```",
-      "Only include fields that should change.",
+      `Help the user with the ${contentLabel}. You know the full campaign context.`,
+      "",
+      "## Actions You Can Take",
+      "When the user asks you to make changes, include a JSON block at the end of your response.",
+      "The frontend will show an 'Apply' button to execute the changes.",
+      "",
+      "Available actions:",
+      `- **Update ${contentLabel} fields**: \`{"actions": [{"type": "update_content", "updates": {"text": "...", "hashtags": ["..."]}}]}\``,
+      "- **Update briefing**: `{\"actions\": [{\"type\": \"update_briefing\", \"value\": \"New briefing...\"}]}`",
+      "- **Update flow title**: `{\"actions\": [{\"type\": \"update_title\", \"value\": \"New title\"}]}`",
+      "- **Multiple actions at once**: combine in the actions array",
+      "",
+      "Only include the JSON block when the user asks you to make changes.",
     ].filter(Boolean).join("\n");
 
-    // Append user message
+    // Append user message to FLOW chat
     appendChat(chatDir, { role: "user", content: message.trim(), ts: new Date().toISOString() });
 
-    // Run agent
-    // Build conversation context into prompt
-    const recentChat = [...history.slice(-8), { role: "user" as const, content: message.trim(), ts: new Date().toISOString() }];
+    // Build conversation context
+    const recentChat = [...history.slice(-10), { role: "user" as const, content: message.trim(), ts: new Date().toISOString() }];
     const chatContext = recentChat.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n");
     const fullPrompt = `${systemPrompt}\n\n## Conversation\n\n${chatContext}\n\nAssistant:`;
 
@@ -1100,7 +1113,7 @@ export async function contentRoutes(app: FastifyInstance) {
       model: project.pipeline.defaultModel,
     });
 
-    // Append assistant response
+    // Append assistant response to FLOW chat
     appendChat(chatDir, { role: "assistant", content: response.text, ts: new Date().toISOString() });
 
     return {
@@ -1110,7 +1123,7 @@ export async function contentRoutes(app: FastifyInstance) {
     };
   });
 
-  // GET /content/:contentId/chat — get chat history
+  // GET /content/:contentId/chat — get chat history (from Flow chat, shared)
   app.get<{
     Params: { customerId: string; projectId: string; contentId: string };
   }>("/:contentId/chat", async (request, reply) => {
@@ -1120,8 +1133,15 @@ export async function contentRoutes(app: FastifyInstance) {
     if (!item) return reply.status(404).send({ error: "Content not found" });
 
     const { readChat } = await import("../../models/chat.js");
-    const chatDir = content.entityDir(contentId);
-    return readChat(chatDir);
+    // Read from Flow chat (shared across all content pieces)
+    const flowId = item.flowId ?? item.topicId;
+    if (flowId) {
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const chatDir = topics.entityDir(flowId);
+      return readChat(chatDir);
+    }
+    // Fallback to content-level chat if no flow linked
+    return readChat(content.entityDir(contentId));
   });
 }
 
