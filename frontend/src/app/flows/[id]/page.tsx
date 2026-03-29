@@ -51,6 +51,8 @@ import {
   Upload,
   Paperclip,
   Loader2,
+  ShoppingBag,
+  Globe,
 } from "lucide-react";
 import { useProject } from "@/lib/project-context";
 import {
@@ -128,6 +130,16 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   email: <Mail className="h-3.5 w-3.5" />,
   media: <Video className="h-3.5 w-3.5" />,
 };
+
+const CONNECTOR_ICONS: Record<string, React.ReactNode> = {
+  shopware: <ShoppingBag className="h-3.5 w-3.5" />,
+  wordpress: <Globe className="h-3.5 w-3.5" />,
+};
+
+function getContentTypeIcon(ct: { connectorType?: string; category: string }): React.ReactNode {
+  if (ct.connectorType && CONNECTOR_ICONS[ct.connectorType]) return CONNECTOR_ICONS[ct.connectorType];
+  return CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />;
+}
 
 // ── Thinking Animation ────────────────────────────────────────
 
@@ -707,7 +719,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     <DropdownMenuContent>
                       {contentTypes.length > 0 ? contentTypes.map((ct) => (
                         <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(ct.id)}>
-                          {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                          {getContentTypeIcon(ct)}
                           {ct.label}
                         </DropdownMenuItem>
                       )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
@@ -733,7 +745,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                     <DropdownMenuContent align="start">
                       {contentTypes.length > 0 ? contentTypes.map((ct) => (
                         <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(ct.id)}>
-                          {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                          {getContentTypeIcon(ct)}
                           {ct.label}
                         </DropdownMenuItem>
                       )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (

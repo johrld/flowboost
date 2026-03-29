@@ -63,6 +63,7 @@ import { InstagramEditor } from "@/components/editors/instagram-editor";
 import { TikTokEditor } from "@/components/editors/tiktok-editor";
 import { NewsletterEditor } from "@/components/editors/newsletter-editor";
 import { GenericEditor } from "@/components/editors/generic-editor";
+import { ShopwareEditor } from "@/components/editors/shopware-editor";
 import type { ContentItem, ContentItemStatus, ContentVersion, MediaAsset, Topic } from "@/lib/types";
 import { MediaPicker } from "@/components/media-picker";
 import {
@@ -1851,6 +1852,10 @@ function JsonEditorSwitch({
     case "newsletter":
       return <NewsletterEditor {...commonProps} />;
     default:
+      // Connector-imported content types with slot structure
+      if (contentType?.connectorType === "shopware" || contentType?.connectorType === "wordpress") {
+        return <ShopwareEditor values={values} onChange={onChange} contentType={contentType} readOnly={readOnly} />;
+      }
       return <GenericEditor values={values} onChange={onChange} contentType={contentType} readOnly={readOnly} />;
   }
 }

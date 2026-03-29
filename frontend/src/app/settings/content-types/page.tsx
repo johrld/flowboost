@@ -41,6 +41,8 @@ import {
   MessageCircle,
   Mail,
   Video,
+  ShoppingBag,
+  Globe,
   GripVertical,
   X,
   Pencil,
@@ -60,6 +62,16 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   email: <Mail className="h-4 w-4" />,
   media: <Video className="h-4 w-4" />,
 };
+
+const CONNECTOR_ICONS: Record<string, React.ReactNode> = {
+  shopware: <ShoppingBag className="h-4 w-4" />,
+  wordpress: <Globe className="h-4 w-4" />,
+};
+
+function getContentTypeIcon(ct: ContentTypeDefinition): React.ReactNode {
+  if (ct.connectorType && CONNECTOR_ICONS[ct.connectorType]) return CONNECTOR_ICONS[ct.connectorType];
+  return CATEGORY_ICONS[ct.category] ?? <FileText className="h-4 w-4" />;
+}
 
 const SOURCE_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
   builtin: { label: "Built-in", variant: "secondary" },
@@ -247,7 +259,7 @@ export default function ContentTypesPage() {
           <div className="space-y-2">
             {builtinTypes.map((ct) => (
               <div key={ct.id} className="flex items-center gap-3 rounded-lg border p-3 group">
-                <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category]}</span>
+                <span className="text-muted-foreground">{getContentTypeIcon(ct)}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{ct.label}</p>
                   <p className="text-xs text-muted-foreground">{ct.fields.length} fields · {ct.category}{ct.agent ? " · Agent configured" : ""}</p>
@@ -269,7 +281,7 @@ export default function ContentTypesPage() {
           <div className="space-y-2">
             {importedTypes.map((ct) => (
               <div key={ct.id} className="flex items-center gap-3 rounded-lg border p-3 group">
-                <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category]}</span>
+                <span className="text-muted-foreground">{getContentTypeIcon(ct)}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{ct.label}</p>
                   <p className="text-xs text-muted-foreground">{ct.fields.length} fields · {ct.category} · {ct.connectorType}</p>
@@ -299,7 +311,7 @@ export default function ContentTypesPage() {
           <div className="space-y-2">
             {customTypes.map((ct) => (
               <div key={ct.id} className="flex items-center gap-3 rounded-lg border p-3 group">
-                <span className="text-muted-foreground">{CATEGORY_ICONS[ct.category]}</span>
+                <span className="text-muted-foreground">{getContentTypeIcon(ct)}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{ct.label}</p>
                   <p className="text-xs text-muted-foreground">{ct.fields.length} fields · {ct.category}</p>
