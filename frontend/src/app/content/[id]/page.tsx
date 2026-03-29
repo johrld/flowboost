@@ -359,7 +359,7 @@ export default function ContentEditorPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { customerId, projectId, categories, authors, loading: projectLoading } = useProject();
+  const { customerId, projectId, categories, authors, languages: projectLanguages, loading: projectLoading } = useProject();
 
   const [item, setItem] = useState<ContentItem | null>(null);
   const [versions, setVersions] = useState<ContentVersion[]>([]);
@@ -1229,192 +1229,7 @@ export default function ContentEditorPage({
             </div>}
           </div>
 
-          {/* Hero Image (markdown mode only) */}
-          {editorMode === "markdown" && (<div className="space-y-3">
-            <h3 className="font-semibold text-sm">Hero Image</h3>
-
-            {/* Preview */}
-            {item.heroImageId ? (
-              <div className="relative aspect-video rounded-md overflow-hidden border bg-muted">
-                <img
-                  src={getMediaFileUrl(customerId, projectId,item.heroImageId)}
-                  alt="Hero"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            ) : (
-              <div className="flex items-center justify-center rounded-md border border-dashed bg-muted/50 aspect-video">
-                <div className="text-center">
-                  <ImageIcon className="mx-auto h-6 w-6 text-muted-foreground" />
-                  <p className="mt-1 text-xs text-muted-foreground">No hero image</p>
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                disabled={generating}
-                onClick={async () => {
-                  if (!item) return;
-                  setGenerating(true);
-                  try {
-                    const prompt = `Professional blog hero image for article titled "${item.title}". ${item.category ? `Category: ${item.category}.` : ""} ${item.keywords?.length ? `Keywords: ${item.keywords.join(", ")}.` : ""} Modern, clean, editorial style photography. No text overlays.`;
-                    const asset = await generateHeroImage(customerId, projectId, item.id, prompt);
-                    setItem({ ...item, heroImageId: asset.id });
-                    const { assets } = await getContentMedia(customerId, projectId, item.id);
-                    setMediaAssets(assets);
-                  } catch (err) {
-                    console.error("Generate failed:", err);
-                  } finally {
-                    setGenerating(false);
-                  }
-                }}
-              >
-                {generating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
-                Generate
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {uploading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}
-                Upload
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                onClick={() => setMediaPickerOpen(true)}
-              >
-                <ImageIcon className="mr-1 h-3 w-3" />
-                Browse
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file || !item) return;
-                  setUploading(true);
-                  try {
-                    const asset = await uploadContentMedia(customerId, projectId, item.id, file);
-                    setItem({ ...item, heroImageId: asset.id });
-                    const { assets } = await getContentMedia(customerId, projectId, item.id);
-                    setMediaAssets(assets);
-                  } catch (err) {
-                    console.error("Upload failed:", err);
-                  } finally {
-                    setUploading(false);
-                    e.target.value = "";
-                  }
-                }}
-              />
-            </div>
-
-            {/* Media Picker (shared for hero image + editor inline) */}
-            <MediaPicker
-              open={mediaPickerOpen}
-              onOpenChange={(open) => {
-                setMediaPickerOpen(open);
-                if (!open) {
-                  const resolve = mediaPickerResolveRef.current;
-                  mediaPickerResolveRef.current = null;
-                  resolve?.(null);
-                }
-              }}
-              typeFilter="image"
-              onSelect={async (globalAsset) => {
-                // Editor inline image browse
-                const resolve = mediaPickerResolveRef.current;
-                if (resolve) {
-                  mediaPickerResolveRef.current = null;
-                  if (item) await linkMediaToContent(customerId, projectId, item.id, globalAsset.id, "inline");
-                  const url = getMediaFileUrl(customerId, projectId, globalAsset.id);
-                  resolve(url);
-                  setMediaPickerOpen(false);
-                  return;
-                }
-                // Hero image: set global asset ID directly
-                if (!item) return;
-                await setHeroImage(customerId, projectId, item.id, globalAsset.id);
-                setItem({ ...item, heroImageId: globalAsset.id });
-                // Refresh media list (usedBy updated server-side)
-                const { assets } = await getContentMedia(customerId, projectId, item.id);
-                setMediaAssets(assets);
-                setMediaPickerOpen(false);
-              }}
-            />
-
-            {/* Gallery */}
-            {mediaAssets.length > 1 && (
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Used images ({mediaAssets.length})</p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {mediaAssets.map((asset) => (
-                    <div key={asset.id} className="relative group">
-                      <button
-                        type="button"
-                        className={`aspect-video w-full rounded-md overflow-hidden border-2 transition-colors ${
-                          item.heroImageId === asset.id ? "border-primary" : "border-transparent hover:border-muted-foreground/30"
-                        }`}
-                        onClick={async () => {
-                          if (!item || item.heroImageId === asset.id) return;
-                          await setHeroImage(customerId, projectId, item.id, asset.id);
-                          setItem({ ...item, heroImageId: asset.id });
-                        }}
-                      >
-                        <img
-                          src={getMediaFileUrl(customerId, projectId,asset.id)}
-                          alt={asset.altText ?? ""}
-                          className="w-full h-full object-cover"
-                        />
-                      </button>
-                      <button
-                        type="button"
-                        className="absolute top-0.5 right-0.5 rounded-full bg-background/80 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={async () => {
-                          if (!item) return;
-                          await deleteContentMedia(customerId, projectId, item.id, asset.id);
-                          setMediaAssets((prev) => prev.filter((a) => a.id !== asset.id));
-                          if (item.heroImageId === asset.id) {
-                            setItem({ ...item, heroImageId: undefined });
-                          }
-                        }}
-                      >
-                        <X className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {mediaAssets.length === 1 && item.heroImageId && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-xs text-muted-foreground"
-                onClick={async () => {
-                  if (!item) return;
-                  const asset = mediaAssets[0];
-                  await deleteContentMedia(customerId, projectId, item.id, asset.id);
-                  setMediaAssets([]);
-                  setItem({ ...item, heroImageId: undefined });
-                }}
-              >
-                <Trash2 className="mr-1 h-3 w-3" />
-                Remove image
-              </Button>
-            )}
-          </div>)}
+          {/* Hero Image moved to main editor area */}
 
           {/* Delivery Info */}
           {(item.deliveryRef || item.deliveryUrl) && (
@@ -1478,17 +1293,17 @@ export default function ContentEditorPage({
           </div>
         </>
       }
-      mediaPanel={editorMode === "json" ? (
+      mediaPanel={
         <SocialMediaPanel
           customerId={customerId!}
           projectId={projectId!}
           contentId={id}
-          images={((jsonValues.images ?? jsonValues.media ?? []) as string[])}
-          onImagesChange={(images) => setJsonValues((prev) => ({ ...prev, images }))}
+          images={editorMode === "json" ? ((jsonValues.images ?? jsonValues.media ?? []) as string[]) : []}
+          onImagesChange={editorMode === "json" ? (images) => setJsonValues((prev) => ({ ...prev, images })) : () => {}}
           mediaAssets={mediaAssets}
           onMediaAssetsChange={setMediaAssets}
         />
-      ) : undefined}
+      }
       chatPanel={
         <ContentChat
           customerId={customerId!}
@@ -1597,6 +1412,80 @@ export default function ContentEditorPage({
               <p className="text-xs text-muted-foreground">{title.length}/70 characters</p>
             </div>
 
+            {/* Hero Image — drag & drop from media library */}
+            <div
+              className={`relative rounded-lg overflow-hidden transition-colors ${
+                item.heroImageId
+                  ? "border"
+                  : "border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/40"
+              }`}
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2", "ring-primary"); }}
+              onDragLeave={(e) => { e.currentTarget.classList.remove("ring-2", "ring-primary"); }}
+              onDrop={async (e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove("ring-2", "ring-primary");
+                const url = e.dataTransfer.getData("text/plain");
+                if (url && item) {
+                  // Extract asset ID from media URL pattern: /media/{assetId}/file
+                  const assetIdMatch = url.match(/\/media\/([^/]+)\/file/);
+                  if (assetIdMatch) {
+                    await setHeroImage(customerId, projectId, item.id, assetIdMatch[1]);
+                    setItem({ ...item, heroImageId: assetIdMatch[1] });
+                  }
+                }
+              }}
+            >
+              {item.heroImageId ? (
+                <div className="relative group">
+                  <img
+                    src={getMediaFileUrl(customerId, projectId, item.heroImageId)}
+                    alt="Hero"
+                    className="w-full aspect-video object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                    <Button size="sm" variant="secondary" className="text-xs" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="mr-1 h-3 w-3" />Replace
+                    </Button>
+                    <Button size="sm" variant="secondary" className="text-xs" onClick={async () => {
+                      if (!item) return;
+                      setItem({ ...item, heroImageId: undefined });
+                    }}>
+                      <Trash2 className="mr-1 h-3 w-3" />Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-6 flex flex-col items-center gap-2 cursor-pointer hover:bg-muted/30 transition-colors"
+                >
+                  <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+                  <p className="text-xs text-muted-foreground">Add hero image — click to upload or drag from media library</p>
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file || !item) return;
+                  setUploading(true);
+                  try {
+                    const asset = await uploadContentMedia(customerId, projectId, item.id, file);
+                    setItem({ ...item, heroImageId: asset.id });
+                  } catch (err) {
+                    console.error("Upload failed:", err);
+                  } finally {
+                    setUploading(false);
+                    e.target.value = "";
+                  }
+                }}
+              />
+            </div>
+
             {/* Language Tabs + Editor */}
             <Tabs value={activeLang} onValueChange={setActiveLang}>
               <TabsList>
@@ -1608,12 +1497,41 @@ export default function ContentEditorPage({
                     ) : null}
                   </TabsTrigger>
                 )) ?? (
-                  <>
-                    <TabsTrigger value="de">DE</TabsTrigger>
-                    <TabsTrigger value="en">EN</TabsTrigger>
-                    <TabsTrigger value="es">ES</TabsTrigger>
-                  </>
+                  <TabsTrigger value="de">DE</TabsTrigger>
                 )}
+                {/* Add language button */}
+                {(() => {
+                  const existingLangs = new Set(activeVersion?.languages.map((l) => l.lang) ?? []);
+                  const availableLangs = projectLanguages.filter((l) => !existingLangs.has(l.code));
+                  if (availableLangs.length === 0) return null;
+                  return (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="ml-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors">
+                          + {availableLangs.length > 1 ? "Language" : availableLangs[0].code.toUpperCase()}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        {availableLangs.map((lang) => (
+                          <DropdownMenuItem
+                            key={lang.code}
+                            onClick={() => {
+                              // Add empty content for this language
+                              setEditorContent((prev) => ({ ...prev, [lang.code]: `# ${title}\n\n` }));
+                              setMetaByLang((prev) => ({
+                                ...prev,
+                                [lang.code]: { title, description: "", category: category || "", tags: "", keywords: "", author: author || "", faqs: [] },
+                              }));
+                              setActiveLang(lang.code);
+                            }}
+                          >
+                            {lang.code.toUpperCase()} — {lang.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                })()}
               </TabsList>
 
               {(activeVersion?.languages ?? [{ lang: "de", slug: "", title: "", description: "", contentPath: "" }]).map((lang) => (
