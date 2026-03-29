@@ -69,6 +69,7 @@ export async function contentRoutes(app: FastifyInstance) {
       category?: string;
       tags?: string[];
       keywords?: string[];
+      flowId?: string;
       topicId?: string;
       translationKey?: string;
       parentId?: string;
@@ -89,14 +90,23 @@ export async function contentRoutes(app: FastifyInstance) {
       category: body.category,
       tags: body.tags,
       keywords: body.keywords,
-      topicId: body.topicId,
+      flowId: body.flowId ?? body.topicId,
+      originFlowId: body.flowId ?? body.topicId,
+      topicId: body.topicId ?? body.flowId,
       translationKey: body.translationKey,
       parentId: body.parentId,
       createdAt: now,
       updatedAt: now,
     });
 
-    log.info({ contentId: item.id, type: item.type }, "content created");
+    // Add to flow outputs if linked
+    const flowId = body.flowId ?? body.topicId;
+    if (flowId) {
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      topics.addOutput(flowId, item.id);
+    }
+
+    log.info({ contentId: item.id, type: item.type, flowId }, "content created");
     return item;
   });
 

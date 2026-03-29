@@ -759,11 +759,7 @@ export async function topicRoutes(app: FastifyInstance) {
 
       // Create ContentItem linked to this flow
       const now = new Date().toISOString();
-      const contentTitle = contentType.category === "social" && platform
-        ? `${topic.title} — ${contentType.label}`
-        : contentType.category === "email"
-        ? `${topic.title} — ${contentType.label}`
-        : topic.title;
+      const contentTitle = topic.title;
 
       // Map content type category to ContentItem type
       const itemType = contentType.category === "social" ? "social_post" as const
