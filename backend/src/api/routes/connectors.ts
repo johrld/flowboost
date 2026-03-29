@@ -42,11 +42,39 @@ export async function connectorRoutes(app: FastifyInstance) {
     }
   });
 
+  // DELETE /connectors/:connectorType — disconnect connector + delete its imported content types
+  app.delete<{
+    Params: { customerId: string; projectId: string; connectorType: string };
+  }>("/:connectorType", async (request, reply) => {
+    const { customerId, projectId, connectorType } = request.params;
+    const projects = app.ctx.projectsFor(customerId);
+    const project = projects.get(projectId);
+    if (!project) return reply.status(404).send({ error: "Project not found" });
+
+    // Remove connector from array
+    const connectors = (project.connectors ?? []).filter((c) => c.type !== connectorType);
+    projects.update(projectId, { connectors, updatedAt: new Date().toISOString() } as Partial<typeof project>);
+
+    // Delete imported content types from this connector
+    const { ContentTypeStore } = await import("../../models/content-type.js");
+    const ctStore = new ContentTypeStore(projects.entityDir(projectId));
+    const types = ctStore.list().filter((ct) => ct.source === "connector" && ct.connectorType === connectorType);
+    let deleted = 0;
+    for (const ct of types) {
+      if (ctStore.delete(ct.id)) deleted++;
+    }
+
+    log.info({ connectorType, deletedContentTypes: deleted }, "connector disconnected");
+    return { disconnected: connectorType, deletedContentTypes: deleted };
+  });
+
   // GET /connectors/schemas — discover schemas from configured connector
   app.get<{
     Params: { customerId: string; projectId: string };
+    Querystring: { connectorType?: string };
   }>("/schemas", async (request, reply) => {
     const { customerId, projectId } = request.params;
+    const { connectorType: reqType } = request.query as { connectorType?: string };
     const projects = app.ctx.projectsFor(customerId);
     const project = projects.get(projectId);
 
@@ -54,10 +82,13 @@ export async function connectorRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: "Project not found" });
     }
 
-    // Find a connector with schema discovery (Shopware or WordPress)
-    const swConn = findConnector(project, "shopware");
-    const wpConn = findConnector(project, "wordpress");
-    const discoveryConn = swConn ?? wpConn;
+    // Find the requested connector, or first one with schema discovery
+    let discoveryConn;
+    if (reqType) {
+      discoveryConn = findConnector(project, reqType as import("../../models/types.js").ConnectorType);
+    } else {
+      discoveryConn = findConnector(project, "shopware") ?? findConnector(project, "wordpress");
+    }
 
     if (!discoveryConn) {
       return reply.status(400).send({ error: "No connector with schema discovery configured" });

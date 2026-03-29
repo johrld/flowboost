@@ -318,6 +318,7 @@ export interface ContentItem {
   projectId: string;
 
   type: ContentType;
+  contentTypeId?: string;
   status: ContentItemStatus;
 
   // Metadata

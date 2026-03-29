@@ -28,6 +28,7 @@ export interface ContentItem {
   customerId: string;
   projectId: string;
   type: ContentType;
+  contentTypeId?: string;
   status: ContentItemStatus;
   title: string;
   description?: string;

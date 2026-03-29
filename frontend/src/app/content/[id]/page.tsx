@@ -63,6 +63,7 @@ import { InstagramEditor } from "@/components/editors/instagram-editor";
 import { TikTokEditor } from "@/components/editors/tiktok-editor";
 import { NewsletterEditor } from "@/components/editors/newsletter-editor";
 import { GenericEditor } from "@/components/editors/generic-editor";
+import { ShopwareEditor } from "@/components/editors/shopware-editor";
 import type { ContentItem, ContentItemStatus, ContentVersion, MediaAsset, Topic } from "@/lib/types";
 import { MediaPicker } from "@/components/media-picker";
 import {
@@ -430,18 +431,19 @@ export default function ContentEditorPage({
       setVersions(data.versions ?? []);
 
       // Determine editor mode from content type
-      const isArticle = data.type === "article" || data.type === "guide";
-      const detectedMode = isArticle ? "markdown" : "json";
+      const isMarkdown = data.type === "article" || data.type === "guide";
+      const detectedMode = isMarkdown ? "markdown" : "json";
       setEditorMode(detectedMode);
 
-      // Load content type definition for JSON editors
-      if (!isArticle) {
+      // Load content type definition
+      if (!isMarkdown) {
         try {
           const types = await getContentTypes(customerId!, projectId!);
-          // Derive contentTypeId from item type + category
-          const ctId = data.type === "social_post" ? `${data.category ?? "linkedin"}-post`
-            : data.type === "newsletter" ? "newsletter"
-            : "blog-post";
+          // Use stored contentTypeId, or derive from type+category (legacy compat)
+          const ctId = (data as { contentTypeId?: string }).contentTypeId
+            ?? (data.type === "social_post" ? `${data.category ?? "linkedin"}-post`
+              : data.type === "newsletter" ? "newsletter"
+              : "blog-post");
           const ct = types.find((t) => t.id === ctId);
           if (ct) {
             setContentTypeId(ctId);
@@ -1867,6 +1869,10 @@ function JsonEditorSwitch({
     case "newsletter":
       return <NewsletterEditor {...commonProps} />;
     default:
+      // Connector-imported content types with slot structure
+      if (contentType?.connectorType === "shopware" || contentType?.connectorType === "wordpress") {
+        return <ShopwareEditor values={values} onChange={onChange} contentType={contentType} readOnly={readOnly} />;
+      }
       return <GenericEditor values={values} onChange={onChange} contentType={contentType} readOnly={readOnly} />;
   }
 }

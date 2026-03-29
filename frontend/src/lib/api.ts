@@ -871,6 +871,16 @@ export function getConnectorTypes(
   return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/types`);
 }
 
+export function disconnectConnector(
+  customerId: string,
+  projectId: string,
+  connectorType: string,
+): Promise<{ disconnected: string; deletedContentTypes: number }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/${connectorType}`, {
+    method: "DELETE",
+  });
+}
+
 export function testConnector(
   customerId: string,
   projectId: string,
@@ -885,18 +895,24 @@ export function testConnector(
 export function getConnectorSchemas(
   customerId: string,
   projectId: string,
+  connectorType?: string,
 ): Promise<{ schemas: Array<{ id: string; label: string; description: string; slots: unknown[] }> }> {
-  return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/schemas`);
+  const params = connectorType ? `?connectorType=${connectorType}` : "";
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/schemas${params}`);
 }
 
 export function importConnectorSchemas(
   customerId: string,
   projectId: string,
   schemaIds?: string[],
+  connectorType?: string,
 ): Promise<{ types: Array<{ id: string; label: string }> }> {
+  const body: Record<string, unknown> = {};
+  if (schemaIds) body.schemaIds = schemaIds;
+  if (connectorType) body.connectorType = connectorType;
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content-types/import`, {
     method: "POST",
-    body: JSON.stringify(schemaIds ? { schemaIds } : {}),
+    body: JSON.stringify(body),
   });
 }
 

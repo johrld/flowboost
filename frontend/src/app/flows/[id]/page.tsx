@@ -51,6 +51,8 @@ import {
   Upload,
   Paperclip,
   Loader2,
+  ShoppingBag,
+  Globe,
 } from "lucide-react";
 import { useProject } from "@/lib/project-context";
 import {
@@ -138,6 +140,17 @@ const CT_ICONS: Record<string, React.ReactNode> = {
   "tiktok-post": <Video className="h-3.5 w-3.5" />,
   "newsletter": <Mail className="h-3.5 w-3.5" />,
 };
+
+const CONNECTOR_ICONS: Record<string, React.ReactNode> = {
+  shopware: <ShoppingBag className="h-3.5 w-3.5" />,
+  wordpress: <Globe className="h-3.5 w-3.5" />,
+};
+
+function getContentTypeIcon(ct: { id?: string; connectorType?: string; category: string }): React.ReactNode {
+  if (ct.id && CT_ICONS[ct.id]) return CT_ICONS[ct.id];
+  if (ct.connectorType && CONNECTOR_ICONS[ct.connectorType]) return CONNECTOR_ICONS[ct.connectorType];
+  return CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />;
+}
 
 // ── Thinking Animation ────────────────────────────────────────
 
@@ -784,7 +797,151 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                 )}
               </div>
-            )}
+<<<<<<< HEAD
+
+              {/* Onboarding Checklist */}
+              {(outputs.length === 0 || inputs.length === 0) && (
+                <div className="rounded-xl bg-muted/30 p-4 mb-4">
+                  <p className="text-sm font-medium mb-3">Get started</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2.5 text-sm">
+                      <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 ${inputs.length > 0 ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/30"}`}>
+                        {inputs.length > 0 && <Check className="h-3 w-3" />}
+                      </div>
+                      <button type="button" onClick={() => setBottomTab("sources")} className={`hover:underline ${inputs.length > 0 ? "text-muted-foreground line-through" : ""}`}>
+                        Add sources (URLs, documents, images)
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-sm">
+                      <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 ${outputs.length > 0 ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/30"}`}>
+                        {outputs.length > 0 && <Check className="h-3 w-3" />}
+                      </div>
+                      <span className={outputs.length > 0 ? "text-muted-foreground line-through" : ""}>
+                        Create your first content piece
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {outputs.length === 0 ? (
+                <div className="rounded-xl border-2 border-dashed p-10 text-center">
+                  <Package className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm font-medium mb-1">No content yet</p>
+                  <p className="text-xs text-muted-foreground mb-4">Create content pieces and generate them with AI or write manually.</p>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="rounded-full">
+                        <Plus className="mr-1.5 h-3.5 w-3.5" />Create Content
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      {contentTypes.length > 0 ? contentTypes.map((ct) => (
+                        <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(ct.id)}>
+                          {getContentTypeIcon(ct)}
+                          {ct.label}
+                        </DropdownMenuItem>
+                      )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                        <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleProduce(opt.contentTypeId)}>
+                          {opt.icon}{opt.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ) : (
+                <div>
+                  {/* + Create Content row */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b">
+                        <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+                          <Plus className="h-4 w-4" />
+                        </div>
+                        Create Content
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {contentTypes.length > 0 ? contentTypes.map((ct) => (
+                        <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(ct.id)}>
+                          {getContentTypeIcon(ct)}
+                          {ct.label}
+                        </DropdownMenuItem>
+                      )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                        <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleProduce(opt.contentTypeId)}>
+                          {opt.icon}{opt.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <div className="divide-y mt-1">
+                  {outputs.map((item) => {
+                    const status = STATUS_BADGE[item.status] ?? { label: item.status, variant: "secondary" as const };
+                    const isProducing = item.status === "producing";
+                    const isPlanned = item.status === "planned";
+                    return (
+                      <Link key={item.id} href={`/content/${item.id}`} className="block py-3 hover:bg-muted/30 -mx-2 px-2 rounded-lg transition-colors">
+                        {/* Header row */}
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+                            {(() => {
+                              const ct = item.contentTypeId ? contentTypes.find((t) => t.id === item.contentTypeId) : null;
+                              if (ct) return getContentTypeIcon(ct);
+                              return OUTPUT_ICONS[item.category ?? ""] ?? OUTPUT_ICONS[item.type] ?? <FileText className="h-4 w-4" />;
+                            })()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{item.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(() => {
+                                const ct = item.contentTypeId ? contentTypes.find((t) => t.id === item.contentTypeId) : null;
+                                if (ct) return ct.label;
+                                return ({ linkedin: "LinkedIn Post", instagram: "Instagram Post", x: "X Post", tiktok: "TikTok Post" } as Record<string, string>)[item.category ?? ""]
+                                  ?? ({ article: "Article", guide: "Guide", newsletter: "Newsletter", social_post: "Social Post" } as Record<string, string>)[item.type]
+                                  ?? item.type.replace("_", " ");
+                              })()}
+                            </p>
+                          </div>
+                          {isProducing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
+                          <Badge variant={status.variant} className="text-xs shrink-0">{status.label}</Badge>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
+                              <button type="button" className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground shrink-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link href={`/content/${item.id}`}>
+                                  <Pencil className="mr-2 h-3.5 w-3.5" />Edit
+                                </Link>
+                              </DropdownMenuItem>
+                              {!isProducing && (
+                                <DropdownMenuItem onClick={(e) => { e.preventDefault();
+                                  // Derive contentTypeId from content item type + category
+                                  const ctId = item.type === "social_post" ? `${item.category ?? "linkedin"}-post`
+                                    : item.type === "newsletter" ? "newsletter"
+                                    : "blog-post";
+                                  handleProduce(ctId);
+                                }}>
+                                  <Sparkles className="mr-2 h-3.5 w-3.5" />Generate with AI
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive" onClick={(e) => { e.preventDefault(); handleDeleteContent(item.id); }}>
+                                <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                  </div>
+                </div>
+              )}
+            )
             </div>
           </div>
         </div>
