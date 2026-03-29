@@ -481,11 +481,20 @@ export default function ContentEditorPage({
         await loadVersionContent(latest, data, detectedMode);
         setAuthor(data.author ?? "");
       } else {
-        // No versions — use ContentItem-level metadata
+        // No versions — initialize empty editor with default language
         setTitle(data.title);
         setDescription(data.description ?? "");
         setCategory(data.category ?? "");
         setAuthor(data.author ?? "");
+
+        if (detectedMode === "markdown") {
+          // Start with empty editor in project default language
+          const defaultLang = "en";
+          setEditorContent({ [defaultLang]: "" });
+          setMetaByLang({ [defaultLang]: { title: "", description: "", category: data.category ?? "", tags: "", keywords: "", author: data.author ?? "", faqs: [] } });
+          setActiveLang(defaultLang);
+          setTitle("");
+        }
       }
     } catch {
       setItem(null);
@@ -960,52 +969,7 @@ export default function ContentEditorPage({
             <span className="text-xs text-muted-foreground">
               Updated: {new Date(item.updatedAt).toLocaleDateString("de-DE")}
             </span>
-            {/* Language switcher in header (multi-language content types only) */}
-            {editorMode === "markdown" && (contentTypeDef?.localization?.mode ?? "multi") === "multi" && (
-              <div className="flex items-center gap-0.5 ml-2 border rounded-md px-1 py-0.5">
-                {(() => {
-                  const versionLangs = activeVersion?.languages ?? [];
-                  const versionLangCodes = new Set(versionLangs.map((l) => l.lang));
-                  const localLangs = Object.keys(editorContent).filter((l) => !versionLangCodes.has(l));
-                  const allLangs = [...versionLangs.map((l) => l.lang), ...localLangs];
-                  return allLangs.map((lc) => (
-                    <button
-                      key={lc}
-                      onClick={() => setActiveLang(lc)}
-                      className={`px-2 py-0.5 text-xs rounded transition-colors ${activeLang === lc ? "bg-primary text-primary-foreground font-medium" : "text-muted-foreground hover:bg-muted"}`}
-                    >
-                      {lc.toUpperCase()}
-                    </button>
-                  ));
-                })()}
-                {(() => {
-                  const allExisting = new Set([
-                    ...(activeVersion?.languages.map((l) => l.lang) ?? []),
-                    ...Object.keys(editorContent),
-                  ]);
-                  const available = projectLanguages.filter((l) => !allExisting.has(l.code));
-                  if (available.length === 0) return null;
-                  return (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted rounded transition-colors">+</button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        {available.map((l) => (
-                          <DropdownMenuItem key={l.code} onClick={() => {
-                            setEditorContent((prev) => ({ ...prev, [l.code]: `# ${title}\n\n` }));
-                            setMetaByLang((prev) => ({ ...prev, [l.code]: { title, description: "", category: category || "", tags: "", keywords: "", author: author || "", faqs: [] } }));
-                            setActiveLang(l.code);
-                          }}>
-                            {l.code.toUpperCase()} — {l.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  );
-                })()}
-              </div>
-            )}
+            {/* Language switcher moved to sidebar */}
           </div>
           <div className="flex gap-2">
             {editorMode === "markdown" && (
@@ -1062,6 +1026,74 @@ export default function ContentEditorPage({
       }
       metadataPanel={
         <>
+          {/* Language (multi-language content types only) */}
+          {editorMode === "markdown" && (contentTypeDef?.localization?.mode ?? "multi") === "multi" && Object.keys(editorContent).length > 0 && (
+            <div className="space-y-2">
+              <h3 className="font-semibold text-sm">Language</h3>
+              <div className="flex flex-wrap items-center gap-1">
+                {(() => {
+                  const versionLangs = activeVersion?.languages ?? [];
+                  const versionLangCodes = new Set(versionLangs.map((l) => l.lang));
+                  const localLangs = Object.keys(editorContent).filter((l) => !versionLangCodes.has(l));
+                  return [...versionLangs.map((l) => l.lang), ...localLangs].map((lc) => (
+                    <button
+                      key={lc}
+                      onClick={() => setActiveLang(lc)}
+                      className={`px-2.5 py-1 text-xs rounded-md transition-colors ${activeLang === lc ? "bg-primary text-primary-foreground font-medium" : "border text-muted-foreground hover:bg-muted"}`}
+                    >
+                      {lc.toUpperCase()}
+                    </button>
+                  ));
+                })()}
+                {(() => {
+                  const allExisting = new Set([...(activeVersion?.languages.map((l) => l.lang) ?? []), ...Object.keys(editorContent)]);
+                  const available = projectLanguages.filter((l) => !allExisting.has(l.code));
+                  if (available.length === 0) return null;
+                  return (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="px-2.5 py-1 text-xs border rounded-md text-muted-foreground hover:bg-muted transition-colors">+ Add</button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        {available.map((l) => (
+                          <DropdownMenuItem key={l.code} onClick={() => {
+                            setEditorContent((prev) => ({ ...prev, [l.code]: "" }));
+                            setMetaByLang((prev) => ({ ...prev, [l.code]: { title: title || "", description: "", category: category || "", tags: "", keywords: "", author: author || "", faqs: [] } }));
+                            setActiveLang(l.code);
+                          }}>
+                            {l.code.toUpperCase()} — {l.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                })()}
+              </div>
+              {/* Translate with AI — only for non-primary languages */}
+              {(() => {
+                const primaryLang = activeVersion?.languages?.[0]?.lang ?? Object.keys(editorContent)[0];
+                if (activeLang === primaryLang) return null;
+                const hasPrimaryContent = editorContent[primaryLang]?.trim();
+                if (!hasPrimaryContent) return null;
+                return (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs"
+                    onClick={() => {
+                      // Copy primary content as starting point (actual AI translation would be a pipeline call)
+                      const primary = editorContent[primaryLang] ?? "";
+                      setEditorContent((prev) => ({ ...prev, [activeLang]: primary }));
+                    }}
+                  >
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                    Translate {primaryLang.toUpperCase()} → {activeLang.toUpperCase()} with AI
+                  </Button>
+                );
+              })()}
+            </div>
+          )}
+
           {/* Version Selector */}
           {versions.length > 0 && activeVersion && (
             <div className="space-y-2">
@@ -1596,9 +1628,10 @@ export default function ContentEditorPage({
 
               {[...(activeVersion?.languages ?? [{ lang: "de", slug: "", title: "", description: "", contentPath: "" }]), ...Object.keys(editorContent).filter((l) => !(activeVersion?.languages ?? []).some((vl) => vl.lang === l)).map((l) => ({ lang: l, slug: "", title: "", description: "", contentPath: "" }))].map((lang) => (
                 <TabsContent key={lang.lang} value={lang.lang} className="mt-4">
-                  {editorContent[lang.lang] ? (
+                  {editorContent[lang.lang] != null ? (
                     <TiptapEditor
-                      content={editorContent[lang.lang]}
+                      key={`${lang.lang}-${activeVersionId ?? "new"}`}
+                      content={editorContent[lang.lang] || ""}
                       onChange={(md) => {
                         userEditedLangs.current.add(lang.lang);
                         setEditorContent((prev) => ({ ...prev, [lang.lang]: md }));
@@ -1612,11 +1645,16 @@ export default function ContentEditorPage({
                     <Card>
                       <CardContent className="flex flex-col items-center justify-center p-12 text-center">
                         <p className="text-sm text-muted-foreground">
-                          No content for {lang.lang.toUpperCase()} yet
+                          {lang.lang === (activeVersion?.languages?.[0]?.lang ?? activeLang)
+                            ? "Start writing your content"
+                            : `No content for ${lang.lang.toUpperCase()} yet`}
                         </p>
-                        <Button variant="outline" size="sm" className="mt-3">
-                          Generate Translation
-                        </Button>
+                        {lang.lang !== (activeVersion?.languages?.[0]?.lang ?? activeLang) && (
+                          <Button variant="outline" size="sm" className="mt-3">
+                            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                            Generate Translation
+                          </Button>
+                        )}
                       </CardContent>
                     </Card>
                   )}

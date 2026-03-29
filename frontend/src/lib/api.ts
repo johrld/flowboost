@@ -337,6 +337,14 @@ export interface ContentTypeDefinition {
     role: string;
     guidelines: string;
   };
+  pipeline?: {
+    mode: "single-phase" | "multi-phase";
+    phases: string[];
+  };
+  localization?: {
+    mode: "single" | "multi";
+    translateOnGenerate?: boolean;
+  };
 }
 
 export function getContentTypes(

@@ -8,7 +8,7 @@ A ContentType is a JSON definition that tells FlowBoost **what** to produce and 
 
 | ID | Label | Category | Pipeline | Phases |
 |----|-------|----------|----------|--------|
-| `blog-post` | Blog Post | site | multi-phase | research, outline, write, quality, image, translate |
+| `blog-post` | Blog Post | site | multi-phase | outline, write, assembly, image, quality, translate |
 | `linkedin-post` | LinkedIn Post | social | single-phase | write, image |
 | `instagram-post` | Instagram Post | social | single-phase | write, image |
 | `x-post` | X Post | social | single-phase | write |
@@ -60,7 +60,7 @@ Complex content type — 9 fields, detailed SEO guidelines, 6-phase production p
   "icon": "file-text",
   "pipeline": {
     "mode": "multi-phase",
-    "phases": ["research", "outline", "write", "quality", "image", "translate"],
+    "phases": ["outline", "write", "assembly", "image", "quality", "translate"],
     "requiresEnrichment": true
   },
   "agent": {
@@ -109,6 +109,7 @@ When a user clicks "Create with AI" and selects a content type, the system:
 | `json` | Structured data | `object` |
 | `number` | Numeric value | `number` |
 | `boolean` | Toggle | `boolean` |
+| `date` | Date picker | `string (ISO)` |
 
 ## Field Constraints
 
@@ -144,6 +145,22 @@ Constraints are injected into the agent prompt as `<constraints>` and enforced i
 | `phases` | `string[]` | Phase names for the pipeline run. Single-phase typically: `["write"]` or `["write", "image"]`. |
 | `requiresEnrichment` | `boolean` | Hint: does this type benefit from SEO research before production? |
 | `defaultModel` | `string` (optional) | Override the project's default model for this content type. |
+
+## Localization
+
+```json
+{
+  "localization": {
+    "mode": "single",
+    "translateOnGenerate": false
+  }
+}
+```
+
+| Field | Values | Description |
+|-------|--------|-------------|
+| `mode` | `"single"` / `"multi"` | `single` = social/email content (no language tabs in editor). `multi` = articles (language tabs + auto-translate in pipeline). |
+| `translateOnGenerate` | `boolean` | When `true`, the pipeline runs the Translation phase automatically after production. Only relevant for `multi` mode. |
 
 ## Agent Configuration
 

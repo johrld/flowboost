@@ -118,7 +118,7 @@ export function ContentStatusBadge({ status }: { status: ContentItemStatus }) {
 // ── Content Type Badge ───────────────────────────────────────────
 
 const contentTypeConfig: Record<ContentType, { label: string; className: string }> = {
-  article: { label: "Article", className: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
+  article: { label: "Blog Post", className: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
   guide: { label: "Guide", className: "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300" },
   landing_page: { label: "Landing", className: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" },
   video: { label: "Video", className: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300" },

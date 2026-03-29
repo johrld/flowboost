@@ -51,7 +51,7 @@ function getContentLabel(item: ContentItem): string {
   };
   if (item.category && labels[item.category]) return labels[item.category];
   const typeLabels: Record<string, string> = {
-    article: "Article", guide: "Guide", newsletter: "Newsletter", social_post: "Social",
+    article: "Blog Post", guide: "Guide", newsletter: "Newsletter", social_post: "Social",
   };
   return typeLabels[item.type] ?? item.type;
 }
@@ -194,7 +194,7 @@ export default function FlowsPage() {
             <option value="all">All Types</option>
             {typeOptions.map((t) => (
               <option key={t} value={t}>
-                {({ linkedin: "LinkedIn", instagram: "Instagram", x: "X", tiktok: "TikTok", article: "Article", guide: "Guide", newsletter: "Newsletter", social_post: "Social" } as Record<string, string>)[t] ?? t}
+                {({ linkedin: "LinkedIn", instagram: "Instagram", x: "X", tiktok: "TikTok", article: "Blog Post", guide: "Guide", newsletter: "Newsletter", social_post: "Social" } as Record<string, string>)[t] ?? t}
               </option>
             ))}
           </select>

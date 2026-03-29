@@ -18,7 +18,7 @@ TikTok Post       → Content Writer (1 agent, 1 call)
 Newsletter        → Content Writer (1 agent, 1 call)
 Any custom type   → Content Writer (1 agent, 1 call)
 
-Blog Post         → 6 specialized agents (research, outline, write, quality, image, translate)
+Blog Post         → 6 specialized agents (outline, write, assembly, image, quality, translate)
 ```
 
 ## Single-Phase Pipeline: Content Writer
@@ -56,37 +56,42 @@ Used exclusively for blog posts (`pipeline.mode: "multi-phase"`). Six specialize
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Phase 1: RESEARCH                                              │
-│  Agent: SEO Researcher                                          │
-│  Task: Find keywords, analyze competitors, determine structure  │
-│  Tools: WebSearch, WebFetch                                     │
-│  Skipped if: Flow already has enrichment.seo data              │
+│  Phase 0: RESEARCH (separate pipeline)                          │
+│  Handled by the Enrichment Pipeline (not part of production).  │
+│  Populates Flow.enrichment.seo before production starts.       │
+│  See "Enrichment Pipeline" section below.                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  Phase 2: OUTLINE                                               │
+│  Phase 1: OUTLINE                                               │
 │  Agent: Outline Architect                                       │
 │  Task: Design article structure (H1, H2s, FAQ, meta)           │
 │  Tools: Read, MCP (brand voice, templates, section specs)      │
 │  Output: JSON outline with sections, word targets, keywords     │
 ├─────────────────────────────────────────────────────────────────┤
-│  Phase 3: WRITE (parallel)                                      │
+│  Phase 2: WRITING (parallel)                                    │
 │  Agent: Section Writer (x N, one per section)                   │
 │  Task: Write one section following the outline                  │
 │  Tools: Read, Write, MCP (validate_section)                    │
 │  Output: Individual markdown files per section                  │
 ├─────────────────────────────────────────────────────────────────┤
-│  Phase 4: QUALITY (with retry)                                  │
-│  Agents: SEO Checker + Content Reviewer (parallel)             │
-│  Task: Validate SEO, structure, brand voice compliance         │
-│  Tools: Read, MCP (validate_article)                           │
-│  Retry: If fail → re-run assembly + quality (up to N retries)  │
+│  Phase 3: ASSEMBLY                                              │
+│  Agent: Content Editor                                          │
+│  Task: Merge section files into a single article               │
+│  Tools: Read, MCP (assemble_article)                           │
+│  Output: Complete markdown article                              │
 ├─────────────────────────────────────────────────────────────────┤
-│  Phase 5: IMAGE (non-fatal)                                     │
+│  Phase 4: IMAGE (non-fatal)                                     │
 │  Agent: Image Generator                                         │
 │  Task: Generate hero image based on article content            │
 │  Tools: Read, MCP (generate_image via Imagen 4)                │
 │  Failure: Pipeline continues without image                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  Phase 6: TRANSLATE (parallel)                                  │
+│  Phase 5: QUALITY (with retry)                                  │
+│  Agents: SEO Checker + Content Reviewer (parallel)             │
+│  Task: Validate SEO, structure, brand voice compliance         │
+│  Tools: Read, MCP (validate_article)                           │
+│  Retry: If fail → re-run assembly + quality (up to N retries)  │
+├─────────────────────────────────────────────────────────────────┤
+│  Phase 6: TRANSLATION (parallel)                                │
 │  Agent: Translator (x N, one per target language)              │
 │  Task: Translate article preserving structure and SEO          │
 │  Tools: Read, Write, MCP (validate_article)                    │
@@ -141,6 +146,8 @@ Agents access FlowBoost tools via a stdio MCP server (`tools/mcp-stdio-server.ts
 | `flowboost_assemble_article` | Merge section files | Blog post pipeline |
 | `flowboost_generate_image` | Generate via Imagen 4 | Blog post pipeline |
 | `flowboost_read_article` | Read from repo | Blog post pipeline |
+| `flowboost_validate_social_post` | Validate social post content | Content Writer (social) |
+| `flowboost_validate_newsletter` | Validate newsletter content | Content Writer (email) |
 
 ### Context Layers
 
