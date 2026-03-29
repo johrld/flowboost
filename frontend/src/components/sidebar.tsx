@@ -165,7 +165,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
       {/* Logo */}
-      <Link href="/dashboard" className="flex items-center gap-2.5 border-b px-4 py-4 hover:bg-muted/50 transition-colors">
+      <Link href="/flows" className="flex items-center gap-2.5 border-b px-4 py-4 hover:bg-muted/50 transition-colors">
         <Image src="/logo.png" alt="FlowBoost" width={28} height={28} className="rounded-md" />
         <span className="text-lg font-semibold">flowboost</span>
       </Link>
