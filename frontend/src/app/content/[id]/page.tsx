@@ -48,6 +48,7 @@ import {
   getContentMedia,
   getMedia,
   getMediaFileUrl,
+  getMediaThumbnailUrl,
   generateHeroImage,
   uploadContentMedia,
   setHeroImage,
@@ -1628,12 +1629,6 @@ export default function ContentEditorPage({
                         const asset = await uploadContentMedia(customerId, projectId, item!.id, file, "inline");
                         return getMediaFileUrl(customerId, projectId, asset.id);
                       }}
-                      onImageBrowse={() => {
-                        return new Promise<string | null>((resolve) => {
-                          mediaPickerResolveRef.current = resolve;
-                          setMediaPickerOpen(true);
-                        });
-                      }}
                     />
                   ) : (
                     <Card>
@@ -1860,7 +1855,7 @@ function JsonEditorSwitch({
   }
 }
 
-/** Media panel for social/email editors — image gallery with upload, mediathek, AI generate */
+/** Media panel for social/email editors — focused on this post + recent library */
 function SocialMediaPanel({
   customerId,
   projectId,
@@ -1881,137 +1876,125 @@ function SocialMediaPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(false);
 
-  // Load global media library (not just content-media)
-  const [globalMedia, setGlobalMedia] = useState<import("@/lib/types").MediaAsset[]>([]);
+  // Load recent images from library (6 newest)
+  const [recentMedia, setRecentMedia] = useState<import("@/lib/types").MediaAsset[]>([]);
   useEffect(() => {
-    getMedia(customerId, projectId, { type: "image", limit: 50 }).then((res) => setGlobalMedia(res.assets)).catch(() => {});
+    getMedia(customerId, projectId, { type: "image", limit: 6 }).then((res) => setRecentMedia(res.assets)).catch(() => {});
   }, [customerId, projectId]);
 
-  // Combine: global media + content media (deduped by id)
-  const allMedia = useMemo(() => {
-    const ids = new Set(globalMedia.map((a) => a.id));
-    const extra = mediaAssets.filter((a) => !ids.has(a.id));
-    return [...globalMedia, ...extra];
-  }, [globalMedia, mediaAssets]);
+  // Recent = library images NOT already attached to this post
+  const recentFiltered = useMemo(() => {
+    const attachedUrls = new Set(images);
+    return recentMedia.filter((a) => {
+      const url = getMediaFileUrl(customerId, projectId, a.id);
+      return !attachedUrls.has(url);
+    });
+  }, [recentMedia, images, customerId, projectId]);
 
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    try {
-      const asset = await uploadContentMedia(customerId, projectId, contentId, file);
-      const url = getMediaFileUrl(customerId, projectId, asset.id);
-      onImagesChange([...images, url]);
-      const { assets } = await getContentMedia(customerId, projectId, contentId);
-      onMediaAssetsChange(assets);
-      getMedia(customerId, projectId, { type: "image", limit: 50 }).then((res) => setGlobalMedia(res.assets)).catch(() => {});
-    } catch (err) {
-      console.error("Upload failed:", err);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const removeImage = (index: number) => {
-    onImagesChange(images.filter((_, i) => i !== index));
+  const refreshMedia = () => {
+    getMedia(customerId, projectId, { type: "image", limit: 6 }).then((res) => setRecentMedia(res.assets)).catch(() => {});
+    getContentMedia(customerId, projectId, contentId).then(({ assets }) => onMediaAssetsChange(assets)).catch(() => {});
   };
 
   return (
     <div className="space-y-4">
-      <h3 className="font-semibold text-sm">Media Library</h3>
-      <p className="text-xs text-muted-foreground">Click an image to add it to your post ({images.length}/20 selected)</p>
-
-      {/* Upload + Generate */}
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs"
-          disabled={uploading}
-          onClick={() => fileInputRef.current?.click()}
-        >
+      {/* Action bar */}
+      <div className="grid grid-cols-3 gap-2">
+        <Button variant="outline" size="sm" className="text-xs" disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}>
           {uploading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}
           Upload
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs"
-          disabled={generating}
+        <Button variant="outline" size="sm" className="text-xs" disabled={generating}
           onClick={async () => {
             setGenerating(true);
             try {
               const asset = await generateHeroImage(customerId, projectId, contentId, "Professional social media image, modern clean style");
               const url = getMediaFileUrl(customerId, projectId, asset.id);
               onImagesChange([...images, url]);
-              // Refresh both content media and global media
-              const { assets } = await getContentMedia(customerId, projectId, contentId);
-              onMediaAssetsChange(assets);
-              getMedia(customerId, projectId, { type: "image", limit: 50 }).then((res) => setGlobalMedia(res.assets)).catch(() => {});
-            } catch (err) {
-              console.error("Generate failed:", err);
-            } finally {
-              setGenerating(false);
-            }
-          }}
-        >
+              refreshMedia();
+            } catch (err) { console.error("Generate failed:", err); }
+            finally { setGenerating(false); }
+          }}>
           {generating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
-          AI Generate
+          Generate
+        </Button>
+        <Button variant="outline" size="sm" className="text-xs" onClick={() => setBrowseOpen(true)}>
+          <ImageIcon className="mr-1 h-3 w-3" />
+          Browse
         </Button>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
+      <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
         onChange={async (e) => {
           const files = Array.from(e.target.files ?? []);
-          for (const file of files) {
-            await handleUpload(file);
-          }
-          e.target.value = "";
+          setUploading(true);
+          try {
+            for (const file of files) {
+              const asset = await uploadContentMedia(customerId, projectId, contentId, file);
+              const url = getMediaFileUrl(customerId, projectId, asset.id);
+              onImagesChange([...images, url]);
+            }
+            refreshMedia();
+          } catch (err) { console.error("Upload failed:", err); }
+          finally { setUploading(false); e.target.value = ""; }
         }}
       />
 
-      {/* Existing media assets */}
-      {allMedia.length > 0 && (
+      {/* This Post */}
+      {images.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground">Available ({allMedia.length})</p>
+          <p className="text-xs text-muted-foreground">This post ({images.length})</p>
           <div className="grid grid-cols-3 gap-1.5">
-            {allMedia.map((asset) => {
+            {images.map((url, i) => (
+              <div key={url} className="relative group aspect-square rounded-md overflow-hidden border bg-muted">
+                <img src={url} alt="" className="w-full h-full object-cover" />
+                <button type="button"
+                  className="absolute top-0.5 right-0.5 rounded-full bg-background/80 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => onImagesChange(images.filter((_, j) => j !== i))}>
+                  <X className="h-3 w-3 text-muted-foreground" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent from library */}
+      {recentFiltered.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">Recent</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {recentFiltered.map((asset) => {
               const url = getMediaFileUrl(customerId, projectId, asset.id);
-              const isSelected = images.includes(url);
+              const thumbUrl = getMediaThumbnailUrl(customerId, projectId, asset.id);
               return (
-                <button
-                  key={asset.id}
-                  type="button"
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData("text/plain", url);
-                    e.dataTransfer.effectAllowed = "copy";
-                  }}
-                  className={`relative aspect-square rounded-md overflow-hidden border bg-muted transition-all cursor-grab active:cursor-grabbing ${isSelected ? "ring-2 ring-primary" : "hover:ring-2 hover:ring-primary/50"}`}
-                  onClick={() => {
-                    if (isSelected) {
-                      onImagesChange(images.filter((img) => img !== url));
-                    } else {
-                      onImagesChange([...images, url]);
-                    }
-                  }}
-                >
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                  {isSelected && (
-                    <div className="absolute top-1 right-1 h-5 w-5 rounded-full bg-primary text-white flex items-center justify-center">
-                      <Check className="h-3 w-3" />
-                    </div>
-                  )}
+                <button key={asset.id} type="button" draggable
+                  onDragStart={(e) => { e.dataTransfer.setData("text/plain", url); e.dataTransfer.effectAllowed = "copy"; }}
+                  className="aspect-square rounded-md overflow-hidden border bg-muted hover:ring-2 hover:ring-primary/50 transition-all cursor-grab active:cursor-grabbing"
+                  onClick={() => onImagesChange([...images, url])}>
+                  <img src={thumbUrl} alt="" className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).src = url; }} />
                 </button>
               );
             })}
           </div>
         </div>
       )}
+
+      {/* MediaPicker */}
+      <MediaPicker
+        open={browseOpen}
+        onOpenChange={setBrowseOpen}
+        typeFilter="image"
+        onSelect={(asset) => {
+          const url = getMediaFileUrl(customerId, projectId, asset.id);
+          if (!images.includes(url)) onImagesChange([...images, url]);
+          setBrowseOpen(false);
+        }}
+      />
     </div>
   );
 }

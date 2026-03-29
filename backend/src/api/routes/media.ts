@@ -86,6 +86,9 @@ export async function mediaRoutes(app: FastifyInstance) {
       assets = assets.filter((a) => (a.usedBy ?? []).length > 0);
     }
 
+    // Sort newest first
+    assets.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+
     const total = assets.length;
     const pageNum = filter.page ?? 1;
     const pageSize = filter.limit ?? 50;

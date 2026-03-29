@@ -144,6 +144,35 @@ export class ContentTypeStore {
     );
   }
 
+  /** Sync builtin content types from seed directory.
+   *  - Missing builtins are copied in
+   *  - Outdated builtins are updated (seed is newer)
+   *  - Connector and custom types are never touched */
+  syncBuiltins(seedDir: string): void {
+    if (!fs.existsSync(seedDir)) return;
+
+    const seedFiles = fs.readdirSync(seedDir).filter((f) => f.endsWith(".json"));
+    for (const file of seedFiles) {
+      try {
+        const seed = JSON.parse(fs.readFileSync(path.join(seedDir, file), "utf-8")) as CustomContentType;
+        if (seed.source !== "builtin") continue;
+
+        const existing = this.get(seed.id);
+        if (!existing) {
+          // Missing → copy in
+          this.save(seed);
+          log.info({ id: seed.id }, "builtin content type added");
+        } else if (existing.source === "builtin" && seed.updatedAt > existing.updatedAt) {
+          // Outdated → update
+          this.save(seed);
+          log.info({ id: seed.id }, "builtin content type updated");
+        }
+      } catch {
+        log.warn({ file }, "failed to read seed content type");
+      }
+    }
+  }
+
   /** Import schemas from a connector as content types */
   importFromConnector(
     projectId: string,

@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { ContentTypeStore, type CustomContentType, type CustomFieldDefinition } from "../../models/content-type.js";
 import { createSiteConnector } from "../../connectors/site/factory.js";
@@ -6,10 +7,15 @@ import { createLogger } from "../../utils/logger.js";
 const log = createLogger("api:content-types");
 
 export async function contentTypeRoutes(app: FastifyInstance) {
-  // Helper: get store for project
+  // Seed directory for builtin content types
+  const seedDir = path.join(app.ctx.dataDir, "..", "data.seed", "project-defaults", "content-types");
+
+  // Helper: get store for project (syncs builtins on access)
   function getStore(customerId: string, projectId: string): ContentTypeStore {
     const projectDir = app.ctx.projectsFor(customerId).entityDir(projectId);
-    return new ContentTypeStore(projectDir);
+    const store = new ContentTypeStore(projectDir);
+    store.syncBuiltins(seedDir);
+    return store;
   }
 
   // GET /content-types — List all content types for project
