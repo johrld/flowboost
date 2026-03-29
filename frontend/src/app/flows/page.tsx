@@ -2,101 +2,102 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { ContentStatusBadge } from "@/components/status-badge";
 import {
   Plus,
-  ChevronRight,
   Clock,
   Mic,
   Image as ImageIcon,
   Link as LinkIcon,
   FileEdit,
   FileText,
+  Linkedin,
+  Instagram,
+  Twitter,
+  Video,
+  Mail,
   Loader2,
+  Sparkles,
+  Package,
 } from "lucide-react";
 import { useProject } from "@/lib/project-context";
-import { getTopics, createTopic } from "@/lib/api";
-import type { Topic, FlowInput } from "@/lib/types";
+import { getTopics, getContent } from "@/lib/api";
+import type { Topic, ContentItem, FlowInput } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
-  proposed: "secondary",
-  approved: "default",
-  in_production: "default",
-  produced: "outline",
-  rejected: "outline",
+const CONTENT_ICONS: Record<string, React.ReactNode> = {
+  linkedin: <Linkedin className="h-3.5 w-3.5" />,
+  instagram: <Instagram className="h-3.5 w-3.5" />,
+  x: <Twitter className="h-3.5 w-3.5" />,
+  tiktok: <Video className="h-3.5 w-3.5" />,
+  article: <FileText className="h-3.5 w-3.5" />,
+  guide: <FileText className="h-3.5 w-3.5" />,
+  newsletter: <Mail className="h-3.5 w-3.5" />,
+  social_post: <Linkedin className="h-3.5 w-3.5" />,
 };
 
-function InputCountBadge({ inputs }: { inputs?: FlowInput[] }) {
+function getContentIcon(item: ContentItem) {
+  return CONTENT_ICONS[item.category ?? ""] ?? CONTENT_ICONS[item.type] ?? <FileText className="h-3.5 w-3.5" />;
+}
+
+function getContentLabel(item: ContentItem): string {
+  const labels: Record<string, string> = {
+    linkedin: "LinkedIn", instagram: "Instagram", x: "X", tiktok: "TikTok",
+  };
+  if (item.category && labels[item.category]) return labels[item.category];
+  const typeLabels: Record<string, string> = {
+    article: "Article", guide: "Guide", newsletter: "Newsletter", social_post: "Social",
+  };
+  return typeLabels[item.type] ?? item.type;
+}
+
+function sourceCount(inputs?: FlowInput[]): React.ReactNode {
   if (!inputs || inputs.length === 0) return null;
-  const types = inputs.map((i) => i.type);
   const icons: React.ReactNode[] = [];
-  if (types.includes("transcript")) icons.push(<Mic key="mic" className="h-3 w-3" />);
-  if (types.includes("text")) icons.push(<FileEdit key="text" className="h-3 w-3" />);
-  if (types.includes("image")) icons.push(<ImageIcon key="img" className="h-3 w-3" />);
-  if (types.includes("url")) icons.push(<LinkIcon key="url" className="h-3 w-3" />);
+  const types = new Set(inputs.map((i) => i.type));
+  if (types.has("transcript")) icons.push(<Mic key="m" className="h-3 w-3" />);
+  if (types.has("text")) icons.push(<FileEdit key="t" className="h-3 w-3" />);
+  if (types.has("image")) icons.push(<ImageIcon key="i" className="h-3 w-3" />);
+  if (types.has("url")) icons.push(<LinkIcon key="u" className="h-3 w-3" />);
+  if (types.has("document")) icons.push(<FileText key="d" className="h-3 w-3" />);
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-      {icons} {inputs.length} input{inputs.length !== 1 ? "s" : ""}
+    <span className="inline-flex items-center gap-1">
+      {icons} {inputs.length} source{inputs.length !== 1 ? "s" : ""}
     </span>
   );
 }
 
 export default function FlowsPage() {
   const { customerId, projectId, loading: projectLoading } = useProject();
-  const router = useRouter();
 
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showNewDialog, setShowNewDialog] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newNotes, setNewNotes] = useState("");
-  const [creating, setCreating] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!customerId || !projectId) return;
     try {
-      const t = await getTopics(customerId, projectId);
+      const [t, c] = await Promise.all([
+        getTopics(customerId, projectId),
+        getContent(customerId, projectId),
+      ]);
       setTopics(t);
-    } catch {
-      // API not available
-    } finally {
-      setLoading(false);
-    }
+      setContentItems(c.items);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
   }, [customerId, projectId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const handleCreate = async () => {
-    if (!newTitle.trim() || !customerId || !projectId) return;
-    setCreating(true);
-    try {
-      const topic = await createTopic(customerId, projectId, {
-        title: newTitle.trim(),
-        userNotes: newNotes.trim() || undefined,
-      });
-      setShowNewDialog(false);
-      setNewTitle("");
-      setNewNotes("");
-      router.push(`/flows/${topic.id}`);
-    } catch (err) {
-      console.error("Failed to create flow:", err);
-    } finally {
-      setCreating(false);
-    }
-  };
+  // Group content items by flowId
+  const contentByFlow = contentItems.reduce<Record<string, ContentItem[]>>((acc, item) => {
+    const fid = item.flowId ?? item.topicId ?? "_unlinked";
+    if (!acc[fid]) acc[fid] = [];
+    acc[fid].push(item);
+    return acc;
+  }, {});
 
   if (projectLoading || loading) {
     return (
@@ -106,111 +107,105 @@ export default function FlowsPage() {
     );
   }
 
+  const activeFlows = topics.filter((t) => t.status !== "archived");
+  const archivedFlows = topics.filter((t) => t.status === "archived");
+
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-8 max-w-5xl mx-auto space-y-8">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Flows</h1>
-          <p className="text-muted-foreground">Your content topics and their outputs</p>
+          <p className="text-sm text-muted-foreground">Your content campaigns and projects</p>
         </div>
-        <Button onClick={() => setShowNewDialog(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Flow
-        </Button>
       </div>
 
-      {topics.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-10 text-center">
-          <FileText className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground mb-4">No flows yet. Create one to start planning content.</p>
-          <Button variant="outline" onClick={() => setShowNewDialog(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Flow
-          </Button>
+      {/* Flow Cards */}
+      {activeFlows.length === 0 ? (
+        <div className="rounded-xl border-2 border-dashed p-12 text-center">
+          <Package className="h-10 w-10 text-muted-foreground/30 mx-auto mb-4" />
+          <p className="text-sm font-medium mb-1">No flows yet</p>
+          <p className="text-xs text-muted-foreground mb-4">Create a flow to start planning and producing content.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {topics.map((topic) => (
-            <Link
-              key={topic.id}
-              href={`/flows/${topic.id}`}
-              className="block rounded-lg border p-4 hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex items-start justify-between">
-                <div className="space-y-1.5 flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium">{topic.title}</h3>
-                    <Badge variant={STATUS_VARIANT[topic.status] ?? "secondary"} className="text-xs capitalize">
-                      {topic.status.replace("_", " ")}
-                    </Badge>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {activeFlows.map((flow) => {
+            const pieces = contentByFlow[flow.id] ?? [];
+            const hasBriefing = !!flow.briefing?.trim();
+            const sourceInfo = sourceCount(flow.inputs);
+            const isAI = flow.source === "pipeline";
+
+            return (
+              <Link
+                key={flow.id}
+                href={`/flows/${flow.id}`}
+                className="block rounded-xl bg-background border shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+              >
+                {/* Card Header */}
+                <div className="px-5 pt-4 pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-base truncate">
+                      {flow.title}
+                      {isAI && <Sparkles className="inline ml-1.5 h-3.5 w-3.5 text-violet-500" />}
+                    </h3>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    {topic.outputIds && topic.outputIds.length > 0 && (
-                      <>
-                        <span>{topic.outputIds.length} output{topic.outputIds.length !== 1 ? "s" : ""}</span>
-                        <span>·</span>
-                      </>
-                    )}
-                    <InputCountBadge inputs={topic.inputs} />
-                    {topic.createdAt && (
-                      <>
-                        <span>·</span>
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatDistanceToNow(new Date(topic.createdAt), { addSuffix: true })}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  {topic.direction && (
-                    <p className="text-xs text-muted-foreground truncate">{topic.direction}</p>
+                  {flow.briefing && (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{flow.briefing}</p>
                   )}
                 </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />
-              </div>
-            </Link>
-          ))}
+
+                {/* Content Pieces */}
+                {pieces.length > 0 && (
+                  <div className="px-5 pb-3 space-y-1.5">
+                    {pieces.map((item) => (
+                      <div key={item.id} className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">{getContentIcon(item)}</span>
+                        <span className="flex-1 truncate text-muted-foreground">{getContentLabel(item)}</span>
+                        <ContentStatusBadge status={item.status} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Card Footer */}
+                <div className="px-5 py-2.5 bg-muted/30 border-t flex items-center gap-3 text-xs text-muted-foreground">
+                  {sourceInfo}
+                  {sourceInfo && (hasBriefing || flow.createdAt) && <span>·</span>}
+                  {!hasBriefing && pieces.length === 0 && (
+                    <span className="text-amber-600">No briefing yet</span>
+                  )}
+                  {flow.createdAt && (
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {formatDistanceToNow(new Date(flow.createdAt), { addSuffix: true })}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
 
-      {/* New Flow Dialog */}
-      <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>New Flow</DialogTitle>
-            <DialogDescription>Start a new content topic. Add inputs and generate outputs later.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="flow-title">Title</Label>
-              <Input
-                id="flow-title"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && newTitle.trim() && !creating) handleCreate(); }}
-                placeholder="e.g. Atemtechniken für Anfänger"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="flow-notes">Notes (optional)</Label>
-              <Textarea
-                id="flow-notes"
-                value={newNotes}
-                onChange={(e) => setNewNotes(e.target.value)}
-                placeholder="Any context, angle, or audience you have in mind..."
-                rows={3}
-              />
-            </div>
-            <div className="flex justify-end">
-              <Button disabled={!newTitle.trim() || creating} onClick={handleCreate}>
-                {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Flow
-              </Button>
-            </div>
+      {/* Archived Flows */}
+      {archivedFlows.length > 0 && (
+        <details className="group">
+          <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+            Archived ({archivedFlows.length})
+          </summary>
+          <div className="mt-3 space-y-2">
+            {archivedFlows.map((flow) => (
+              <Link
+                key={flow.id}
+                href={`/flows/${flow.id}`}
+                className="block rounded-lg border p-3 hover:bg-muted/50 transition-colors opacity-60"
+              >
+                <span className="text-sm">{flow.title}</span>
+              </Link>
+            ))}
           </div>
-        </DialogContent>
-      </Dialog>
+        </details>
+      )}
     </div>
   );
 }

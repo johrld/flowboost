@@ -302,6 +302,18 @@ export function produceFlowOutput(
   });
 }
 
+export function produceAllFlowOutputs(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  mode: "all" | "missing" = "all",
+): Promise<{ message: string; started: number; total: number }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/produce-all`, {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  });
+}
+
 // ── Content Types ───────────────────────────────────────────────
 
 export interface ContentTypeDefinition {
