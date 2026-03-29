@@ -60,6 +60,7 @@ import {
   addFlowInput,
   uploadFlowFile,
   deleteFlowInput,
+  createContent,
   deleteContent,
   updateContent,
   produceFlowOutput,
@@ -127,6 +128,15 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   social: <MessageCircle className="h-3.5 w-3.5" />,
   email: <Mail className="h-3.5 w-3.5" />,
   media: <Video className="h-3.5 w-3.5" />,
+};
+
+const CT_ICONS: Record<string, React.ReactNode> = {
+  "blog-post": <FileText className="h-3.5 w-3.5" />,
+  "linkedin-post": <Linkedin className="h-3.5 w-3.5" />,
+  "instagram-post": <Instagram className="h-3.5 w-3.5" />,
+  "x-post": <Twitter className="h-3.5 w-3.5" />,
+  "tiktok-post": <Video className="h-3.5 w-3.5" />,
+  "newsletter": <Mail className="h-3.5 w-3.5" />,
 };
 
 // ── Thinking Animation ────────────────────────────────────────
@@ -324,6 +334,30 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
     }
   };
 
+  // Add a content piece WITHOUT starting the pipeline
+  const handleAddContent = async (contentTypeId: string) => {
+    if (!customerId || !projectId || !topic) return;
+    try {
+      const categoryMap: Record<string, string> = {
+        "blog-post": "article", "linkedin-post": "social_post", "instagram-post": "social_post",
+        "x-post": "social_post", "tiktok-post": "social_post", "newsletter": "newsletter",
+      };
+      const platformMap: Record<string, string> = {
+        "linkedin-post": "linkedin", "instagram-post": "instagram", "x-post": "x", "tiktok-post": "tiktok",
+      };
+      await createContent(customerId, projectId, {
+        type: (categoryMap[contentTypeId] ?? "article") as import("@/lib/types").ContentType,
+        title: topic.title,
+        category: platformMap[contentTypeId],
+        flowId: id,
+      });
+      await loadData();
+    } catch (err) {
+      console.error("Add content failed:", err);
+    }
+  };
+
+  // Generate a content piece WITH pipeline (✨ button)
   const handleProduce = async (contentTypeId: string) => {
     if (!customerId || !projectId) return;
     try {
@@ -618,12 +652,12 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
                     {contentTypes.length > 0 ? contentTypes.map((ct) => (
-                      <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(ct.id)}>
-                        {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                      <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleAddContent(ct.id)}>
+                        {CT_ICONS[ct.id] ?? CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
                         {ct.label}
                       </DropdownMenuItem>
                     )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
-                      <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleProduce(opt.contentTypeId)}>
+                      <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleAddContent(opt.contentTypeId)}>
                         {opt.icon}{opt.label}
                       </DropdownMenuItem>
                     ))}
@@ -643,12 +677,12 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
                     {contentTypes.length > 0 ? contentTypes.map((ct) => (
-                      <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleProduce(ct.id)}>
-                        {CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                      <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleAddContent(ct.id)}>
+                        {CT_ICONS[ct.id] ?? CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
                         {ct.label}
                       </DropdownMenuItem>
                     )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
-                      <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleProduce(opt.contentTypeId)}>
+                      <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleAddContent(opt.contentTypeId)}>
                         {opt.icon}{opt.label}
                       </DropdownMenuItem>
                     ))}
@@ -669,7 +703,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                           <p className="text-sm font-medium truncate">{item.title}</p>
                           <p className="text-xs text-muted-foreground">
                             {({ linkedin: "LinkedIn Post", instagram: "Instagram Post", x: "X Post", tiktok: "TikTok Post" } as Record<string, string>)[item.category ?? ""]
-                              ?? ({ article: "Article", guide: "Guide", newsletter: "Newsletter", social_post: "Social Post" } as Record<string, string>)[item.type]
+                              ?? ({ article: "Blog Post", guide: "Guide", newsletter: "Newsletter", social_post: "Social Post" } as Record<string, string>)[item.type]
                               ?? item.type.replace("_", " ")}
                           </p>
                         </div>

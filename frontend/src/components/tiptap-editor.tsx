@@ -390,10 +390,15 @@ export function TiptapEditor({
         </div>
       )}
 
-      <EditorContent
-        editor={editor}
-        className="prose prose-sm max-w-none dark:prose-invert p-4 min-h-[500px] focus-within:outline-none [&_.tiptap]:outline-none"
-      />
+      <div
+        className="cursor-text"
+        onClick={() => { if (editor && !editor.isFocused) editor.commands.focus("end"); }}
+      >
+        <EditorContent
+          editor={editor}
+          className="prose prose-sm max-w-none dark:prose-invert p-4 min-h-[500px] focus-within:outline-none [&_.tiptap]:outline-none"
+        />
+      </div>
 
       {/* Floating image toolbar */}
       {editable && selectedContainer && toolbarPos && (
