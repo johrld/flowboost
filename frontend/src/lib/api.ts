@@ -414,7 +414,7 @@ export function getContentItem(
 export function createContent(
   customerId: string,
   projectId: string,
-  data: { type: ContentType; title: string; description?: string; category?: string; tags?: string[]; keywords?: string[] },
+  data: { type: ContentType; title: string; description?: string; category?: string; tags?: string[]; keywords?: string[]; flowId?: string },
 ): Promise<ContentItem> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content`, {
     method: "POST",
