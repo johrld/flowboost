@@ -590,7 +590,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 <p className="text-sm font-medium mb-1">Add context for your content</p>
                 <p className="text-xs text-muted-foreground mb-5">Upload files, paste URLs, or add notes to help the AI understand what you need.</p>
                 <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowAddSource(true)}>
-                  Add Source
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />Add Source
                 </Button>
               </div>
             )}
@@ -613,7 +613,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="rounded-full">
-                      <Plus className="mr-1.5 h-3.5 w-3.5" />Create Content
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />Add Content
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
@@ -638,7 +638,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                       <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center">
                         <Plus className="h-4 w-4" />
                       </div>
-                      Create Content
+                      Add Content
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
