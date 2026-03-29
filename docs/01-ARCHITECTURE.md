@@ -113,7 +113,7 @@ Each ContentType defines:
 | `agent.role` | Agent identity — first line of system prompt |
 | `agent.guidelines` | Markdown: tone, structure, dos/don'ts |
 | `pipeline.mode` | `"single-phase"` or `"multi-phase"` |
-| `pipeline.phases` | Ordered phase list: `["write", "image"]` or `["research", "outline", "write", "quality", "image", "translate"]` |
+| `pipeline.phases` | Ordered phase list: `["write", "image"]` or `["outline", "write", "assembly", "image", "quality", "translate"]` |
 | `category` | `"site"` / `"social"` / `"email"` / `"media"` |
 
 **Adding a new content type requires zero code changes** — just create a JSON file.
@@ -138,7 +138,7 @@ Each ContentType defines:
 
 4. PIPELINE
    Single-phase: Write (+ optional Image) → ContentVersion created
-   Multi-phase: Research → Outline → Write → Quality → Image → Translate
+   Multi-phase: Outline → Writing → Assembly → Image → Quality → Translation
 
 5. REVIEW + EDIT
    User sees result in editor, edits fields, chats for refinement.
@@ -160,7 +160,7 @@ ContentType.pipeline.mode
   │
   └── "multi-phase" → runProductionPipeline(ctx)
       Blog-post specific (6 specialized agents).
-      Research → Outline → Write → Assembly → Quality → Image → Translate.
+      Outline → Writing → Assembly → Image → Quality → Translation.
       Each phase has a dedicated agent with focused tools.
 ```
 

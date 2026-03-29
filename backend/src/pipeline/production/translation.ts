@@ -31,6 +31,25 @@ export async function runTranslationPhase(
   const metaSection = outline.sections.find((s) => s.type === "meta");
   const translations = (metaSection?.frontmatter as Record<string, unknown>)?.translations as Record<string, string> | undefined;
 
+  // Check content type localization mode — skip translation for single-language types
+  const contentId = ctx.run.contentId;
+  if (contentId) {
+    try {
+      const { ContentTypeStore } = await import("../../models/content-type.js");
+      const ctStore = new ContentTypeStore(ctx.projectDir);
+      const item = ctx.stores.content.get(contentId);
+      const ctId = item?.type === "social_post" ? `${item.category ?? "linkedin"}-post`
+        : item?.type === "newsletter" ? "newsletter" : "blog-post";
+      const contentType = ctStore.get(ctId);
+      if (contentType?.localization?.mode === "single" || contentType?.localization?.translateOnGenerate === false) {
+        log.info({ contentTypeId: ctId }, "single-language content type — skipping translation");
+        ctx.startPhase("translation");
+        ctx.completePhase("translation");
+        return [];
+      }
+    } catch { /* ignore — fall through to default behavior */ }
+  }
+
   // Filter to enabled non-default languages
   const targetLanguages = project.languages
     .filter((l) => l.enabled && l.code !== project.defaultLanguage);

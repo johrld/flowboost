@@ -36,11 +36,11 @@ import {
   Search,
   Package,
   MessageCircle,
+  MessageSquare,
   Pencil,
   Trash2,
   MoreHorizontal,
   Sparkles,
-  Check,
   ArrowUp,
   RefreshCw,
   Copy,
@@ -62,6 +62,7 @@ import {
   addFlowInput,
   uploadFlowFile,
   deleteFlowInput,
+  createContent,
   deleteContent,
   updateContent,
   produceFlowOutput,
@@ -131,12 +132,22 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   media: <Video className="h-3.5 w-3.5" />,
 };
 
+const CT_ICONS: Record<string, React.ReactNode> = {
+  "blog-post": <FileText className="h-3.5 w-3.5" />,
+  "linkedin-post": <Linkedin className="h-3.5 w-3.5" />,
+  "instagram-post": <Instagram className="h-3.5 w-3.5" />,
+  "x-post": <Twitter className="h-3.5 w-3.5" />,
+  "tiktok-post": <Video className="h-3.5 w-3.5" />,
+  "newsletter": <Mail className="h-3.5 w-3.5" />,
+};
+
 const CONNECTOR_ICONS: Record<string, React.ReactNode> = {
   shopware: <ShoppingBag className="h-3.5 w-3.5" />,
   wordpress: <Globe className="h-3.5 w-3.5" />,
 };
 
-function getContentTypeIcon(ct: { connectorType?: string; category: string }): React.ReactNode {
+function getContentTypeIcon(ct: { id?: string; connectorType?: string; category: string }): React.ReactNode {
+  if (ct.id && CT_ICONS[ct.id]) return CT_ICONS[ct.id];
   if (ct.connectorType && CONNECTOR_ICONS[ct.connectorType]) return CONNECTOR_ICONS[ct.connectorType];
   return CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />;
 }
@@ -197,7 +208,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [bottomTab, setBottomTab] = useState<"chat" | "sources" | "content">("content");
+  const [chatOpen, setChatOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [addingInput, setAddingInput] = useState(false);
   const [sourceText, setSourceText] = useState("");
@@ -336,11 +347,34 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
     }
   };
 
+  // Add a content piece WITHOUT starting the pipeline
+  const handleAddContent = async (contentTypeId: string) => {
+    if (!customerId || !projectId || !topic) return;
+    try {
+      const categoryMap: Record<string, string> = {
+        "blog-post": "article", "linkedin-post": "social_post", "instagram-post": "social_post",
+        "x-post": "social_post", "tiktok-post": "social_post", "newsletter": "newsletter",
+      };
+      const platformMap: Record<string, string> = {
+        "linkedin-post": "linkedin", "instagram-post": "instagram", "x-post": "x", "tiktok-post": "tiktok",
+      };
+      await createContent(customerId, projectId, {
+        type: (categoryMap[contentTypeId] ?? "article") as import("@/lib/types").ContentType,
+        title: topic.title,
+        category: platformMap[contentTypeId],
+        flowId: id,
+      });
+      await loadData();
+    } catch (err) {
+      console.error("Add content failed:", err);
+    }
+  };
+
+  // Generate a content piece WITH pipeline (✨ button)
   const handleProduce = async (contentTypeId: string) => {
     if (!customerId || !projectId) return;
     try {
       await produceFlowOutput(customerId, projectId, id, { contentTypeId });
-      setBottomTab("content");
       await loadData();
     } catch (err) {
       console.error("Produce failed:", err);
@@ -431,23 +465,28 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
         {/* ── Flow Title ────────────────────────────────── */}
         <div className="flex items-start justify-between pt-8 pb-6">
-          {editingTitle ? (
-            <input
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={handleSaveTitle}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSaveTitle(); if (e.key === "Escape") setEditingTitle(false); }}
-              autoFocus
-              className="text-2xl font-semibold bg-transparent outline-none border-b-2 border-primary w-full"
-            />
-          ) : (
-            <h1
-              className="text-2xl font-semibold cursor-text hover:text-muted-foreground transition-colors"
-              onClick={() => { setTitleDraft(topic.title); setEditingTitle(true); }}
-            >
-              {topic.title}
-            </h1>
-          )}
+          <div className="flex-1 min-w-0">
+            {editingTitle ? (
+              <input
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={handleSaveTitle}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSaveTitle(); if (e.key === "Escape") setEditingTitle(false); }}
+                autoFocus
+                className="text-2xl font-semibold bg-transparent outline-none border-b-2 border-primary w-full"
+              />
+            ) : (
+              <h1
+                className="text-2xl font-semibold cursor-text hover:text-muted-foreground transition-colors"
+                onClick={() => { setTitleDraft(topic.title); setEditingTitle(true); }}
+              >
+                {topic.title}
+              </h1>
+            )}
+          </div>
+          <Button variant="outline" size="sm" className="shrink-0 ml-3" onClick={() => setChatOpen(true)}>
+            <MessageSquare className="mr-1.5 h-3.5 w-3.5" />Chat
+          </Button>
         </div>
 
         <input
@@ -458,227 +497,307 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
           onChange={(e) => { handleFileUpload(e.target.files); e.target.value = ""; }}
         />
 
-        {/* ── Tabs: Chat | Sources | Content ────────────── */}
-        <div className="pb-12">
-          <div className="flex items-center gap-2 mb-6">
-            {(["content", "sources", "chat"] as const).map((tab) => {
-              const count = tab === "sources" ? inputs.length : tab === "content" ? outputs.length : chatMessages.length;
-              const isActive = bottomTab === tab;
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setBottomTab(tab)}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-full border transition-colors ${
-                    isActive
-                      ? "bg-muted text-foreground border-border"
-                      : "text-muted-foreground border-transparent hover:text-foreground"
-                  }`}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}{count > 0 ? ` (${count})` : ""}
-                </button>
-              );
-            })}
+        {/* ── 1. Briefing ──────────────────────────────── */}
+        <div className="pb-12 space-y-10">
+          <div>
+            <div className="mb-3">
+              <h3 className="text-base font-semibold">Briefing</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Describe your project — what is it about, who is the audience, what tone should the content have?</p>
+            </div>
+            <textarea
+              value={topic?.briefing ?? ""}
+              onChange={(e) => {
+                if (topic) setTopic({ ...topic, briefing: e.target.value });
+              }}
+              onBlur={async () => {
+                if (!customerId || !projectId || !topic) return;
+                try {
+                  await updateTopic(customerId, projectId, id, { briefing: topic.briefing ?? "" } as Partial<import("@/lib/types").Topic>);
+                } catch { /* ignore */ }
+              }}
+              placeholder="Describe what this campaign is about — target audience, goals, key messages, tone..."
+              className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none min-h-[80px]"
+              rows={3}
+            />
           </div>
 
-          {/* ── Chat Tab ──────────────────────────── */}
-          {bottomTab === ("chat" as string) && (
-            <div className="space-y-4 pb-20">
-              {chatMessages.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-10 text-center">
-                  <MessageCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-sm font-medium mb-1">Chat with AI</p>
-                  <p className="text-xs text-muted-foreground">Brainstorm ideas, get feedback on your content, or ask for help.</p>
+          {/* ── 2. Sources ──────────────────────────────── */}
+          <div>
+            <div className="mb-3">
+              <h3 className="text-base font-semibold">Sources</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Add reference material — URLs, documents, images, or notes to give the AI context.</p>
+            </div>
+            <div className={inputs.length > 0 ? "rounded-xl bg-background border shadow-sm p-5" : ""}>
+
+            {inputs.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAddSource(true)}
+                className="flex items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b"
+              >
+                <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+                  <Plus className="h-4 w-4" />
                 </div>
-              ) : (
-                chatMessages.map((msg, i) => (
-                  msg.role === "user" ? (
-                    /* User: right-aligned bubble */
-                    <div key={i} className="flex justify-end group">
-                      <div className="max-w-[80%]">
-                        <div className="bg-muted rounded-2xl rounded-br-sm px-4 py-2.5">
-                          <p className="text-sm">{msg.content}</p>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                          {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    /* AI: left-aligned, no bubble */
-                    <div key={i} className="flex gap-3 group">
-                      <div className="shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center bg-muted mt-0.5">
-                        <Bot className="h-3.5 w-3.5" />
+                Add Source
+              </button>
+            )}
+
+            {inputs.length > 0 && (
+              <div className="divide-y">
+                {inputs.map((input) => {
+                  const status = input.processed?.status;
+                  const isProcessing = status === "processing";
+                  const isCompleted = status === "completed";
+                  const isFailed = status === "failed";
+                  const notProcessed = !status || status === "pending";
+                  const hasSummary = isCompleted && (input.processed?.summary || input.processed?.description);
+
+                  return (
+                    <div
+                      key={input.id}
+                      className="flex items-center gap-3 py-3 group transition-colors hover:bg-muted/20 cursor-pointer"
+                      onClick={() => hasSummary && setSelectedInputId(input.id)}
+                    >
+                      <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                        {INPUT_ICONS[input.type] ?? <FileText className="h-4 w-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-3 prose-blockquote:my-2 prose-a:text-primary">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium truncate">{input.fileName ?? INPUT_LABELS[input.type] ?? input.type}</span>
+                          {isProcessing && (
+                            <span className="inline-flex items-center gap-1 text-xs text-amber-500">
+                              <Loader2 className="h-3 w-3 animate-spin" />Analyzing
+                            </span>
+                          )}
+                          {isCompleted && <span className="text-xs text-emerald-500">Analyzed</span>}
+                          {isFailed && <span className="text-xs text-destructive">Failed</span>}
                         </div>
-                        <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            onClick={() => navigator.clipboard.writeText(msg.content)}
-                            className="p-1 rounded hover:bg-muted text-muted-foreground"
-                            title="Copy"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
+                        <p className="text-xs text-muted-foreground">
+                          {INPUT_LABELS[input.type] ?? input.type}
+                          {input.createdAt && ` · ${formatDistanceToNow(new Date(input.createdAt), { addSuffix: true })}`}
+                        </p>
+                        {input.type === "url" && (
+                          <a href={input.content} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            {input.content.replace(/^https?:\/\//, "").slice(0, 50)}
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        )}
+                        {hasSummary && (
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{input.processed?.summary ?? input.processed?.description}</p>
+                        )}
+                        {isFailed && <p className="text-xs text-destructive/70 mt-0.5 truncate">{input.processed?.error}</p>}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {(notProcessed || isFailed) && (
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleReanalyze(input.id); }} className="text-xs text-primary hover:underline px-2 py-1">
+                            {isFailed ? "Retry" : "Analyze"}
                           </button>
-                          <span className="text-xs text-muted-foreground ml-1">
-                            {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
-                          </span>
-                        </div>
+                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {hasSummary && (
+                              <DropdownMenuItem onClick={() => setSelectedInputId(input.id)}>
+                                <Search className="mr-2 h-3.5 w-3.5" />View Summary
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => handleReanalyze(input.id)}>
+                              <RefreshCw className="mr-2 h-3.5 w-3.5" />Refine
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteInput(input.id)}>
+                              <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
-                  )
-                ))
-              )}
-              {sending && <ThinkingIndicator />}
-              <div ref={chatEndRef} />
+                  );
+                })}
+              </div>
+            )}
+
+            {inputs.length === 0 && (
+              <div
+                className={`rounded-xl border-2 border-dashed p-14 text-center transition-colors ${
+                  isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/15"
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <div className="flex items-center justify-center gap-2 mb-3 text-muted-foreground/30">
+                  <Upload className="h-5 w-5" />
+                  <Paperclip className="h-5 w-5" />
+                </div>
+                <p className="text-sm font-medium mb-1">Add context for your content</p>
+                <p className="text-xs text-muted-foreground mb-5">Upload files, paste URLs, or add notes to help the AI understand what you need.</p>
+                <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowAddSource(true)}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />Add Source
+                </Button>
+              </div>
+            )}
             </div>
-          )}
+          </div>
 
+          {/* ── 3. Content ──────────────────────────────── */}
+          <div>
+            <div className="mb-3">
+              <h3 className="text-base font-semibold">Content</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Choose what to create — blog posts, social media, newsletters. Generate with AI or write manually.</p>
+            </div>
+            <div className={outputs.length > 0 ? "rounded-xl bg-background border shadow-sm p-5" : ""}>
 
-          {/* ── Sources Tab ───────────────────────── */}
-          {bottomTab === "sources" && (
-            <div>
-              {/* + Add Source as first row (only when sources exist) */}
-              {inputs.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAddSource(true)}
-                  className="flex items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b"
-                >
-                  <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center">
-                    <Plus className="h-4 w-4" />
-                  </div>
-                  Add Source
-                </button>
-              )}
+            {outputs.length === 0 ? (
+              <div className="rounded-xl border-2 border-dashed p-10 text-center">
+                <Package className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm font-medium mb-1">No content yet</p>
+                <p className="text-xs text-muted-foreground mb-4">Create content pieces and generate them with AI or write manually.</p>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="rounded-full">
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />Add Content
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    {contentTypes.length > 0 ? contentTypes.map((ct) => (
+                      <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleAddContent(ct.id)}>
+                        {CT_ICONS[ct.id] ?? CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                        {ct.label}
+                      </DropdownMenuItem>
+                    )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                      <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleAddContent(opt.contentTypeId)}>
+                        {opt.icon}{opt.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : (
+              <div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b">
+                      <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+                        <Plus className="h-4 w-4" />
+                      </div>
+                      Add Content
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {contentTypes.length > 0 ? contentTypes.map((ct) => (
+                      <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleAddContent(ct.id)}>
+                        {CT_ICONS[ct.id] ?? CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                        {ct.label}
+                      </DropdownMenuItem>
+                    )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                      <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleAddContent(opt.contentTypeId)}>
+                        {opt.icon}{opt.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
-              {inputs.length > 0 && (
-                <div className="divide-y">
-                  {inputs.map((input) => {
-                    const status = input.processed?.status;
-                    const isProcessing = status === "processing";
-                    const isCompleted = status === "completed";
-                    const isFailed = status === "failed";
-                    const notProcessed = !status || status === "pending";
-                    const hasSummary = isCompleted && (input.processed?.summary || input.processed?.description);
-
-                    return (
-                      <div
-                        key={input.id}
-                        className="flex items-center gap-3 py-3 group transition-colors hover:bg-muted/20 cursor-pointer"
-                        onClick={() => hasSummary && setSelectedInputId(input.id)}
-                      >
-                        <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
-                          {INPUT_ICONS[input.type] ?? <FileText className="h-4 w-4" />}
+                <div className="divide-y mt-1">
+                {outputs.map((item) => {
+                  const status = STATUS_BADGE[item.status] ?? { label: item.status, variant: "secondary" as const };
+                  const isProducing = item.status === "producing";
+                  return (
+                    <Link key={item.id} href={`/content/${item.id}`} className="block py-3 hover:bg-muted/30 -mx-2 px-2 rounded-lg transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+                          {OUTPUT_ICONS[item.category ?? ""] ?? OUTPUT_ICONS[item.type] ?? <FileText className="h-4 w-4" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium truncate">{input.fileName ?? INPUT_LABELS[input.type] ?? input.type}</span>
-                            {isProcessing && (
-                              <span className="inline-flex items-center gap-1 text-xs text-amber-500">
-                                <Loader2 className="h-3 w-3 animate-spin" />Analyzing
-                              </span>
-                            )}
-                            {isCompleted && <span className="text-xs text-emerald-500">Analyzed</span>}
-                            {isFailed && <span className="text-xs text-destructive">Failed</span>}
-                          </div>
+                          <p className="text-sm font-medium truncate">{item.title}</p>
                           <p className="text-xs text-muted-foreground">
-                            {INPUT_LABELS[input.type] ?? input.type}
-                            {input.createdAt && ` · ${formatDistanceToNow(new Date(input.createdAt), { addSuffix: true })}`}
+                            {({ linkedin: "LinkedIn Post", instagram: "Instagram Post", x: "X Post", tiktok: "TikTok Post" } as Record<string, string>)[item.category ?? ""]
+                              ?? ({ article: "Blog Post", guide: "Guide", newsletter: "Newsletter", social_post: "Social Post" } as Record<string, string>)[item.type]
+                              ?? item.type.replace("_", " ")}
                           </p>
-                          {input.type === "url" && (
-                            <a href={input.content} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                              {input.content.replace(/^https?:\/\//, "").slice(0, 50)}
-                              <ExternalLink className="h-2.5 w-2.5" />
-                            </a>
-                          )}
-                          {hasSummary && (
-                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{input.processed?.summary ?? input.processed?.description}</p>
-                          )}
-                          {isFailed && <p className="text-xs text-destructive/70 mt-0.5 truncate">{input.processed?.error}</p>}
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {(notProcessed || isFailed) && (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); handleReanalyze(input.id); }} className="text-xs text-primary hover:underline px-2 py-1">
-                              {isFailed ? "Retry" : "Analyze"}
+                        {isProducing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
+                        <Badge variant={status.variant} className="text-xs shrink-0">{status.label}</Badge>
+                        {!isProducing && (
+                          <button
+                            type="button"
+                            title="Generate with AI"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const ctId = item.type === "social_post" ? `${item.category ?? "linkedin"}-post`
+                                : item.type === "newsletter" ? "newsletter"
+                                : "blog-post";
+                              handleProduce(ctId);
+                            }}
+                            className="p-1.5 rounded-full hover:bg-violet-50 text-muted-foreground hover:text-violet-600 transition-colors shrink-0"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                          </button>
+                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
+                            <button type="button" className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground shrink-0">
+                              <MoreHorizontal className="h-4 w-4" />
                             </button>
-                          )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button type="button" onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {hasSummary && (
-                                <DropdownMenuItem onClick={() => setSelectedInputId(input.id)}>
-                                  <Search className="mr-2 h-3.5 w-3.5" />View Summary
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem onClick={() => handleReanalyze(input.id)}>
-                                <RefreshCw className="mr-2 h-3.5 w-3.5" />Refine
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/content/${item.id}`}>
+                                <Pencil className="mr-2 h-3.5 w-3.5" />Edit
+                              </Link>
+                            </DropdownMenuItem>
+                            {!isProducing && (
+                              <DropdownMenuItem onClick={(e) => { e.preventDefault();
+                                const ctId = item.type === "social_post" ? `${item.category ?? "linkedin"}-post`
+                                  : item.type === "newsletter" ? "newsletter"
+                                  : "blog-post";
+                                handleProduce(ctId);
+                              }}>
+                                <Sparkles className="mr-2 h-3.5 w-3.5" />Generate with AI
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteInput(input.id)}>
-                                <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={(e) => { e.preventDefault(); handleDeleteContent(item.id); }}>
+                              <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
-                    );
-                  })}
+                    </Link>
+                  );
+                })}
                 </div>
-              )}
 
-              {/* Empty state: big drop zone (only when no sources yet) */}
-              {inputs.length === 0 && (
-                <div
-                  className={`rounded-xl border-2 border-dashed p-14 text-center transition-colors ${
-                    isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/15"
-                  }`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                >
-                  <div className="flex items-center justify-center gap-2 mb-3 text-muted-foreground/30">
-                    <Upload className="h-5 w-5" />
-                    <Paperclip className="h-5 w-5" />
+                {/* Generate All with AI button */}
+                {outputs.some((o) => o.status === "planned" || o.status === "draft") && (
+                  <div className="mt-4 rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 p-4">
+                    <Button
+                      className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+                      onClick={async () => {
+                        if (!customerId || !projectId) return;
+                        try {
+                          const { produceAllFlowOutputs } = await import("@/lib/api");
+                          await produceAllFlowOutputs(customerId, projectId, id);
+                          await loadData();
+                        } catch (err) {
+                          console.error("Generate all failed:", err);
+                        }
+                      }}
+                    >
+                      <Sparkles className="mr-2 h-4 w-4" />Generate All with AI
+                    </Button>
+                    <p className="text-xs text-violet-600 dark:text-violet-400 mt-2 text-center">
+                      Articles are generated first, then social posts can reference them.
+                    </p>
                   </div>
-                  <p className="text-sm font-medium mb-1">Add context for your content</p>
-                  <p className="text-xs text-muted-foreground mb-5">Upload files, paste URLs, or add notes to help the AI understand what you need.</p>
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowAddSource(true)}>
-                    Add Source
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Content Tab ───────────────────────── */}
-          {bottomTab === "content" && (
-            <div>
-              {/* Briefing */}
-              <div className="mb-4">
-                <textarea
-                  value={topic?.briefing ?? ""}
-                  onChange={(e) => {
-                    if (topic) setTopic({ ...topic, briefing: e.target.value });
-                  }}
-                  onBlur={async () => {
-                    if (!customerId || !projectId || !topic) return;
-                    try {
-                      await updateTopic(customerId, projectId, id, { briefing: topic.briefing ?? "" } as Partial<import("@/lib/types").Topic>);
-                    } catch { /* ignore */ }
-                  }}
-                  placeholder="Describe what this campaign is about — target audience, goals, key messages, tone..."
-                  className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none min-h-[80px]"
-                  rows={3}
-                />
+                )}
               </div>
+<<<<<<< HEAD
 
               {/* Onboarding Checklist */}
               {(outputs.length === 0 || inputs.length === 0) && (
@@ -822,8 +941,9 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                 </div>
               )}
+            )
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -906,40 +1026,162 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
         </DialogContent>
       </Dialog>
 
-      {/* ── Fixed Chat Input (only in Chat tab) ──────────── */}
-      {bottomTab === ("chat" as string) && (
-        <div className="fixed bottom-0 left-64 right-0 z-20 p-4 bg-background/95 backdrop-blur-sm">
-          <div className="max-w-3xl mx-auto">
-            <div className="rounded-2xl border shadow-sm px-4 py-3 bg-background">
-              <div className="flex gap-3 items-center">
-                <Plus className="h-5 w-5 text-muted-foreground shrink-0" />
-                <input
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
-                  placeholder={`Message in ${topic.title.slice(0, 30)}...`}
-                  disabled={sending}
-                  className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="shrink-0 p-1.5 rounded-lg hover:bg-muted text-muted-foreground"
-                  title="Attach file"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSendChat}
-                  disabled={!chatInput.trim() || sending}
-                  className="shrink-0 p-1.5 rounded-lg bg-foreground text-background disabled:opacity-30"
-                >
-                  <ArrowUp className="h-4 w-4" />
-                </button>
+      {/* ── Chat Sidebar Overlay ──────────────────────── */}
+      {chatOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/20" onClick={() => setChatOpen(false)} />
+          {/* Panel */}
+          <div className="relative w-full max-w-md bg-background border-l shadow-xl flex flex-col h-full animate-in slide-in-from-right duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+              <h3 className="text-sm font-semibold">Chat</h3>
+              <button type="button" onClick={() => setChatOpen(false)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {chatMessages.length === 0 ? (
+                <div className="rounded-xl border border-dashed p-10 text-center">
+                  <MessageCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm font-medium mb-1">Chat with AI</p>
+                  <p className="text-xs text-muted-foreground">Brainstorm ideas, get feedback on your content, or ask for help.</p>
+                </div>
+              ) : (
+                chatMessages.map((msg, i) => (
+                  msg.role === "user" ? (
+                    <div key={i} className="flex justify-end group">
+                      <div className="max-w-[80%]">
+                        <div className="bg-muted rounded-2xl rounded-br-sm px-4 py-2.5">
+                          <p className="text-sm">{msg.content}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                          {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={i} className="flex gap-3 group">
+                      <div className="shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center bg-muted mt-0.5">
+                        <Bot className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-3 prose-blockquote:my-2 prose-a:text-primary">
+                          <ReactMarkdown>{msg.content.replace(/```json\s*\n?\{[\s\S]*?\}\s*\n?```/g, "").trim()}</ReactMarkdown>
+                        </div>
+                        {/* Apply Actions Button */}
+                        {(() => {
+                          const jsonMatch = msg.content.match(/```json\s*\n?([\s\S]*?)\n?```/);
+                          if (!jsonMatch) return null;
+                          try {
+                            const parsed = JSON.parse(jsonMatch[1]) as { actions?: Array<{ type: string; value?: string; contentTypeId?: string; updates?: Record<string, unknown> }>; updates?: Record<string, unknown> };
+                            const actions = parsed.actions ?? (parsed.updates ? [{ type: "update_content", updates: parsed.updates }] : []);
+                            if (actions.length === 0) return null;
+                            // Show what will change
+                            const actionLabels: Record<string, string> = {
+                              update_briefing: "Briefing",
+                              update_title: "Title",
+                              update_direction: "Direction",
+                              create_content: "Create content piece",
+                              update_content: "Content",
+                            };
+                            return (
+                              <div className="mt-2 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-950/30 p-3 space-y-2">
+                                {actions.map((a, idx) => (
+                                  <div key={idx} className="text-xs">
+                                    <span className="font-medium text-violet-700 dark:text-violet-400">{actionLabels[a.type] ?? a.type}:</span>{" "}
+                                    <span className="text-foreground/80">
+                                      {a.value ? (a.value.length > 150 ? a.value.slice(0, 150) + "..." : a.value) : a.contentTypeId ?? JSON.stringify(a.updates ?? {}).slice(0, 100)}
+                                    </span>
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-1.5 text-xs font-medium text-violet-600 hover:text-violet-700 bg-violet-100 hover:bg-violet-200 dark:bg-violet-900 dark:hover:bg-violet-800 px-3 py-1.5 rounded-lg transition-colors w-full justify-center"
+                                onClick={async () => {
+                                  if (!customerId || !projectId || !topic) return;
+                                  for (const action of actions) {
+                                    try {
+                                      if (action.type === "update_briefing" && action.value) {
+                                        await updateTopic(customerId, projectId, id, { briefing: action.value } as Partial<Topic>);
+                                        setTopic((prev) => prev ? { ...prev, briefing: action.value } : prev);
+                                      } else if (action.type === "update_title" && action.value) {
+                                        await updateTopic(customerId, projectId, id, { title: action.value } as Partial<Topic>);
+                                        setTopic((prev) => prev ? { ...prev, title: action.value! } : prev);
+                                      } else if (action.type === "update_direction" && action.value) {
+                                        await updateTopic(customerId, projectId, id, { direction: action.value } as Partial<Topic>);
+                                        setTopic((prev) => prev ? { ...prev, direction: action.value } : prev);
+                                      } else if (action.type === "create_content" && action.contentTypeId) {
+                                        const { createContent } = await import("@/lib/api");
+                                        const catMap: Record<string, string> = { "blog-post": "article", "linkedin-post": "social_post", "instagram-post": "social_post", "x-post": "social_post", "tiktok-post": "social_post", "newsletter": "newsletter" };
+                                        const platMap: Record<string, string> = { "linkedin-post": "linkedin", "instagram-post": "instagram", "x-post": "x", "tiktok-post": "tiktok" };
+                                        await createContent(customerId, projectId, { type: (catMap[action.contentTypeId] ?? "article") as import("@/lib/types").ContentType, title: topic.title, category: platMap[action.contentTypeId], flowId: id });
+                                      }
+                                    } catch (err) { console.error("Action failed:", err); }
+                                  }
+                                  await loadData();
+                                }}
+                              >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Apply {actions.length > 1 ? `${actions.length} changes` : "changes"}
+                                </button>
+                              </div>
+                            );
+                          } catch { return null; }
+                        })()}
+                        <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard.writeText(msg.content)}
+                            className="p-1 rounded hover:bg-muted text-muted-foreground"
+                            title="Copy"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="text-xs text-muted-foreground ml-1">
+                            {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                ))
+              )}
+              {sending && <ThinkingIndicator />}
+              <div ref={chatEndRef} />
+            </div>
+            {/* Chat Input */}
+            <div className="p-4 border-t shrink-0">
+              <div className="rounded-2xl border shadow-sm px-4 py-3 bg-background">
+                <div className="flex gap-3 items-center">
+                  <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+                    placeholder={`Message in ${topic.title.slice(0, 30)}...`}
+                    disabled={sending}
+                    className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="shrink-0 p-1.5 rounded-lg hover:bg-muted text-muted-foreground"
+                    title="Attach file"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendChat}
+                    disabled={!chatInput.trim() || sending}
+                    className="shrink-0 p-1.5 rounded-lg bg-foreground text-background disabled:opacity-30"
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="h-2" /> {/* spacing so content isn't hidden behind fixed input */}
           </div>
         </div>
       )}

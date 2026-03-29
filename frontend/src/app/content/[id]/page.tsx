@@ -360,7 +360,7 @@ export default function ContentEditorPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { customerId, projectId, categories, authors, loading: projectLoading } = useProject();
+  const { customerId, projectId, categories, authors, languages: projectLanguages, loading: projectLoading } = useProject();
 
   const [item, setItem] = useState<ContentItem | null>(null);
   const [versions, setVersions] = useState<ContentVersion[]>([]);
@@ -483,11 +483,20 @@ export default function ContentEditorPage({
         await loadVersionContent(latest, data, detectedMode);
         setAuthor(data.author ?? "");
       } else {
-        // No versions — use ContentItem-level metadata
+        // No versions — initialize empty editor with default language
         setTitle(data.title);
         setDescription(data.description ?? "");
         setCategory(data.category ?? "");
         setAuthor(data.author ?? "");
+
+        if (detectedMode === "markdown") {
+          // Start with empty editor in project default language
+          const defaultLang = "en";
+          setEditorContent({ [defaultLang]: "" });
+          setMetaByLang({ [defaultLang]: { title: "", description: "", category: data.category ?? "", tags: "", keywords: "", author: data.author ?? "", faqs: [] } });
+          setActiveLang(defaultLang);
+          setTitle("");
+        }
       }
     } catch {
       setItem(null);
@@ -962,6 +971,7 @@ export default function ContentEditorPage({
             <span className="text-xs text-muted-foreground">
               Updated: {new Date(item.updatedAt).toLocaleDateString("de-DE")}
             </span>
+            {/* Language switcher moved to sidebar */}
           </div>
           <div className="flex gap-2">
             {editorMode === "markdown" && (
@@ -1018,6 +1028,74 @@ export default function ContentEditorPage({
       }
       metadataPanel={
         <>
+          {/* Language (multi-language content types only) */}
+          {editorMode === "markdown" && (contentTypeDef?.localization?.mode ?? "multi") === "multi" && Object.keys(editorContent).length > 0 && (
+            <div className="space-y-2">
+              <h3 className="font-semibold text-sm">Language</h3>
+              <div className="flex flex-wrap items-center gap-1">
+                {(() => {
+                  const versionLangs = activeVersion?.languages ?? [];
+                  const versionLangCodes = new Set(versionLangs.map((l) => l.lang));
+                  const localLangs = Object.keys(editorContent).filter((l) => !versionLangCodes.has(l));
+                  return [...versionLangs.map((l) => l.lang), ...localLangs].map((lc) => (
+                    <button
+                      key={lc}
+                      onClick={() => setActiveLang(lc)}
+                      className={`px-2.5 py-1 text-xs rounded-md transition-colors ${activeLang === lc ? "bg-primary text-primary-foreground font-medium" : "border text-muted-foreground hover:bg-muted"}`}
+                    >
+                      {lc.toUpperCase()}
+                    </button>
+                  ));
+                })()}
+                {(() => {
+                  const allExisting = new Set([...(activeVersion?.languages.map((l) => l.lang) ?? []), ...Object.keys(editorContent)]);
+                  const available = projectLanguages.filter((l) => !allExisting.has(l.code));
+                  if (available.length === 0) return null;
+                  return (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="px-2.5 py-1 text-xs border rounded-md text-muted-foreground hover:bg-muted transition-colors">+ Add</button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        {available.map((l) => (
+                          <DropdownMenuItem key={l.code} onClick={() => {
+                            setEditorContent((prev) => ({ ...prev, [l.code]: "" }));
+                            setMetaByLang((prev) => ({ ...prev, [l.code]: { title: title || "", description: "", category: category || "", tags: "", keywords: "", author: author || "", faqs: [] } }));
+                            setActiveLang(l.code);
+                          }}>
+                            {l.code.toUpperCase()} — {l.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                })()}
+              </div>
+              {/* Translate with AI — only for non-primary languages */}
+              {(() => {
+                const primaryLang = activeVersion?.languages?.[0]?.lang ?? Object.keys(editorContent)[0];
+                if (activeLang === primaryLang) return null;
+                const hasPrimaryContent = editorContent[primaryLang]?.trim();
+                if (!hasPrimaryContent) return null;
+                return (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs"
+                    onClick={() => {
+                      // Copy primary content as starting point (actual AI translation would be a pipeline call)
+                      const primary = editorContent[primaryLang] ?? "";
+                      setEditorContent((prev) => ({ ...prev, [activeLang]: primary }));
+                    }}
+                  >
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                    Translate {primaryLang.toUpperCase()} → {activeLang.toUpperCase()} with AI
+                  </Button>
+                );
+              })()}
+            </div>
+          )}
+
           {/* Version Selector */}
           {versions.length > 0 && activeVersion && (
             <div className="space-y-2">
@@ -1231,192 +1309,7 @@ export default function ContentEditorPage({
             </div>}
           </div>
 
-          {/* Hero Image (markdown mode only) */}
-          {editorMode === "markdown" && (<div className="space-y-3">
-            <h3 className="font-semibold text-sm">Hero Image</h3>
-
-            {/* Preview */}
-            {item.heroImageId ? (
-              <div className="relative aspect-video rounded-md overflow-hidden border bg-muted">
-                <img
-                  src={getMediaFileUrl(customerId, projectId,item.heroImageId)}
-                  alt="Hero"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            ) : (
-              <div className="flex items-center justify-center rounded-md border border-dashed bg-muted/50 aspect-video">
-                <div className="text-center">
-                  <ImageIcon className="mx-auto h-6 w-6 text-muted-foreground" />
-                  <p className="mt-1 text-xs text-muted-foreground">No hero image</p>
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                disabled={generating}
-                onClick={async () => {
-                  if (!item) return;
-                  setGenerating(true);
-                  try {
-                    const prompt = `Professional blog hero image for article titled "${item.title}". ${item.category ? `Category: ${item.category}.` : ""} ${item.keywords?.length ? `Keywords: ${item.keywords.join(", ")}.` : ""} Modern, clean, editorial style photography. No text overlays.`;
-                    const asset = await generateHeroImage(customerId, projectId, item.id, prompt);
-                    setItem({ ...item, heroImageId: asset.id });
-                    const { assets } = await getContentMedia(customerId, projectId, item.id);
-                    setMediaAssets(assets);
-                  } catch (err) {
-                    console.error("Generate failed:", err);
-                  } finally {
-                    setGenerating(false);
-                  }
-                }}
-              >
-                {generating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
-                Generate
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {uploading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}
-                Upload
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                onClick={() => setMediaPickerOpen(true)}
-              >
-                <ImageIcon className="mr-1 h-3 w-3" />
-                Browse
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file || !item) return;
-                  setUploading(true);
-                  try {
-                    const asset = await uploadContentMedia(customerId, projectId, item.id, file);
-                    setItem({ ...item, heroImageId: asset.id });
-                    const { assets } = await getContentMedia(customerId, projectId, item.id);
-                    setMediaAssets(assets);
-                  } catch (err) {
-                    console.error("Upload failed:", err);
-                  } finally {
-                    setUploading(false);
-                    e.target.value = "";
-                  }
-                }}
-              />
-            </div>
-
-            {/* Media Picker (shared for hero image + editor inline) */}
-            <MediaPicker
-              open={mediaPickerOpen}
-              onOpenChange={(open) => {
-                setMediaPickerOpen(open);
-                if (!open) {
-                  const resolve = mediaPickerResolveRef.current;
-                  mediaPickerResolveRef.current = null;
-                  resolve?.(null);
-                }
-              }}
-              typeFilter="image"
-              onSelect={async (globalAsset) => {
-                // Editor inline image browse
-                const resolve = mediaPickerResolveRef.current;
-                if (resolve) {
-                  mediaPickerResolveRef.current = null;
-                  if (item) await linkMediaToContent(customerId, projectId, item.id, globalAsset.id, "inline");
-                  const url = getMediaFileUrl(customerId, projectId, globalAsset.id);
-                  resolve(url);
-                  setMediaPickerOpen(false);
-                  return;
-                }
-                // Hero image: set global asset ID directly
-                if (!item) return;
-                await setHeroImage(customerId, projectId, item.id, globalAsset.id);
-                setItem({ ...item, heroImageId: globalAsset.id });
-                // Refresh media list (usedBy updated server-side)
-                const { assets } = await getContentMedia(customerId, projectId, item.id);
-                setMediaAssets(assets);
-                setMediaPickerOpen(false);
-              }}
-            />
-
-            {/* Gallery */}
-            {mediaAssets.length > 1 && (
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Used images ({mediaAssets.length})</p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {mediaAssets.map((asset) => (
-                    <div key={asset.id} className="relative group">
-                      <button
-                        type="button"
-                        className={`aspect-video w-full rounded-md overflow-hidden border-2 transition-colors ${
-                          item.heroImageId === asset.id ? "border-primary" : "border-transparent hover:border-muted-foreground/30"
-                        }`}
-                        onClick={async () => {
-                          if (!item || item.heroImageId === asset.id) return;
-                          await setHeroImage(customerId, projectId, item.id, asset.id);
-                          setItem({ ...item, heroImageId: asset.id });
-                        }}
-                      >
-                        <img
-                          src={getMediaFileUrl(customerId, projectId,asset.id)}
-                          alt={asset.altText ?? ""}
-                          className="w-full h-full object-cover"
-                        />
-                      </button>
-                      <button
-                        type="button"
-                        className="absolute top-0.5 right-0.5 rounded-full bg-background/80 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={async () => {
-                          if (!item) return;
-                          await deleteContentMedia(customerId, projectId, item.id, asset.id);
-                          setMediaAssets((prev) => prev.filter((a) => a.id !== asset.id));
-                          if (item.heroImageId === asset.id) {
-                            setItem({ ...item, heroImageId: undefined });
-                          }
-                        }}
-                      >
-                        <X className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {mediaAssets.length === 1 && item.heroImageId && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-xs text-muted-foreground"
-                onClick={async () => {
-                  if (!item) return;
-                  const asset = mediaAssets[0];
-                  await deleteContentMedia(customerId, projectId, item.id, asset.id);
-                  setMediaAssets([]);
-                  setItem({ ...item, heroImageId: undefined });
-                }}
-              >
-                <Trash2 className="mr-1 h-3 w-3" />
-                Remove image
-              </Button>
-            )}
-          </div>)}
+          {/* Hero Image moved to main editor area */}
 
           {/* Delivery Info */}
           {(item.deliveryRef || item.deliveryUrl) && (
@@ -1480,17 +1373,17 @@ export default function ContentEditorPage({
           </div>
         </>
       }
-      mediaPanel={editorMode === "json" ? (
+      mediaPanel={
         <SocialMediaPanel
           customerId={customerId!}
           projectId={projectId!}
           contentId={id}
-          images={((jsonValues.images ?? jsonValues.media ?? []) as string[])}
-          onImagesChange={(images) => setJsonValues((prev) => ({ ...prev, images }))}
+          images={editorMode === "json" ? ((jsonValues.images ?? jsonValues.media ?? []) as string[]) : []}
+          onImagesChange={editorMode === "json" ? (images) => setJsonValues((prev) => ({ ...prev, images })) : () => {}}
           mediaAssets={mediaAssets}
           onMediaAssetsChange={setMediaAssets}
         />
-      ) : undefined}
+      }
       chatPanel={
         <ContentChat
           customerId={customerId!}
@@ -1599,30 +1492,148 @@ export default function ContentEditorPage({
               <p className="text-xs text-muted-foreground">{title.length}/70 characters</p>
             </div>
 
+            {/* Hero Image — drag & drop from media library */}
+            <div
+              className={`relative rounded-lg overflow-hidden transition-colors ${
+                item.heroImageId
+                  ? "border"
+                  : "border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/40"
+              }`}
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2", "ring-primary"); }}
+              onDragLeave={(e) => { e.currentTarget.classList.remove("ring-2", "ring-primary"); }}
+              onDrop={async (e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove("ring-2", "ring-primary");
+                const url = e.dataTransfer.getData("text/plain");
+                if (url && item) {
+                  // Extract asset ID from media URL pattern: /media/{assetId}/file
+                  const assetIdMatch = url.match(/\/media\/([^/]+)\/file/);
+                  if (assetIdMatch) {
+                    await setHeroImage(customerId, projectId, item.id, assetIdMatch[1]);
+                    setItem({ ...item, heroImageId: assetIdMatch[1] });
+                  }
+                }
+              }}
+            >
+              {item.heroImageId ? (
+                <div className="relative group">
+                  <img
+                    src={getMediaFileUrl(customerId, projectId, item.heroImageId)}
+                    alt="Hero"
+                    className="w-full aspect-video object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                    <Button size="sm" variant="secondary" className="text-xs" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="mr-1 h-3 w-3" />Replace
+                    </Button>
+                    <Button size="sm" variant="secondary" className="text-xs" onClick={async () => {
+                      if (!item) return;
+                      setItem({ ...item, heroImageId: undefined });
+                    }}>
+                      <Trash2 className="mr-1 h-3 w-3" />Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-6 flex flex-col items-center gap-2 cursor-pointer hover:bg-muted/30 transition-colors"
+                >
+                  <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+                  <p className="text-xs text-muted-foreground">Add hero image — click to upload or drag from media library</p>
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file || !item) return;
+                  setUploading(true);
+                  try {
+                    const asset = await uploadContentMedia(customerId, projectId, item.id, file);
+                    setItem({ ...item, heroImageId: asset.id });
+                  } catch (err) {
+                    console.error("Upload failed:", err);
+                  } finally {
+                    setUploading(false);
+                    e.target.value = "";
+                  }
+                }}
+              />
+            </div>
+
             {/* Language Tabs + Editor */}
             <Tabs value={activeLang} onValueChange={setActiveLang}>
+              {/* Language tabs moved to header — hidden here */}
+              {false && (
               <TabsList>
-                {activeVersion?.languages.map((lang) => (
-                  <TabsTrigger key={lang.lang} value={lang.lang}>
-                    {lang.lang.toUpperCase()}
-                    {lang.wordCount ? (
-                      <span className="ml-1 text-[10px] text-muted-foreground">({lang.wordCount}w)</span>
-                    ) : null}
-                  </TabsTrigger>
-                )) ?? (
-                  <>
-                    <TabsTrigger value="de">DE</TabsTrigger>
-                    <TabsTrigger value="en">EN</TabsTrigger>
-                    <TabsTrigger value="es">ES</TabsTrigger>
-                  </>
-                )}
-              </TabsList>
+                {(() => {
+                  // Combine version languages + locally added languages (from editorContent keys)
+                  const versionLangs = activeVersion?.languages ?? [];
+                  const versionLangCodes = new Set(versionLangs.map((l) => l.lang));
+                  const localLangs = Object.keys(editorContent).filter((l) => !versionLangCodes.has(l));
+                  const allLangs = [...versionLangs.map((l) => l.lang), ...localLangs];
 
-              {(activeVersion?.languages ?? [{ lang: "de", slug: "", title: "", description: "", contentPath: "" }]).map((lang) => (
+                  return allLangs.map((langCode) => {
+                    const vLang = versionLangs.find((l) => l.lang === langCode);
+                    return (
+                      <TabsTrigger key={langCode} value={langCode}>
+                        {langCode.toUpperCase()}
+                        {vLang?.wordCount ? (
+                          <span className="ml-1 text-[10px] text-muted-foreground">({vLang.wordCount}w)</span>
+                        ) : null}
+                      </TabsTrigger>
+                    );
+                  });
+                })()}
+                {/* Add language button */}
+                {(() => {
+                  const allExisting = new Set([
+                    ...(activeVersion?.languages.map((l) => l.lang) ?? []),
+                    ...Object.keys(editorContent),
+                  ]);
+                  const availableLangs = projectLanguages.filter((l) => !allExisting.has(l.code));
+                  if (availableLangs.length === 0) return null;
+                  return (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="ml-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors">
+                          + {availableLangs.length > 1 ? "Language" : availableLangs[0].code.toUpperCase()}
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        {availableLangs.map((lang) => (
+                          <DropdownMenuItem
+                            key={lang.code}
+                            onClick={() => {
+                              setEditorContent((prev) => ({ ...prev, [lang.code]: `# ${title}\n\n` }));
+                              setMetaByLang((prev) => ({
+                                ...prev,
+                                [lang.code]: { title, description: "", category: category || "", tags: "", keywords: "", author: author || "", faqs: [] },
+                              }));
+                              setActiveLang(lang.code);
+                            }}
+                          >
+                            {lang.code.toUpperCase()} — {lang.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                })()}
+              </TabsList>
+              )}
+
+              {[...(activeVersion?.languages ?? [{ lang: "de", slug: "", title: "", description: "", contentPath: "" }]), ...Object.keys(editorContent).filter((l) => !(activeVersion?.languages ?? []).some((vl) => vl.lang === l)).map((l) => ({ lang: l, slug: "", title: "", description: "", contentPath: "" }))].map((lang) => (
                 <TabsContent key={lang.lang} value={lang.lang} className="mt-4">
-                  {editorContent[lang.lang] ? (
+                  {editorContent[lang.lang] != null ? (
                     <TiptapEditor
-                      content={editorContent[lang.lang]}
+                      key={`${lang.lang}-${activeVersionId ?? "new"}`}
+                      content={editorContent[lang.lang] || ""}
                       onChange={(md) => {
                         userEditedLangs.current.add(lang.lang);
                         setEditorContent((prev) => ({ ...prev, [lang.lang]: md }));
@@ -1636,11 +1647,16 @@ export default function ContentEditorPage({
                     <Card>
                       <CardContent className="flex flex-col items-center justify-center p-12 text-center">
                         <p className="text-sm text-muted-foreground">
-                          No content for {lang.lang.toUpperCase()} yet
+                          {lang.lang === (activeVersion?.languages?.[0]?.lang ?? activeLang)
+                            ? "Start writing your content"
+                            : `No content for ${lang.lang.toUpperCase()} yet`}
                         </p>
-                        <Button variant="outline" size="sm" className="mt-3">
-                          Generate Translation
-                        </Button>
+                        {lang.lang !== (activeVersion?.languages?.[0]?.lang ?? activeLang) && (
+                          <Button variant="outline" size="sm" className="mt-3">
+                            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                            Generate Translation
+                          </Button>
+                        )}
                       </CardContent>
                     </Card>
                   )}

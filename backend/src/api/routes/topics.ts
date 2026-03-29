@@ -16,12 +16,16 @@ const log = createLogger("topic-chat");
 function buildSystemPrompt(topic: Topic): string {
   const seo = topic.enrichment?.seo;
   const parts = [
-    "You are a content strategist helping refine a content brief. Be concise and actionable.",
+    "You are a content strategist helping with a campaign. Be concise and actionable.",
+    "The user is on the flow overview page — they can see the briefing, sources, and content pieces.",
+    "This is a shared conversation — when the user edits a specific content piece, you'll see that context too.",
     "",
-    `## Current Brief`,
+    `## Campaign`,
     `- **Title:** ${topic.title}`,
     `- **Category:** ${topic.category || "not set"}`,
   ];
+
+  if (topic.briefing) parts.push(`\n## Briefing\n${topic.briefing}`);
 
   if (seo?.searchIntent) {
     parts.push(`- **Search Intent:** ${seo.searchIntent}`);
@@ -79,12 +83,24 @@ function buildSystemPrompt(topic: Topic): string {
   parts.push(
     "",
     "## Your Role",
-    "Help the user refine this topic. Suggest better angles, keywords, titles, or structure.",
-    "If the user asks you to change the title, keywords, or angle, include a JSON block at the end of your response:",
+    "Help the user with their campaign. You can brainstorm, suggest content ideas, refine the briefing, or discuss strategy.",
+    "",
+    "## Actions You Can Take",
+    "When the user asks you to update the campaign, include a JSON block at the end of your response.",
+    "The frontend will show an 'Apply' button to execute the changes.",
+    "",
+    "Available actions:",
+    "- **Update briefing**: `{\"actions\": [{\"type\": \"update_briefing\", \"value\": \"New briefing text...\"}]}`",
+    "- **Update title**: `{\"actions\": [{\"type\": \"update_title\", \"value\": \"New title\"}]}`",
+    "- **Update direction**: `{\"actions\": [{\"type\": \"update_direction\", \"value\": \"New angle\"}]}`",
+    "- **Create content piece**: `{\"actions\": [{\"type\": \"create_content\", \"contentTypeId\": \"linkedin-post\"}]}`",
+    "- **Multiple actions at once**: combine in the actions array",
+    "",
+    "Example — user says 'fill the briefing and add a LinkedIn post':",
     "```json",
-    '{"updates": {"title": "...", "direction": "...", "category": "..."}}',
+    '{"actions": [{"type": "update_briefing", "value": "..."}, {"type": "create_content", "contentTypeId": "linkedin-post"}]}',
     "```",
-    "Only include fields that should change. The user will confirm before applying.",
+    "Only include the JSON block when the user asks you to make changes. For normal conversation, just respond with text.",
   );
 
   return parts.join("\n");
@@ -759,11 +775,7 @@ export async function topicRoutes(app: FastifyInstance) {
 
       // Create ContentItem linked to this flow
       const now = new Date().toISOString();
-      const contentTitle = contentType.category === "social" && platform
-        ? `${topic.title} — ${contentType.label}`
-        : contentType.category === "email"
-        ? `${topic.title} — ${contentType.label}`
-        : topic.title;
+      const contentTitle = topic.title;
 
       // Map content type category to ContentItem type
       const itemType = contentType.category === "social" ? "social_post" as const
@@ -862,6 +874,117 @@ export async function topicRoutes(app: FastifyInstance) {
         runId: run.id,
         type: itemType,
         platform,
+      });
+    },
+  );
+
+  // POST /topics/:topicId/produce-all — generate all planned content pieces
+  // Hierarchical: articles first, then social/email (can reference article content)
+  app.post<{
+    Params: { customerId: string; projectId: string; topicId: string };
+    Body: { mode?: "all" | "missing" };
+  }>(
+    "/:topicId/produce-all",
+    async (request, reply) => {
+      const { customerId, projectId, topicId } = request.params;
+      const mode = ((request.body as Record<string, unknown>)?.mode as string) ?? "all";
+
+      const topics = app.ctx.topicsFor(customerId, projectId);
+      const topic = topics.get(topicId);
+      if (!topic) return reply.status(404).send({ error: "Topic not found" });
+
+      const content = app.ctx.contentFor(customerId, projectId);
+      const outputIds = topic.outputIds ?? [];
+      const pieces = outputIds.map((id) => content.get(id)).filter((item) => item != null);
+
+      // Filter: only planned pieces (or pieces without versions for "missing" mode)
+      const toGenerate = pieces.filter((item) => {
+        if (mode === "missing") {
+          const versions = content.getVersions(item!.id);
+          return versions.length === 0;
+        }
+        return item!.status === "planned" || item!.status === "draft";
+      });
+
+      if (toGenerate.length === 0) {
+        return reply.status(400).send({ error: "No content pieces to generate" });
+      }
+
+      // Hierarchical ordering: articles/guides first, then social/email
+      // So social agents can reference article content
+      const priority: Record<string, number> = { article: 0, guide: 0, landing_page: 1, newsletter: 2, social_post: 3 };
+      const sorted = [...toGenerate].sort((a, b) => (priority[a!.type] ?? 5) - (priority[b!.type] ?? 5));
+
+      // Start pipelines sequentially for articles, then social/email in parallel
+      const started: string[] = [];
+      const ctStore = new ContentTypeStore(
+        path.join(app.ctx.dataDir, "customers", customerId, "projects", projectId),
+      );
+
+      for (const item of sorted) {
+        if (!item) continue;
+        // Derive contentTypeId
+        const ctId = item.type === "social_post" ? `${item.category ?? "linkedin"}-post`
+          : item.type === "newsletter" ? "newsletter"
+          : "blog-post";
+
+        const contentType = ctStore.get(ctId);
+        if (!contentType) continue;
+
+        const pipelineMode = contentType.pipeline?.mode ?? "single-phase";
+        const pipelinePhases = contentType.pipeline?.phases ?? ["write"];
+
+        const run = app.ctx.pipelineRunsFor(customerId, projectId).create({
+          customerId,
+          projectId,
+          type: pipelineMode === "multi-phase" ? "production" : "social_production",
+          status: "pending",
+          topicId,
+          flowId: topicId,
+          contentId: item.id,
+          phases: pipelinePhases.map((name) => ({ name, status: "pending" as const, agentCalls: [] })),
+          totalCostUsd: 0,
+          totalTokens: { input: 0, output: 0 },
+          createdAt: new Date().toISOString(),
+        });
+
+        const project = app.ctx.projectsFor(customerId).get(projectId)!;
+        const ctx = new PipelineContext(
+          customerId, project, run,
+          {
+            customers: app.ctx.customers,
+            projects: app.ctx.projectsFor(customerId),
+            content,
+            pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
+            topics,
+          },
+          app.ctx.dataDir,
+          topic,
+        );
+
+        // For articles: await completion so social can reference it
+        // For social/email: fire and forget
+        if (pipelineMode === "multi-phase") {
+          if (topic.status === "approved") {
+            topics.update(topicId, { status: "in_production" });
+          }
+          // Don't await — let it run in background but start social after a delay
+          runProductionPipeline(ctx).catch((err) => {
+            log.error({ runId: run.id, err }, "production pipeline failed");
+          });
+        } else {
+          runContentPipeline(ctx, ctId).catch((err) => {
+            log.error({ runId: run.id, err }, "content pipeline failed");
+          });
+        }
+
+        started.push(item.id);
+      }
+
+      return reply.status(200).send({
+        message: `Started generation for ${started.length} content piece(s)`,
+        started: started.length,
+        total: toGenerate.length,
       });
     },
   );

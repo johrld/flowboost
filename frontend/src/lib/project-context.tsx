@@ -11,6 +11,7 @@ interface ProjectContextValue {
   projects: Project[];
   categories: Category[];
   authors: Author[];
+  languages: { code: string; name: string; enabled: boolean }[];
   setActiveProject: (project: Project) => void;
   refreshProjects: () => Promise<void>;
   needsOnboarding: boolean;
@@ -24,6 +25,7 @@ const ProjectContext = createContext<ProjectContextValue>({
   projects: [],
   categories: [],
   authors: [],
+  languages: [],
   setActiveProject: () => {},
   refreshProjects: async () => {},
   needsOnboarding: false,
@@ -82,6 +84,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         projects,
         categories: project?.categories ?? [],
         authors: customer?.authors ?? [],
+        languages: project?.languages?.filter((l) => l.enabled) ?? [],
         setActiveProject,
         refreshProjects,
         needsOnboarding,

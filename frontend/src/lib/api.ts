@@ -302,6 +302,18 @@ export function produceFlowOutput(
   });
 }
 
+export function produceAllFlowOutputs(
+  customerId: string,
+  projectId: string,
+  topicId: string,
+  mode: "all" | "missing" = "all",
+): Promise<{ message: string; started: number; total: number }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/topics/${topicId}/produce-all`, {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  });
+}
+
 // ── Content Types ───────────────────────────────────────────────
 
 export interface ContentTypeDefinition {
@@ -324,6 +336,14 @@ export interface ContentTypeDefinition {
   agent?: {
     role: string;
     guidelines: string;
+  };
+  pipeline?: {
+    mode: "single-phase" | "multi-phase";
+    phases: string[];
+  };
+  localization?: {
+    mode: "single" | "multi";
+    translateOnGenerate?: boolean;
   };
 }
 
@@ -414,7 +434,7 @@ export function getContentItem(
 export function createContent(
   customerId: string,
   projectId: string,
-  data: { type: ContentType; title: string; description?: string; category?: string; tags?: string[]; keywords?: string[] },
+  data: { type: ContentType; title: string; description?: string; category?: string; tags?: string[]; keywords?: string[]; flowId?: string },
 ): Promise<ContentItem> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/content`, {
     method: "POST",

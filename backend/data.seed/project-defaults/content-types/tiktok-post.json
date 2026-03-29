@@ -34,6 +34,7 @@
       }
     }
   ],
+  "localization": { "mode": "single" },
   "pipeline": {
     "mode": "single-phase",
     "phases": ["write", "image"],

@@ -80,12 +80,18 @@ export function ContentChat({ customerId, projectId, contentId, onApplyUpdates }
     setLoading(false);
   };
 
-  // Extract JSON updates from assistant message
+  // Extract content updates from assistant message (supports actions[] and legacy updates{})
   const extractUpdates = (text: string): Record<string, unknown> | null => {
     const match = text.match(/```json\s*\n?([\s\S]*?)\n?```/);
     if (!match) return null;
     try {
-      const parsed = JSON.parse(match[1]) as { updates?: Record<string, unknown> };
+      const parsed = JSON.parse(match[1]) as { actions?: Array<{ type: string; updates?: Record<string, unknown> }>; updates?: Record<string, unknown> };
+      // New format: actions array with update_content type
+      if (parsed.actions) {
+        const contentAction = parsed.actions.find((a) => a.type === "update_content");
+        return contentAction?.updates ?? null;
+      }
+      // Legacy format: direct updates object
       return parsed.updates ?? null;
     } catch {
       return null;

@@ -18,6 +18,7 @@ import {
   LayoutTemplate,
   Archive,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useProject } from "@/lib/project-context";
 import { CreateProjectWizard } from "@/components/create-project-wizard";
-import { getTopics, createTopic, updateTopic, deleteTopic } from "@/lib/api";
+import { getTopics, createTopic, updateTopic, deleteTopic, createContent } from "@/lib/api";
 import type { Topic } from "@/lib/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FlowOnboardingModal } from "@/components/flow-onboarding-modal";
@@ -83,9 +84,29 @@ export function Sidebar() {
     setShowOnboarding(true);
   };
 
-  const handleCreateFlow = async (title: string) => {
+  const handleCreateFlow = async (title: string, contentTypeIds: string[] = []) => {
     if (!customerId || !projectId) return;
     const topic = await createTopic(customerId, projectId, { title });
+
+    // Pre-create content pieces as "planned" (no pipeline started — user decides when to generate)
+    const categoryMap: Record<string, string> = {
+      "blog-post": "article", "linkedin-post": "social_post", "instagram-post": "social_post",
+      "x-post": "social_post", "tiktok-post": "social_post", "newsletter": "newsletter",
+    };
+    const platformMap: Record<string, string> = {
+      "linkedin-post": "linkedin", "instagram-post": "instagram", "x-post": "x", "tiktok-post": "tiktok",
+    };
+    for (const ctId of contentTypeIds) {
+      try {
+        await createContent(customerId, projectId, {
+          type: (categoryMap[ctId] ?? "article") as import("@/lib/types").ContentType,
+          title,
+          category: platformMap[ctId],
+          flowId: topic.id,
+        });
+      } catch { /* ignore */ }
+    }
+
     await loadFlows();
     router.push(`/flows/${topic.id}`);
   };
@@ -144,10 +165,10 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
       {/* Logo */}
-      <div className="flex items-center gap-2.5 border-b px-4 py-4">
+      <Link href="/flows" className="flex items-center gap-2.5 border-b px-4 py-4 hover:bg-muted/50 transition-colors">
         <Image src="/logo.png" alt="FlowBoost" width={28} height={28} className="rounded-md" />
         <span className="text-lg font-semibold">flowboost</span>
-      </div>
+      </Link>
 
       {/* Project Selector */}
       <div className="border-b px-3 py-3">
@@ -239,6 +260,7 @@ export function Sidebar() {
                   )}
                 >
                   <span className="flex-1 truncate">{flow.title}</span>
+                  {flow.source === "pipeline" && <Sparkles className="h-3 w-3 shrink-0 text-violet-500" />}
                 </Link>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

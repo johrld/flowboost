@@ -174,12 +174,18 @@ Sidebar chat panel available in **every** editor. The AI receives full context:
 4. ContentType Guidelines (writing rules for this format)
 ```
 
-When the AI suggests changes, it returns a JSON block:
+When the AI suggests changes, it returns a JSON block with an actions array:
 ```json
-{"updates": {"text": "New text...", "hashtags": ["#new"]}}
+{"actions": [{"type": "update_content", "updates": {"text": "New text...", "hashtags": ["#new"]}}]}
 ```
 
+The `type` field determines the action. Content-level actions: `update_content`. Flow-level actions: `update_briefing`, `update_title`, `create_content`.
+
 An "Apply Changes" button appears in the chat to merge updates into the editor.
+
+> **Localization:** For multi-language content types (e.g. blog posts), a Language switcher appears in the sidebar. Single-language types (social, email) have no language UI.
+
+> **Hero Image:** The hero image appears in the editor area (below title, above the text editor) with drag-and-drop from Media library.
 
 ## Version Management
 
