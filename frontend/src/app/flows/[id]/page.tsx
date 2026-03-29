@@ -727,25 +727,26 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
 
                 {/* Generate All with AI button */}
-                {outputs.some((o) => o.status === "planned") && (
-                  <div className="mt-4">
+                {outputs.some((o) => o.status === "planned" || o.status === "draft") && (
+                  <div className="mt-4 rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 p-4">
                     <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full"
-                      onClick={() => {
-                        outputs
-                          .filter((o) => o.status === "planned")
-                          .forEach((o) => {
-                            const ctId = o.type === "social_post" ? `${o.category ?? "linkedin"}-post`
-                              : o.type === "newsletter" ? "newsletter"
-                              : "blog-post";
-                            handleProduce(ctId);
-                          });
+                      className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+                      onClick={async () => {
+                        if (!customerId || !projectId) return;
+                        try {
+                          const { produceAllFlowOutputs } = await import("@/lib/api");
+                          await produceAllFlowOutputs(customerId, projectId, id);
+                          await loadData();
+                        } catch (err) {
+                          console.error("Generate all failed:", err);
+                        }
                       }}
                     >
-                      <Sparkles className="mr-1.5 h-3.5 w-3.5" />Generate All with AI
+                      <Sparkles className="mr-2 h-4 w-4" />Generate All with AI
                     </Button>
+                    <p className="text-xs text-violet-600 dark:text-violet-400 mt-2 text-center">
+                      Articles are generated first, then social posts can reference them.
+                    </p>
                   </div>
                 )}
               </div>
