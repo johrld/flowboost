@@ -46,6 +46,13 @@ export interface ContentTypeAgent {
   guidelines: string;
 }
 
+export interface ContentTypeLocalization {
+  /** single = one language per content piece (social, email). multi = multiple languages (articles). */
+  mode: "single" | "multi";
+  /** Auto-translate into project languages when generating with AI (only for multi mode) */
+  translateOnGenerate?: boolean;
+}
+
 export interface ContentTypePipeline {
   /** Pipeline execution mode */
   mode: "single-phase" | "multi-phase";
@@ -70,6 +77,7 @@ export interface CustomContentType {
   fields: CustomFieldDefinition[];
   agent?: ContentTypeAgent;
   pipeline?: ContentTypePipeline;
+  localization?: ContentTypeLocalization;
   createdAt: string;
   updatedAt: string;
 }

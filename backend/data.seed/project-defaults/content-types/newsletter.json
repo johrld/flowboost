@@ -48,6 +48,7 @@
       "sortOrder": 3
     }
   ],
+  "localization": { "mode": "single" },
   "pipeline": {
     "mode": "single-phase",
     "phases": ["write"],
