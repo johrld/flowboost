@@ -50,7 +50,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         setCustomerId(cid);
         const p = await getProjects(cid);
         setProjects(p);
-        if (p.length > 0) setProject((prev) => prev && p.find((x) => x.id === prev.id) ? prev : p[0]);
+        if (p.length > 0) setProject((prev) => p.find((x) => x.id === prev?.id) ?? p[0]);
       }
     } catch {
       // API not available yet

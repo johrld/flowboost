@@ -766,14 +766,22 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                         {/* Header row */}
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0">
-                            {OUTPUT_ICONS[item.category ?? ""] ?? OUTPUT_ICONS[item.type] ?? <FileText className="h-4 w-4" />}
+                            {(() => {
+                              const ct = item.contentTypeId ? contentTypes.find((t) => t.id === item.contentTypeId) : null;
+                              if (ct) return getContentTypeIcon(ct);
+                              return OUTPUT_ICONS[item.category ?? ""] ?? OUTPUT_ICONS[item.type] ?? <FileText className="h-4 w-4" />;
+                            })()}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{item.title}</p>
                             <p className="text-xs text-muted-foreground">
-                              {({ linkedin: "LinkedIn Post", instagram: "Instagram Post", x: "X Post", tiktok: "TikTok Post" } as Record<string, string>)[item.category ?? ""]
-                                ?? ({ article: "Article", guide: "Guide", newsletter: "Newsletter", social_post: "Social Post" } as Record<string, string>)[item.type]
-                                ?? item.type.replace("_", " ")}
+                              {(() => {
+                                const ct = item.contentTypeId ? contentTypes.find((t) => t.id === item.contentTypeId) : null;
+                                if (ct) return ct.label;
+                                return ({ linkedin: "LinkedIn Post", instagram: "Instagram Post", x: "X Post", tiktok: "TikTok Post" } as Record<string, string>)[item.category ?? ""]
+                                  ?? ({ article: "Article", guide: "Guide", newsletter: "Newsletter", social_post: "Social Post" } as Record<string, string>)[item.type]
+                                  ?? item.type.replace("_", " ");
+                              })()}
                             </p>
                           </div>
                           {isProducing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}

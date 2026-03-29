@@ -132,19 +132,19 @@ export async function contentTypeRoutes(app: FastifyInstance) {
   // POST /content-types/import — Import schemas from connector
   app.post<{
     Params: { customerId: string; projectId: string };
-    Body: { schemaIds?: string[] };
+    Body: { schemaIds?: string[]; connectorType?: string };
   }>(
     "/import",
     async (request, reply) => {
       const { customerId, projectId } = request.params;
-      const body = (request.body ?? {}) as { schemaIds?: string[] };
+      const body = (request.body ?? {}) as { schemaIds?: string[]; connectorType?: string };
       const project = app.ctx.projectsFor(customerId).get(projectId);
       if (!project) {
         return reply.status(404).send({ error: "Project not found" });
       }
 
       try {
-        const connector = createSiteConnector(project);
+        const connector = createSiteConnector(project, body.connectorType ? { connectorType: body.connectorType as import("../../models/types.js").ConnectorType } : undefined);
         if (!connector.discoverSchemas) {
           return reply.status(400).send({
             error: `${connector.platform} connector does not support schema discovery`,

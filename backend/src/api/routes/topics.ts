@@ -768,12 +768,14 @@ export async function topicRoutes(app: FastifyInstance) {
       // Map content type category to ContentItem type
       const itemType = contentType.category === "social" ? "social_post" as const
         : contentType.category === "email" ? "newsletter" as const
+        : contentType.source === "connector" ? "landing_page" as const
         : "article" as const;
 
       const contentItem = app.ctx.contentFor(customerId, projectId).create({
         customerId,
         projectId,
         type: itemType,
+        contentTypeId,
         status: "planned",
         title: contentTitle,
         category: platform ?? topic.category,

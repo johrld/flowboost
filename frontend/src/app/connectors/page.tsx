@@ -127,9 +127,9 @@ function ConnectorsPageContent() {
   }, [detailView, ghInstallationId, ghRepos.length, loadGhRepos]);
 
   // Helper to find a connector by type in the project's connectors array
-  const findConn = useCallback((type: string) => {
+  const findConn = (type: string) => {
     return (project?.connectors ?? []).find((c) => c.type === type);
-  }, [project?.connectors]);
+  };
 
   // Helper to add or update a connector in the array and save to project
   const upsertConnector = useCallback(async (connectorData: Record<string, unknown> & { type: string }) => {
@@ -145,13 +145,16 @@ function ConnectorsPageContent() {
     await refreshProjects();
   }, [customerId, projectId, project, refreshProjects]);
 
-  // Helper to remove a connector from the array
+  // Helper to disconnect a connector (removes from array + deletes imported content types)
   const removeConnector = useCallback(async (type: string) => {
-    if (!customerId || !projectId || !project) return;
-    const connectors = (project.connectors ?? []).filter((c) => c.type !== type);
-    await updateProject(customerId, projectId, { connectors } as Partial<typeof project>);
+    if (!customerId || !projectId) return;
+    const { disconnectConnector } = await import("@/lib/api");
+    await disconnectConnector(customerId, projectId, type);
     await refreshProjects();
-  }, [customerId, projectId, project, refreshProjects]);
+    // Clear local config values for this type
+    setConfigValues((prev) => { const next = { ...prev }; delete next[type]; return next; });
+    setTestStatus((prev) => { const next = { ...prev }; delete next[type]; return next; });
+  }, [customerId, projectId, refreshProjects]);
 
   // Populate state from project data — generic for all connectors + GitHub special case
   useEffect(() => {
@@ -188,7 +191,8 @@ function ConnectorsPageContent() {
     }
     setConfigValues(loadedConfigs);
     setInitialized(true);
-  }, [project, initialized, findConn]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, initialized]);
 
   // Handle GitHub OAuth callback
   useEffect(() => {
@@ -273,15 +277,15 @@ function ConnectorsPageContent() {
     }
   };
 
-  // Connection status derived purely from project data
+  // Connection status — plain function, re-evaluated every render (no stale closures)
   const isGitConnected = !!findConn("github")?.github?.installationId;
-  const isConnected = useCallback((connectorId: string) => {
+  const isConnected = (connectorId: string): boolean => {
     if (connectorId === "git") return isGitConnected;
     const def = connectorDefs.find((c) => c.id === connectorId);
     if (!def?.configKey) return false;
     const conn = findConn(connectorId);
     return !!conn?.[def.configKey as keyof typeof conn];
-  }, [findConn, isGitConnected]);
+  };
 
   // Backward compat aliases
   const isSwConnected = isConnected("shopware");
@@ -320,7 +324,7 @@ function ConnectorsPageContent() {
       setTestStatus((prev) => ({ ...prev, [connectorId]: "error" }));
       setTestError((prev) => ({ ...prev, [connectorId]: err instanceof Error ? err.message : "Connection failed" }));
     }
-  }, [configValues, customerId, projectId]);
+  }, [connectorDefs, configValues, customerId, projectId]);
 
   // Generic save handler for any connector with fields
   const handleGenericSave = useCallback(async (connectorId: string) => {
@@ -342,7 +346,7 @@ function ConnectorsPageContent() {
     } catch {
       setSaveStatus((prev) => ({ ...prev, [connectorId]: "error" as SaveStatus }));
     }
-  }, [configValues, upsertConnector]);
+  }, [connectorDefs, configValues, upsertConnector]);
 
   // Generic stream toggle handler
   const handleStreamToggle = useCallback(async (connectorId: string, streamId: string, enabled: boolean) => {
@@ -365,7 +369,8 @@ function ConnectorsPageContent() {
     }
 
     await upsertConnector({ type: connectorId, ...configData, enabledStreams: updated });
-  }, [findConn, upsertConnector]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectorDefs, project?.connectors, upsertConnector]);
 
   const handleLmLoadData = async () => {
     if (!customerId || !projectId) return;
@@ -410,12 +415,15 @@ function ConnectorsPageContent() {
   };
 
   // Schema discovery handlers (generic, used by any connector with hasSchemaDiscovery)
+  // Which connector type is currently being viewed for schema discovery
+  const activeSchemaConnector = detailView ?? undefined;
+
   const handleLoadSchemas = async () => {
     if (!customerId || !projectId) return;
     setSchemasLoading(true);
     try {
       const [schemasResult, typesResult] = await Promise.all([
-        getConnectorSchemas(customerId, projectId),
+        getConnectorSchemas(customerId, projectId, activeSchemaConnector),
         import("@/lib/api").then((m) => m.getContentTypes(customerId, projectId)),
       ]);
       setSchemas(schemasResult.schemas);
@@ -441,9 +449,10 @@ function ConnectorsPageContent() {
     if (!customerId || !projectId || selectedSchemas.size === 0) return;
     setImporting(true);
     try {
-      const result = await importConnectorSchemas(customerId, projectId, Array.from(selectedSchemas));
+      const result = await importConnectorSchemas(customerId, projectId, Array.from(selectedSchemas), activeSchemaConnector);
       alert(`${result.types?.length ?? 0} Content Types imported`);
-      setSchemas([]);
+      // Reload schemas to refresh import status
+      await handleLoadSchemas();
     } catch (err) {
       console.error("Schema import failed:", err);
       alert("Import failed");
@@ -496,6 +505,19 @@ function ConnectorsPageContent() {
             <Button
               variant="outline"
               onClick={() => { disconnectGitHub(); setDetailView(null); }}
+            >
+              Disconnect
+            </Button>
+          )}
+          {connector.configKey && isConnected(connector.id) && (
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={async () => {
+                if (!confirm(`Disconnect ${connector.name}? This will also delete imported content types.`)) return;
+                await removeConnector(connector.id);
+                setDetailView(null);
+              }}
             >
               Disconnect
             </Button>
@@ -605,7 +627,7 @@ function ConnectorsPageContent() {
                                     onClick={async () => {
                                       if (!customerId || !projectId) return;
                                       try {
-                                        const result = await importConnectorSchemas(customerId, projectId, [schema.id]);
+                                        const result = await importConnectorSchemas(customerId, projectId, [schema.id], activeSchemaConnector);
                                         const next = new Set(selectedSchemas);
                                         next.add(schema.id);
                                         setSelectedSchemas(next);
