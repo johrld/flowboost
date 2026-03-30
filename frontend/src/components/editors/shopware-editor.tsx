@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Label } from "@/components/ui/label";
-import { ImageIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ImageIcon, Upload } from "lucide-react";
+import { TiptapEditor } from "@/components/tiptap-editor";
+import { MediaPicker } from "@/components/media-picker";
 
 // ── Slot Layout Parser ──────────────────────────────────────────
 
@@ -11,12 +14,12 @@ interface SlotField {
   label: string;
   type: string;
   slotName: string;
+  exampleContent?: string;
 }
 
 interface Block {
   blockType: string;
   slots: SlotField[];
-  columns: number;
 }
 
 interface Section {
@@ -24,11 +27,10 @@ interface Section {
   blocks: Block[];
 }
 
-function parseSlotLayout(fields: Array<{ id: string; label: string; type: string }>): Section[] {
+function parseSlotLayout(fields: Array<{ id: string; label: string; type: string; exampleContent?: string }>): Section[] {
   const sectionMap = new Map<number, Map<string, SlotField[]>>();
 
   for (const field of fields) {
-    // Parse: s{N}-{blockType}-{slotName}
     const match = field.id.match(/^s(\d+)-(.+)-([^-]+)$/);
     if (!match) continue;
 
@@ -46,19 +48,12 @@ function parseSlotLayout(fields: Array<{ id: string; label: string; type: string
   for (const [index, blockMap] of [...sectionMap.entries()].sort((a, b) => a[0] - b[0])) {
     const blocks: Block[] = [];
     for (const [blockType, slots] of blockMap) {
-      const columns = getBlockColumns(blockType);
-      blocks.push({ blockType, slots, columns });
+      blocks.push({ blockType, slots });
     }
     sections.push({ index, blocks });
   }
 
   return sections;
-}
-
-function getBlockColumns(blockType: string): number {
-  if (blockType.includes("three-column")) return 3;
-  if (blockType.includes("two-column") || blockType.includes("image-text")) return 2;
-  return 1;
 }
 
 function getBlockLabel(blockType: string): string {
@@ -75,11 +70,14 @@ function getBlockLabel(blockType: string): string {
 interface ShopwareEditorProps {
   values: Record<string, unknown>;
   onChange: (values: Record<string, unknown>) => void;
-  contentType: { fields: Array<{ id: string; label: string; type: string }> } | null;
+  contentType: { fields: Array<{ id: string; label: string; type: string; exampleContent?: string }> } | null;
   readOnly?: boolean;
+  onImageUpload?: (file: File) => Promise<string>;
 }
 
-export function ShopwareEditor({ values, onChange, contentType, readOnly }: ShopwareEditorProps) {
+export function ShopwareEditor({ values, onChange, contentType, readOnly, onImageUpload }: ShopwareEditorProps) {
+  const [browseFieldId, setBrowseFieldId] = useState<string | null>(null);
+
   const sections = useMemo(
     () => parseSlotLayout(contentType?.fields ?? []),
     [contentType?.fields],
@@ -90,73 +88,83 @@ export function ShopwareEditor({ values, onChange, contentType, readOnly }: Shop
   }
 
   return (
-    <div className="grid grid-cols-2 gap-6 h-full">
-      {/* Left: Editor */}
-      <div className="overflow-y-auto space-y-6 pr-2">
-        {sections.map((section) => (
-          <div key={section.index} className="space-y-3">
-            {section.blocks.map((block) => (
-              <div key={`${section.index}-${block.blockType}`}>
-                <p className="text-xs font-medium text-muted-foreground mb-2">
-                  Section {section.index} — {getBlockLabel(block.blockType)}
-                </p>
-                <div className={`grid gap-3 ${block.columns === 3 ? "grid-cols-3" : block.columns === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
-                  {block.slots.map((slot) => (
-                    <div key={slot.id} className="space-y-1">
-                      <Label className="text-xs">{slot.slotName}</Label>
-                      {slot.type === "image" ? (
-                        <div className="flex items-center justify-center rounded-md border border-dashed bg-muted/50 aspect-video">
+    <div className="space-y-8">
+      {sections.map((section) => (
+        <div key={section.index} className="space-y-4">
+          {section.blocks.map((block) => (
+            <div key={`${section.index}-${block.blockType}`} className="space-y-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Section {section.index} — {getBlockLabel(block.blockType)}
+              </p>
+
+              {block.slots.map((slot) => (
+                <div key={slot.id} className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">{slot.slotName}</Label>
+
+                  {slot.type === "image" ? (
+                    // Image slot: preview + browse
+                    <div className="space-y-2">
+                      {values[slot.id] ? (
+                        <img
+                          src={String(values[slot.id])}
+                          alt=""
+                          className="rounded-md border max-h-40 w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center rounded-md border border-dashed bg-muted/50 h-24">
                           <ImageIcon className="h-5 w-5 text-muted-foreground" />
                         </div>
-                      ) : (
-                        <textarea
-                          value={String(values[slot.id] ?? "")}
-                          onChange={(e) => onChange({ ...values, [slot.id]: e.target.value })}
-                          readOnly={readOnly}
-                          className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus:outline-none focus:ring-2 focus:ring-ring"
-                          placeholder={slot.slotName}
-                        />
+                      )}
+                      {!readOnly && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => setBrowseFieldId(slot.id)}
+                        >
+                          <ImageIcon className="mr-1 h-3 w-3" />
+                          Browse
+                        </Button>
                       )}
                     </div>
-                  ))}
+                  ) : slot.type === "rich-text" || slot.type === "markdown" ? (
+                    // Rich text slot: TipTap WYSIWYG
+                    <TiptapEditor
+                      content={String(values[slot.id] ?? "")}
+                      onChange={(md) => onChange({ ...values, [slot.id]: md })}
+                      editable={!readOnly}
+                      onImageUpload={onImageUpload}
+                    />
+                  ) : (
+                    // Other slots: plain textarea
+                    <textarea
+                      value={String(values[slot.id] ?? "")}
+                      onChange={(e) => onChange({ ...values, [slot.id]: e.target.value })}
+                      readOnly={readOnly}
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[80px] resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                      placeholder={slot.exampleContent ? `Example: ${slot.exampleContent.slice(0, 100)}...` : slot.slotName}
+                    />
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
 
-      {/* Right: Preview */}
-      <div className="overflow-y-auto border rounded-lg bg-white p-4 space-y-4">
-        <p className="text-xs font-medium text-muted-foreground">Preview</p>
-        {sections.map((section) => (
-          <div key={section.index} className="space-y-2">
-            {section.blocks.map((block) => (
-              <div
-                key={`${section.index}-${block.blockType}`}
-                className={`grid gap-3 ${block.columns === 3 ? "grid-cols-3" : block.columns === 2 ? "grid-cols-2" : "grid-cols-1"}`}
-              >
-                {block.slots.map((slot) => (
-                  <div key={slot.id} className="min-h-[40px]">
-                    {slot.type === "image" ? (
-                      <div className="flex items-center justify-center rounded bg-muted aspect-video">
-                        <ImageIcon className="h-6 w-6 text-muted-foreground/50" />
-                      </div>
-                    ) : values[slot.id] ? (
-                      <div
-                        className="prose prose-sm max-w-none text-sm"
-                        dangerouslySetInnerHTML={{ __html: String(values[slot.id]) }}
-                      />
-                    ) : (
-                      <div className="rounded bg-muted/30 h-full min-h-[40px]" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
+      {/* MediaPicker for image slots */}
+      <MediaPicker
+        open={!!browseFieldId}
+        onOpenChange={(open) => { if (!open) setBrowseFieldId(null); }}
+        typeFilter="image"
+        onSelect={(asset) => {
+          if (browseFieldId) {
+            // Use the thumbnail URL from the asset
+            onChange({ ...values, [browseFieldId]: asset.id });
+            setBrowseFieldId(null);
+          }
+        }}
+      />
     </div>
   );
 }

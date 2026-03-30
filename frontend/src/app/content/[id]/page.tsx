@@ -1679,6 +1679,8 @@ export default function ContentEditorPage({
             authorRole={typeof authors[0]?.role === "string" ? authors[0].role : authors[0]?.role?.en ?? authors[0]?.role?.de}
             authorImage={authors[0]?.image}
             readOnly={false}
+            customerId={customerId}
+            projectId={projectId}
           />
         )}
       </div>
@@ -1845,6 +1847,8 @@ function JsonEditorSwitch({
   authorRole,
   authorImage,
   readOnly,
+  customerId,
+  projectId,
 }: {
   contentTypeId: string | null;
   contentType: ContentTypeDefinition | null;
@@ -1855,6 +1859,8 @@ function JsonEditorSwitch({
   authorRole?: string;
   authorImage?: string;
   readOnly?: boolean;
+  customerId?: string;
+  projectId?: string;
 }) {
   const commonProps = { values, onChange, projectName, authorName, authorRole, authorImage, readOnly };
   switch (contentTypeId) {
@@ -1869,6 +1875,22 @@ function JsonEditorSwitch({
     case "newsletter":
       return <NewsletterEditor {...commonProps} />;
     default:
+      if (contentType?.connectorType === "shopware" || contentType?.connectorType === "wordpress") {
+        return (
+          <ShopwareEditor
+            values={values}
+            onChange={onChange}
+            contentType={contentType}
+            readOnly={readOnly}
+            onImageUpload={async (file) => {
+              const { uploadMedia } = await import("@/lib/api");
+              const result = await uploadMedia(customerId ?? "", projectId ?? "", file);
+              const { getMediaFileUrl } = await import("@/lib/api");
+              return getMediaFileUrl(customerId ?? "", projectId ?? "", result.asset.id);
+            }}
+          />
+        );
+      }
       return <GenericEditor values={values} onChange={onChange} contentType={contentType} readOnly={readOnly} />;
   }
 }
