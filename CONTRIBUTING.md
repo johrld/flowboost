@@ -1,116 +1,57 @@
 # Contributing to FlowBoost
 
-## Quick Links
-
-- **GitHub:** https://github.com/johrld/flowboost
-- **Issues:** https://github.com/johrld/flowboost/issues
+Thanks for your interest! Here's how to contribute effectively.
 
 ## Maintainers
 
-- **Johannes Herold** — Creator, Architecture, Pipeline
-  - GitHub: [@johrld](https://github.com/johrld)
-
-- **Magnus** — Contributor
-  - GitHub: [@MagnusHL](https://github.com/MagnusHL)
+| Who | Focus | GitHub |
+|---|---|---|
+| Johannes Herold | Project Lead | [@johrld](https://github.com/johrld) |
+| Magnus Hinzke | Media Library, Connectors | [@MagnusHL](https://github.com/MagnusHL) |
 
 ## How to Contribute
 
-1. **Bugs & small fixes** — Open a PR
-2. **New features / architecture changes** — Open an Issue first to discuss
-3. **Refactor-only PRs** — Not accepted unless a maintainer explicitly asks for it
-4. **Questions** — Open a Discussion or Issue
+**Bugs & small fixes** — open a PR directly. Link the issue if one exists.
+
+**Features & architecture changes** — open an Issue first. Describe what, why, and rough scope. Discuss before coding so nobody wastes time on something that doesn't fit.
+
+**Questions & ideas** — open an Issue. Everything is welcome.
 
 ## Before You PR
 
-- Test locally: `docker compose up --build`
-- Run TypeScript check: `cd backend && npx tsc --noEmit` and `cd frontend && npx tsc --noEmit`
-- Run lint: `cd frontend && npm run lint`
-- Keep PRs focused — one thing per PR, don't mix unrelated changes
-- Describe **what** changed and **why**
-- Include screenshots for UI changes (before/after)
+- [ ] Linked Issue exists (features must be discussed first)
+- [ ] Tested locally: `docker compose up --build`
+- [ ] TypeScript passes: `cd backend && npx tsc --noEmit` + `cd frontend && npx tsc --noEmit`
+- [ ] Lint passes: `cd frontend && npm run lint`
+- [ ] One PR = one thing. No unrelated changes mixed in.
+- [ ] Under ~500 changed lines (split larger work into multiple PRs)
+- [ ] Screenshots for UI changes (before/after)
 
-## Development Setup
+## Branching & Commits
 
-```bash
-# 1. Fork and clone
-git clone https://github.com/YOUR_USERNAME/flowboost.git
-cd flowboost
+PRs target `main`. Direct pushes are blocked.
 
-# 2. Run setup (creates .env, configures auth, seeds data)
-bash scripts/setup.sh
+- Branches: `feat/`, `fix/`, `chore/`, `refactor/`
+- Commits: `type(scope): description` — e.g. `feat(pipeline): add retry logic`
 
-# 3. Start services
-docker compose up --build
-```
+## Review
 
-Dashboard: http://localhost:6101 — API: http://localhost:6100
+PRs are reviewed by a maintainer. Questions are part of the process, not rejection. This is a side project — reviews may take a few days.
 
-## Branching
+## AI-Assisted PRs
 
-All PRs go against `main`. No `develop` branch. Direct pushes to `main` are blocked — all changes must go through a PR.
-
-```
-main (protected: no force push, no direct push, PRs required)
-  └── feat/your-feature → PR → main
-```
-
-### Branch Naming
-
-- `feat/` — New features
-- `fix/` — Bug fixes
-- `chore/` — Maintenance, dependencies
-- `refactor/` — Code restructuring
-
-### Commit Format
-
-```
-<type>(<scope>): <description>
-```
-
-Types: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`
-
-Examples:
-- `feat(pipeline): add retry logic for image generation`
-- `fix(sidebar): project selector not updating after create`
-- `chore(docker): update node base image to 22`
-
-## AI-Assisted PRs Welcome
-
-Built with Claude Code, Cursor, Copilot, or other AI tools? Great — just be transparent:
-
-- Note it in the PR description
-- Confirm you understand what the code does
-- Test it locally before submitting
-
-## Project Structure
-
-```
-flowboost/
-├── backend/          # Fastify API + Claude Agent SDK pipeline
-│   ├── src/
-│   │   ├── api/      # REST routes
-│   │   ├── models/   # Data models (JSON file store)
-│   │   ├── pipeline/ # AI agent orchestration
-│   │   └── tools/    # MCP server for agent tools
-│   └── data.seed/    # Seed data + project defaults
-├── frontend/         # Next.js dashboard
-│   └── src/
-│       ├── app/      # Pages (App Router)
-│       ├── components/
-│       └── lib/      # API client, types, context
-└── scripts/          # Setup and utility scripts
-```
+Built with AI tools? Welcome. Just note it in the PR, make sure you understand the code, and test it.
 
 ## What We're Looking For
 
-- Pipeline improvements (new agent prompts, better quality checks)
-- Frontend UX (better empty states, editor improvements)
+- Pipeline improvements (agent prompts, quality checks)
+- Frontend UX (editors, empty states, dashboard)
 - New connectors (WordPress, Webflow, social platforms)
-- Documentation and examples
 - Bug fixes and stability
 
-Check [Issues](https://github.com/johrld/flowboost/issues) for things to work on.
+See [VISION.md](VISION.md) for priorities and scope.
+See [Issues](https://github.com/johrld/flowboost/issues) for open tasks.
 
-## Report a Vulnerability
+## Security
 
-Do not open public issues for security vulnerabilities. Report them via [GitHub Security Advisories](https://github.com/johrld/flowboost/security/advisories/new).
+Report vulnerabilities via [GitHub Security Advisories](https://github.com/johrld/flowboost/security/advisories/new), not public issues.
