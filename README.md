@@ -179,13 +179,12 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production setup, authenticatio
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, branching conventions, and PR guidelines.
-
-All PRs go against `main`. AI-assisted contributions are welcome.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and [VISION.md](VISION.md) for project direction.
 
 ## Contributors
 
-- [Magnus Hinzke](https://github.com/MagnusHL)
+<a href="https://github.com/johrld"><img src="https://github.com/johrld.png" width="48" height="48" alt="johrld" style="border-radius:50%"></a>
+<a href="https://github.com/MagnusHL"><img src="https://github.com/MagnusHL.png" width="48" height="48" alt="MagnusHL" style="border-radius:50%"></a>
 
 ## License
 
