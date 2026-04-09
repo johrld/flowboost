@@ -1882,6 +1882,8 @@ function JsonEditorSwitch({
             onChange={onChange}
             contentType={contentType}
             readOnly={readOnly}
+            customerId={customerId}
+            projectId={projectId}
             onImageUpload={async (file) => {
               const { uploadMedia } = await import("@/lib/api");
               const result = await uploadMedia(customerId ?? "", projectId ?? "", file);

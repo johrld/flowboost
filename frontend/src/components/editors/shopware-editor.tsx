@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { ImageIcon, Upload } from "lucide-react";
+import { ImageIcon, Upload, Package } from "lucide-react";
 import { TiptapEditor } from "@/components/tiptap-editor";
 import { MediaPicker } from "@/components/media-picker";
+import { getMediaFileUrl } from "@/lib/api";
 
 // ── Slot Layout Parser ──────────────────────────────────────────
 
@@ -65,6 +66,18 @@ function getBlockLabel(blockType: string): string {
   return "Content";
 }
 
+function getBlockGridClass(blockType: string): string {
+  if (blockType.includes("three-column")) return "grid grid-cols-3 gap-4";
+  if (blockType.includes("two-column") || blockType.includes("image-text")) return "grid grid-cols-2 gap-4";
+  return "space-y-3";
+}
+
+const slotOrder: Record<string, number> = { left: 0, "center-left": 1, center: 2, "center-right": 3, right: 4 };
+
+function sortSlots(slots: SlotField[]): SlotField[] {
+  return [...slots].sort((a, b) => (slotOrder[a.slotName] ?? 9) - (slotOrder[b.slotName] ?? 9));
+}
+
 // ── Editor Component ────────────────────────────────────────────
 
 interface ShopwareEditorProps {
@@ -73,9 +86,11 @@ interface ShopwareEditorProps {
   contentType: { fields: Array<{ id: string; label: string; type: string; exampleContent?: string }> } | null;
   readOnly?: boolean;
   onImageUpload?: (file: File) => Promise<string>;
+  customerId?: string;
+  projectId?: string;
 }
 
-export function ShopwareEditor({ values, onChange, contentType, readOnly, onImageUpload }: ShopwareEditorProps) {
+export function ShopwareEditor({ values, onChange, contentType, readOnly, onImageUpload, customerId, projectId }: ShopwareEditorProps) {
   const [browseFieldId, setBrowseFieldId] = useState<string | null>(null);
 
   const sections = useMemo(
@@ -97,36 +112,42 @@ export function ShopwareEditor({ values, onChange, contentType, readOnly, onImag
                 Section {section.index} — {getBlockLabel(block.blockType)}
               </p>
 
-              {block.slots.map((slot) => (
-                <div key={slot.id} className="space-y-1.5">
+              <div className={getBlockGridClass(block.blockType)}>
+              {sortSlots(block.slots).map((slot, idx) => (
+                <div key={`${slot.id}-${idx}`} className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">{slot.slotName}</Label>
 
                   {slot.type === "image" ? (
-                    // Image slot: preview + browse
-                    <div className="space-y-2">
+                    // Image slot: click to browse, drag to upload
+                    <button
+                      type="button"
+                      disabled={readOnly}
+                      onClick={() => !readOnly && setBrowseFieldId(slot.id)}
+                      onDragOver={(e) => { if (!readOnly) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }}
+                      onDrop={async (e) => {
+                        e.preventDefault();
+                        if (readOnly || !onImageUpload) return;
+                        const file = e.dataTransfer.files[0];
+                        if (file?.type.startsWith("image/")) {
+                          const url = await onImageUpload(file);
+                          onChange({ ...values, [slot.id]: url });
+                        }
+                      }}
+                      className="w-full rounded-md border border-dashed bg-muted/50 overflow-hidden cursor-pointer hover:border-primary/50 transition-colors disabled:cursor-default"
+                    >
                       {values[slot.id] ? (
                         <img
                           src={String(values[slot.id])}
                           alt=""
-                          className="rounded-md border max-h-40 w-full object-cover"
+                          className="w-full aspect-video object-cover"
                         />
                       ) : (
-                        <div className="flex items-center justify-center rounded-md border border-dashed bg-muted/50 h-24">
+                        <div className="flex flex-col items-center justify-center h-24 gap-1">
                           <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">Click or drop image</span>
                         </div>
                       )}
-                      {!readOnly && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs"
-                          onClick={() => setBrowseFieldId(slot.id)}
-                        >
-                          <ImageIcon className="mr-1 h-3 w-3" />
-                          Browse
-                        </Button>
-                      )}
-                    </div>
+                    </button>
                   ) : slot.type === "rich-text" || slot.type === "markdown" ? (
                     // Rich text slot: TipTap WYSIWYG
                     <TiptapEditor
@@ -135,6 +156,14 @@ export function ShopwareEditor({ values, onChange, contentType, readOnly, onImag
                       editable={!readOnly}
                       onImageUpload={onImageUpload}
                     />
+                  ) : slot.type === "json" && (slot.id.includes("product") || slot.slotName.includes("product")) ? (
+                    // Product slot: hint to add sources
+                    <div className="rounded-md border border-dashed bg-muted/30 p-4 text-center">
+                      <Package className="h-5 w-5 text-muted-foreground mx-auto mb-1" />
+                      <p className="text-xs text-muted-foreground">
+                        Product selection — add products as sources in your flow, then AI will choose relevant ones for this slot.
+                      </p>
+                    </div>
                   ) : (
                     // Other slots: plain textarea
                     <textarea
@@ -147,6 +176,7 @@ export function ShopwareEditor({ values, onChange, contentType, readOnly, onImag
                   )}
                 </div>
               ))}
+              </div>
             </div>
           ))}
         </div>
@@ -158,9 +188,9 @@ export function ShopwareEditor({ values, onChange, contentType, readOnly, onImag
         onOpenChange={(open) => { if (!open) setBrowseFieldId(null); }}
         typeFilter="image"
         onSelect={(asset) => {
-          if (browseFieldId) {
-            // Use the thumbnail URL from the asset
-            onChange({ ...values, [browseFieldId]: asset.id });
+          if (browseFieldId && customerId && projectId) {
+            const url = getMediaFileUrl(customerId, projectId, asset.id);
+            onChange({ ...values, [browseFieldId]: url });
             setBrowseFieldId(null);
           }
         }}

@@ -614,7 +614,7 @@ function ConnectorsPageContent() {
                                         console.log("[REMOVE] deleted successfully");
                                         setSelectedSchemas((prev) => { const next = new Set(prev); next.delete(schema.id); return next; });
                                         setSchemaToTypeId((prev) => { const next = { ...prev }; delete next[schema.id]; return next; });
-                                      } catch (err) { console.error("remove failed:", err); }
+                                      } catch (err) { console.error("remove failed:", err); alert("Failed to remove content type"); }
                                     }}
                                   >
                                     Remove

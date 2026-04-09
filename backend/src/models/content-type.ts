@@ -96,22 +96,53 @@ export class ContentTypeStore {
 
   list(): CustomContentType[] {
     if (!fs.existsSync(this.basePath)) return [];
-    return fs.readdirSync(this.basePath)
-      .filter((f) => f.endsWith(".json"))
-      .map((f) => {
-        try {
-          return JSON.parse(fs.readFileSync(path.join(this.basePath, f), "utf-8")) as CustomContentType;
-        } catch {
-          return null;
+    const files = fs.readdirSync(this.basePath).filter((f) => f.endsWith(".json"));
+    const byId = new Map<string, { ct: CustomContentType; fileName: string; mtime: number }>();
+
+    for (const f of files) {
+      const filePath = path.join(this.basePath, f);
+      try {
+        const ct = JSON.parse(fs.readFileSync(filePath, "utf-8")) as CustomContentType;
+        const mtime = fs.statSync(filePath).mtimeMs;
+        const existing = byId.get(ct.id);
+
+        if (!existing || mtime > existing.mtime) {
+          if (existing) {
+            // Remove older duplicate
+            const oldPath = path.join(this.basePath, existing.fileName);
+            if (fs.existsSync(oldPath)) {
+              fs.unlinkSync(oldPath);
+              log.info({ id: ct.id, removed: existing.fileName }, "removed duplicate content type file");
+            }
+          }
+          byId.set(ct.id, { ct, fileName: f, mtime });
+        } else {
+          // This file is older — remove it
+          fs.unlinkSync(filePath);
+          log.info({ id: ct.id, removed: f }, "removed duplicate content type file");
         }
-      })
-      .filter((ct): ct is CustomContentType => ct !== null);
+      } catch { /* skip corrupt files */ }
+    }
+
+    // Self-heal: rename files whose name doesn't match their ID
+    for (const [id, entry] of byId) {
+      const expected = `${id}.json`;
+      if (entry.fileName !== expected) {
+        const correctPath = path.join(this.basePath, expected);
+        try {
+          fs.renameSync(path.join(this.basePath, entry.fileName), correctPath);
+          log.info({ id, from: entry.fileName, to: expected }, "self-healed mismatched filename");
+        } catch (err) {
+          log.warn({ id, err }, "failed to self-heal filename");
+        }
+      }
+    }
+
+    return Array.from(byId.values()).map((e) => e.ct);
   }
 
   get(id: string): CustomContentType | null {
-    const filePath = path.join(this.basePath, `${id}.json`);
-    if (!fs.existsSync(filePath)) return null;
-    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as CustomContentType;
+    return this.findById(id)?.ct ?? null;
   }
 
   create(data: Omit<CustomContentType, "id" | "createdAt" | "updatedAt">): CustomContentType {
@@ -137,12 +168,13 @@ export class ContentTypeStore {
   }
 
   delete(id: string): boolean {
-    const filePath = path.join(this.basePath, `${id}.json`);
-    if (!fs.existsSync(filePath)) return false;
-    const ct = this.get(id);
-    if (ct?.source === "builtin") return false; // Protect built-in types
-    fs.unlinkSync(filePath);
+    const found = this.findById(id);
+    if (!found) return false;
+    if (found.ct.source === "builtin") return false;
+    fs.unlinkSync(found.filePath);
     log.info({ id }, "content type deleted");
+    // Clean up any remaining duplicate files with the same ID
+    this.removeDuplicateFiles(id);
     return true;
   }
 
@@ -152,6 +184,52 @@ export class ContentTypeStore {
       JSON.stringify(ct, null, 2),
       "utf-8",
     );
+  }
+
+  /** Find content type file by ID — fast path first, then directory scan with self-healing */
+  private findById(id: string): { ct: CustomContentType; filePath: string } | null {
+    // Fast path: filename matches ID
+    const expectedPath = path.join(this.basePath, `${id}.json`);
+    if (fs.existsSync(expectedPath)) {
+      try {
+        const ct = JSON.parse(fs.readFileSync(expectedPath, "utf-8")) as CustomContentType;
+        if (ct.id === id) return { ct, filePath: expectedPath };
+      } catch { /* fall through to scan */ }
+    }
+
+    // Slow path: scan directory for mismatched filename
+    if (!fs.existsSync(this.basePath)) return null;
+    for (const f of fs.readdirSync(this.basePath).filter((f) => f.endsWith(".json"))) {
+      const filePath = path.join(this.basePath, f);
+      try {
+        const ct = JSON.parse(fs.readFileSync(filePath, "utf-8")) as CustomContentType;
+        if (ct.id === id) {
+          // Self-heal: rename to match ID
+          if (f !== `${id}.json` && !fs.existsSync(expectedPath)) {
+            fs.renameSync(filePath, expectedPath);
+            log.info({ id, from: f, to: `${id}.json` }, "self-healed mismatched filename");
+            return { ct, filePath: expectedPath };
+          }
+          return { ct, filePath };
+        }
+      } catch { /* skip corrupt files */ }
+    }
+    return null;
+  }
+
+  /** Remove all files containing a given ID (used after primary delete to clean up duplicates) */
+  private removeDuplicateFiles(id: string): void {
+    if (!fs.existsSync(this.basePath)) return;
+    for (const f of fs.readdirSync(this.basePath).filter((f) => f.endsWith(".json"))) {
+      const filePath = path.join(this.basePath, f);
+      try {
+        const ct = JSON.parse(fs.readFileSync(filePath, "utf-8")) as CustomContentType;
+        if (ct.id === id) {
+          fs.unlinkSync(filePath);
+          log.info({ id, file: f }, "removed duplicate file during delete");
+        }
+      } catch { /* skip */ }
+    }
   }
 
   /** Sync builtin content types from seed directory.
