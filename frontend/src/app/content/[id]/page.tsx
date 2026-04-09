@@ -962,7 +962,7 @@ export default function ContentEditorPage({
           </Link>
           <div className="flex-1 flex items-center gap-2">
             <ContentStatusBadge status={item.status} />
-            <ContentTypeBadge type={item.type} label={contentTypeDef?.label} />
+            <ContentTypeBadge type={item.type} label={contentTypeDef?.label} connectorType={contentTypeDef?.connectorType} />
             {activeVersion && (
               <span className={`text-xs ${isViewingOldVersion ? "text-violet-600 font-medium" : "text-muted-foreground"}`}>
                 v{activeVersion.versionNumber}{isViewingOldVersion ? ` (latest: v${latestVersion!.versionNumber})` : ""}
@@ -1679,6 +1679,8 @@ export default function ContentEditorPage({
             authorRole={typeof authors[0]?.role === "string" ? authors[0].role : authors[0]?.role?.en ?? authors[0]?.role?.de}
             authorImage={authors[0]?.image}
             readOnly={false}
+            customerId={customerId}
+            projectId={projectId}
           />
         )}
       </div>
@@ -1845,6 +1847,8 @@ function JsonEditorSwitch({
   authorRole,
   authorImage,
   readOnly,
+  customerId,
+  projectId,
 }: {
   contentTypeId: string | null;
   contentType: ContentTypeDefinition | null;
@@ -1855,6 +1859,8 @@ function JsonEditorSwitch({
   authorRole?: string;
   authorImage?: string;
   readOnly?: boolean;
+  customerId?: string;
+  projectId?: string;
 }) {
   const commonProps = { values, onChange, projectName, authorName, authorRole, authorImage, readOnly };
   switch (contentTypeId) {
@@ -1869,9 +1875,23 @@ function JsonEditorSwitch({
     case "newsletter":
       return <NewsletterEditor {...commonProps} />;
     default:
-      // Connector-imported content types with slot structure
       if (contentType?.connectorType === "shopware" || contentType?.connectorType === "wordpress") {
-        return <ShopwareEditor values={values} onChange={onChange} contentType={contentType} readOnly={readOnly} />;
+        return (
+          <ShopwareEditor
+            values={values}
+            onChange={onChange}
+            contentType={contentType}
+            readOnly={readOnly}
+            customerId={customerId}
+            projectId={projectId}
+            onImageUpload={async (file) => {
+              const { uploadMedia } = await import("@/lib/api");
+              const result = await uploadMedia(customerId ?? "", projectId ?? "", file);
+              const { getMediaFileUrl } = await import("@/lib/api");
+              return getMediaFileUrl(customerId ?? "", projectId ?? "", result.asset.id);
+            }}
+          />
+        );
       }
       return <GenericEditor values={values} onChange={onChange} contentType={contentType} readOnly={readOnly} />;
   }

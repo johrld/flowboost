@@ -351,15 +351,28 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const handleAddContent = async (contentTypeId: string) => {
     if (!customerId || !projectId || !topic) return;
     try {
-      const categoryMap: Record<string, string> = {
+      // Derive type from content type definition
+      const ct = contentTypes.find((t) => t.id === contentTypeId);
+      const typeMap: Record<string, string> = {
         "blog-post": "article", "linkedin-post": "social_post", "instagram-post": "social_post",
         "x-post": "social_post", "tiktok-post": "social_post", "newsletter": "newsletter",
       };
       const platformMap: Record<string, string> = {
         "linkedin-post": "linkedin", "instagram-post": "instagram", "x-post": "x", "tiktok-post": "tiktok",
       };
+      let itemType: string;
+      if (ct?.source === "connector") {
+        itemType = "landing_page";
+      } else if (ct?.category === "social") {
+        itemType = "social_post";
+      } else if (ct?.category === "email") {
+        itemType = "newsletter";
+      } else {
+        itemType = typeMap[contentTypeId] ?? "article";
+      }
       await createContent(customerId, projectId, {
-        type: (categoryMap[contentTypeId] ?? "article") as import("@/lib/types").ContentType,
+        type: itemType as import("@/lib/types").ContentType,
+        contentTypeId,
         title: topic.title,
         category: platformMap[contentTypeId],
         flowId: id,
@@ -666,7 +679,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   <DropdownMenuContent>
                     {contentTypes.length > 0 ? contentTypes.map((ct) => (
                       <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleAddContent(ct.id)}>
-                        {CT_ICONS[ct.id] ?? CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                        {getContentTypeIcon(ct)}
                         {ct.label}
                       </DropdownMenuItem>
                     )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
@@ -691,7 +704,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                   <DropdownMenuContent align="start">
                     {contentTypes.length > 0 ? contentTypes.map((ct) => (
                       <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleAddContent(ct.id)}>
-                        {CT_ICONS[ct.id] ?? CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                        {getContentTypeIcon(ct)}
                         {ct.label}
                       </DropdownMenuItem>
                     )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
