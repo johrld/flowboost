@@ -25,6 +25,7 @@ import { mediaRoutes } from "./routes/media.js";
 import { contentTypeRoutes } from "./routes/content-types.js";
 import { connectorRoutes } from "./routes/connectors.js";
 import { cmoRoutes } from "./routes/cmo.js";
+import { jobRoutes } from "./routes/jobs.js";
 
 const log = createLogger("server");
 
@@ -103,6 +104,7 @@ export async function buildServer(dataDir: string) {
   await app.register(contentTypeRoutes, { prefix: "/customers/:customerId/projects/:projectId/content-types" });
   await app.register(connectorRoutes, { prefix: "/customers/:customerId/projects/:projectId/connectors" });
   await app.register(cmoRoutes, { prefix: "/customers/:customerId/projects/:projectId/cmo" });
+  await app.register(jobRoutes, { prefix: "/customers/:customerId/projects/:projectId/jobs" });
 
   // Error handler
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {

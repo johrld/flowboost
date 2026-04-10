@@ -175,6 +175,9 @@ export interface PipelineSettings {
   maxBudgetPerVideo?: number;
   maxBudgetPerAudio?: number;
   maxBudgetPerSocialPost?: number;
+
+  // Health content quality checks (E-E-A-T, citations, health claims)
+  healthContentChecks?: boolean;
 }
 
 export interface ApiKeys {
