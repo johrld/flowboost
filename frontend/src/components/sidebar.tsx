@@ -10,6 +10,8 @@ import {
   Cable,
   ImageIcon,
   Library,
+  Brain,
+  MessageSquare,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -20,6 +22,7 @@ import {
   Archive,
   Loader2,
   Sparkles,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,6 +39,7 @@ import { getTopics, createTopic, updateTopic, deleteTopic, createContent } from 
 import type { Topic } from "@/lib/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FlowOnboardingModal } from "@/components/flow-onboarding-modal";
+import { CmoChat } from "@/components/cmo-chat";
 
 const settingsItems = [
   { href: "/connectors", label: "Connectors", icon: Cable },
@@ -53,6 +57,7 @@ export function Sidebar() {
   const [creatingFlow, setCreatingFlow] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [cmoOpen, setCmoOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [deleteFlowId, setDeleteFlowId] = useState<string | null>(null);
 
@@ -162,6 +167,7 @@ export function Sidebar() {
 
   const calendarActive = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
   const contentActive = pathname === "/content" || (pathname.startsWith("/content/") && !pathname.startsWith("/content/topics"));
+  const intelligenceActive = pathname === "/intelligence";
   const monitorActive = pathname === "/monitor" || pathname.startsWith("/monitor/");
 
   return (
@@ -224,6 +230,18 @@ export function Sidebar() {
         >
           <Library className="h-4 w-4" />
           Content
+        </Link>
+        <Link
+          href="/intelligence"
+          className={cn(
+            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            intelligenceActive
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          )}
+        >
+          <Brain className="h-4 w-4" />
+          Intelligence
         </Link>
       </div>
 
@@ -377,6 +395,18 @@ export function Sidebar() {
         </Link>
       </div>
 
+      {/* CMO Chat Button */}
+      <div className="px-3 pb-1">
+        <button
+          type="button"
+          onClick={() => setCmoOpen(true)}
+          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors w-full text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+        >
+          <MessageSquare className="h-4 w-4" />
+          CMO Chat
+        </button>
+      </div>
+
       {/* Settings */}
       <div className="border-t px-3 py-3 space-y-0.5">
         {settingsItems.map((item) => {
@@ -435,6 +465,24 @@ export function Sidebar() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* CMO Chat Overlay */}
+      {cmoOpen && customerId && projectId && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setCmoOpen(false)} />
+          <div className="relative w-full max-w-md bg-background border-l shadow-xl flex flex-col h-full animate-in slide-in-from-right duration-200">
+            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+              <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                <MessageSquare className="h-3.5 w-3.5" />CMO Chat
+              </h3>
+              <button type="button" onClick={() => setCmoOpen(false)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <CmoChat customerId={customerId} projectId={projectId} />
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

@@ -25,7 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useProject } from "@/lib/project-context";
-import { getContent, getTopics, deleteContent, produceFlowOutput } from "@/lib/api";
+import { getContent, getTopics, deleteContent, createArticleJob, createSocialJob } from "@/lib/api";
 import type { Topic, ContentItem } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 
@@ -114,10 +114,12 @@ export default function ContentLibraryPage() {
   const handleGenerate = async (item: ContentItem) => {
     if (!customerId || !projectId || !item.flowId) return;
     try {
-      const ctId = item.type === "social_post" ? `${item.category ?? "linkedin"}-post`
-        : item.type === "newsletter" ? "newsletter"
-        : "blog-post";
-      await produceFlowOutput(customerId, projectId, item.flowId, { contentTypeId: ctId });
+      const socialPlatforms = ["linkedin", "instagram", "x", "tiktok"];
+      if (item.type === "social_post" && item.category && socialPlatforms.includes(item.category)) {
+        await createSocialJob(customerId, projectId, { flowId: item.flowId, platform: item.category, contentId: item.id });
+      } else {
+        await createArticleJob(customerId, projectId, { flowId: item.flowId, contentId: item.id });
+      }
       await loadData();
     } catch (err) {
       console.error("Generate failed:", err);

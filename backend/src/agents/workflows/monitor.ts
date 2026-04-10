@@ -1,7 +1,9 @@
 import { createLogger } from "../../utils/logger.js";
 import { PipelineContext } from "../../pipeline/context.js";
 import { JobStore } from "../../models/job.js";
+import { MemoryStore } from "../../models/memory.js";
 import { executeJob, loadMemoryContext } from "../executor.js";
+import { extractJson } from "../../pipeline/extract-json.js";
 import type { Job } from "../../models/types.js";
 
 const log = createLogger("workflow:monitor");
@@ -18,6 +20,7 @@ async function runMonitor(
   title: string,
   description: string,
   input: Record<string, unknown>,
+  memoryFile: string,
 ): Promise<Job> {
   const now = () => new Date().toISOString();
   const memoryContext = loadMemoryContext(ctx.projectDir);
@@ -41,6 +44,15 @@ async function runMonitor(
 
   try {
     const result = await executeJob(ctx, job, { memoryContext });
+
+    // Extract structured data and save to memory
+    const structured = extractJson(result.text);
+    if (structured) {
+      const memory = new MemoryStore(ctx.projectDir);
+      memory.save(memoryFile, { ...structured, updatedAt: now(), projectId: ctx.project.id }, agentName);
+      log.info({ agent: agentName, memoryFile }, "memory updated");
+    }
+
     jobs.transition(job.id, "done", { summary: result.text.slice(0, 2000) });
     ctx.completePhase(agentName);
     log.info({ agent: agentName, jobId: job.id, costUsd: result.costUsd }, "monitor completed");
@@ -68,6 +80,7 @@ export async function runCompetitorMonitor(ctx: PipelineContext, jobs: JobStore)
       competitors: competitors.map((c) => ({ domain: c.domain, name: c.name })),
       projectDescription: ctx.project.description,
     },
+    "areas/competitor-landscape.json",
   );
 }
 
@@ -86,6 +99,7 @@ export async function runTrendScanner(ctx: PipelineContext, jobs: JobStore): Pro
       categories: ctx.project.categories?.map((c) => c.labels) ?? [],
       keywords: ctx.project.keywords ?? {},
     },
+    "areas/trend-watch.json",
   );
 }
 
@@ -104,5 +118,6 @@ export async function runContentWatcher(ctx: PipelineContext, jobs: JobStore): P
       defaultLanguage: ctx.project.defaultLanguage,
       languages: ctx.project.languages?.filter((l) => l.enabled).map((l) => l.code) ?? [],
     },
+    "areas/content-gaps.json",
   );
 }

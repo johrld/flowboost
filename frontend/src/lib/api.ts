@@ -953,3 +953,127 @@ export function getConnectorLists(
 ): Promise<{ lists: Array<{ id: number; name: string; type: string; subscriberCount: number }> }> {
   return fetchJson(`/customers/${customerId}/projects/${projectId}/connectors/lists`);
 }
+
+// ── CMO Chat (v2 Agent System) ──────────────────────────────────
+
+export function getCmoChatHistory(
+  customerId: string,
+  projectId: string,
+): Promise<ChatMessage[]> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/cmo/chat`);
+}
+
+export function sendCmoChat(
+  customerId: string,
+  projectId: string,
+  message: string,
+): Promise<{ reply: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/cmo/chat`, {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
+}
+
+export function getCmoAgents(
+  customerId: string,
+  projectId: string,
+): Promise<Array<{ name: string; role: string; model: string; canDelegate: boolean; heartbeat?: { enabled: boolean; schedule: string } }>> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/cmo/agents`);
+}
+
+export function getProjectMemory(
+  customerId: string,
+  projectId: string,
+): Promise<{ meta: { lastUpdated: Record<string, string>; lastRunBy: Record<string, string> }; files: string[]; data: Record<string, unknown> }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/cmo/memory`);
+}
+
+// ── Job System (v2 Agent System) ────────────────────────────────
+
+export interface JobSummary {
+  id: string;
+  type: string;
+  status: string;
+  assigneeAgent: string;
+  title: string;
+  flowId?: string;
+  contentId?: string;
+  parentJobId?: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  cost?: { inputTokens: number; outputTokens: number; durationMs: number; costUsd: number };
+}
+
+export function getJobs(
+  customerId: string,
+  projectId: string,
+  filters?: { status?: string; flowId?: string; type?: string },
+): Promise<JobSummary[]> {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.flowId) params.set("flowId", filters.flowId);
+  if (filters?.type) params.set("type", filters.type);
+  const qs = params.toString();
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/jobs${qs ? `?${qs}` : ""}`);
+}
+
+export function getJob(
+  customerId: string,
+  projectId: string,
+  jobId: string,
+): Promise<JobSummary> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/jobs/${jobId}`);
+}
+
+export function createArticleJob(
+  customerId: string,
+  projectId: string,
+  data: { flowId: string; skipResearch?: boolean; contentId?: string },
+): Promise<{ message: string; runId: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/jobs/article`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function createSocialJob(
+  customerId: string,
+  projectId: string,
+  data: { flowId: string; platform: string; sourceContentId?: string; contentId?: string },
+): Promise<{ message: string; runId: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/jobs/social`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// ── Heartbeat / Monitors (v2 Agent System) ──────────────────────
+
+export function getMonitorStatus(
+  customerId: string,
+  projectId: string,
+): Promise<{ monitors: Array<{ name: string; role: string; schedule?: string; lastUpdated: Record<string, string>; lastRunBy: Record<string, string> }>; memoryFiles: string[] }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/heartbeat/status`);
+}
+
+export function triggerMonitor(
+  customerId: string,
+  projectId: string,
+  type: "competitor-scan" | "trend-scan" | "content-watch",
+): Promise<{ message: string; runId: string }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/heartbeat/${type}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function triggerAllMonitors(
+  customerId: string,
+  projectId: string,
+): Promise<{ message: string; started: string[] }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/heartbeat/trigger`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}

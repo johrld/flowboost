@@ -58,7 +58,6 @@ import {
   createContent,
   deleteContent,
   updateContent,
-  produceFlowOutput,
   getContent,
   getContentTypes,
   reprocessFlowInput,
@@ -287,11 +286,18 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
     }
   };
 
-  // Generate a content piece WITH pipeline (✨ button)
+  // Generate a content piece via Job system (✨ button)
   const handleProduce = async (contentTypeId: string) => {
     if (!customerId || !projectId) return;
     try {
-      await produceFlowOutput(customerId, projectId, id, { contentTypeId });
+      const { createArticleJob, createSocialJob } = await import("@/lib/api");
+      const socialTypes = ["linkedin-post", "instagram-post", "x-post", "tiktok-post"];
+      if (socialTypes.includes(contentTypeId)) {
+        const platform = contentTypeId.replace("-post", "");
+        await createSocialJob(customerId, projectId, { flowId: id, platform });
+      } else {
+        await createArticleJob(customerId, projectId, { flowId: id });
+      }
       await loadData();
     } catch (err) {
       console.error("Produce failed:", err);
@@ -534,8 +540,17 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                       onClick={async () => {
                         if (!customerId || !projectId) return;
                         try {
-                          const { produceAllFlowOutputs } = await import("@/lib/api");
-                          await produceAllFlowOutputs(customerId, projectId, id);
+                          const { createArticleJob, createSocialJob } = await import("@/lib/api");
+                          const socialTypes = ["linkedin-post", "instagram-post", "x-post", "tiktok-post"];
+                          for (const item of outputs.filter((o) => o.status === "planned" || o.status === "draft")) {
+                            const ctId = item.type === "social_post" ? `${item.category ?? "linkedin"}-post`
+                              : item.type === "newsletter" ? "newsletter" : "blog-post";
+                            if (socialTypes.includes(ctId)) {
+                              await createSocialJob(customerId, projectId, { flowId: id, platform: ctId.replace("-post", ""), contentId: item.id });
+                            } else {
+                              await createArticleJob(customerId, projectId, { flowId: id, contentId: item.id });
+                            }
+                          }
                           await loadData();
                         } catch (err) {
                           console.error("Generate all failed:", err);

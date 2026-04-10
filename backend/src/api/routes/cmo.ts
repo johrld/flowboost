@@ -192,7 +192,7 @@ export async function cmoRoutes(app: FastifyInstance) {
     }));
   });
 
-  // GET /cmo/memory — get memory status
+  // GET /cmo/memory — get memory status + content
   app.get<{ Params: { customerId: string; projectId: string } }>(
     "/memory",
     async (request) => {
@@ -201,6 +201,7 @@ export async function cmoRoutes(app: FastifyInstance) {
       return {
         meta: memory.getMeta(),
         files: memory.listFiles(),
+        data: memory.getAll(),
       };
     },
   );

@@ -9,8 +9,14 @@ import { MemoryStore } from "../models/memory.js";
 
 const log = createLogger("agent-executor");
 
-/** Directory where skill markdown files live */
-const SKILLS_DIR = path.resolve(import.meta.dirname, "skills");
+/** Directory where skill markdown files live.
+ * In dev (tsx): import.meta.dirname = src/agents → skills at src/agents/skills/
+ * In prod (compiled): import.meta.dirname = dist/agents → skills at src/agents/skills/ (not copied to dist)
+ * So we try dist first, then fall back to src.
+ */
+const SKILLS_DIR = fs.existsSync(path.resolve(import.meta.dirname, "skills"))
+  ? path.resolve(import.meta.dirname, "skills")
+  : path.resolve(import.meta.dirname, "../../src/agents/skills");
 
 /**
  * Load skill files for an agent and combine into a single system prompt section.
