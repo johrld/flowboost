@@ -735,3 +735,183 @@ export interface AgentResult {
   durationMs: number;
   sessionId: string;
 }
+
+// ─── Job System (v2 Agent Architecture) ─────────────────────────
+
+export type JobType =
+  | "research"
+  | "write_article"
+  | "write_section"
+  | "edit_article"
+  | "write_social"
+  | "write_newsletter"
+  | "quality_check"
+  | "translate"
+  | "generate_image"
+  | "monitor_competitors"
+  | "monitor_trends"
+  | "monitor_content"
+  | "enrich"
+  | "custom";
+
+export type JobStatus =
+  | "queued"
+  | "in_progress"
+  | "in_review"
+  | "done"
+  | "failed"
+  | "blocked"
+  | "cancelled";
+
+export interface Job {
+  id: string;
+  customerId: string;
+  projectId: string;
+
+  // Type & context
+  type: JobType;
+  flowId?: string;
+  contentId?: string;
+  parentJobId?: string;
+
+  // Agent assignment
+  assigneeAgent: string;
+
+  // Status
+  status: JobStatus;
+
+  // Payload
+  title: string;
+  description?: string;
+  input: Record<string, unknown>;
+  output?: Record<string, unknown>;
+
+  // Communication
+  comments: JobComment[];
+
+  // Tracking
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  runId?: string;
+  cost?: { inputTokens: number; outputTokens: number; durationMs: number; costUsd: number };
+}
+
+export interface JobComment {
+  id: string;
+  agentName: string;
+  content: string;
+  createdAt: string;
+}
+
+// ─── Agent Registry ─────────────────────────────────────────────
+
+export interface AgentDefinition {
+  name: string;
+  role: string;
+  model: "sonnet" | "haiku" | "opus";
+  maxTurns: number;
+  skills: string[];
+  tools: string[];
+  useMcpTools: boolean;
+  canDelegate: boolean;
+  canApprove: boolean;
+  heartbeat?: {
+    enabled: boolean;
+    schedule: string; // Cron expression
+  };
+}
+
+// ─── Project Memory (PARA) ──────────────────────────────────────
+
+export interface MemoryMeta {
+  lastUpdated: Record<string, string>; // filename → ISO timestamp
+  lastRunBy: Record<string, string>;   // filename → agent name
+}
+
+export interface CompetitorSnapshot {
+  domain: string;
+  name: string;
+  lastScannedAt: string;
+  knownArticles: Array<{
+    url: string;
+    title: string;
+    publishedAt?: string;
+    discoveredAt: string;
+    category?: string;
+  }>;
+  newSinceLastScan: string[]; // URLs
+  totalArticles: number;
+}
+
+export interface CompetitorState {
+  projectId: string;
+  updatedAt: string;
+  competitors: CompetitorSnapshot[];
+}
+
+export interface ContentGap {
+  id: string;
+  type: "missing_topic" | "thin_content" | "stale_content" | "competitor_only";
+  title: string;
+  description: string;
+  priority: "high" | "medium" | "low";
+  relatedCluster?: string;
+  suggestedAction: string;
+}
+
+export interface ContentGaps {
+  projectId: string;
+  updatedAt: string;
+  gaps: ContentGap[];
+  clusterCoverage: Record<string, number>;
+}
+
+export interface TrendItem {
+  id: string;
+  topic: string;
+  source: string;
+  relevanceScore: number;
+  discoveredAt: string;
+  expiresAt?: string;
+  relatedKeywords: string[];
+  suggestedAngle?: string;
+}
+
+export interface TrendWatch {
+  projectId: string;
+  updatedAt: string;
+  trends: TrendItem[];
+}
+
+export interface TopicCluster {
+  id: string;
+  name: string;
+  pillarTopic: string;
+  subtopics: string[];
+  existingContentIds: string[];
+  gapTopics: string[];
+}
+
+export interface TopicClusters {
+  projectId: string;
+  updatedAt: string;
+  clusters: TopicCluster[];
+}
+
+export interface VettedSource {
+  id: string;
+  name: string;
+  domain: string;
+  type: "government" | "academic" | "professional_org" | "peer_reviewed";
+  trustLevel: "high" | "medium";
+  topics: string[];
+  lastVerifiedAt: string;
+  exampleUrls: string[];
+}
+
+export interface CitationSources {
+  projectId: string;
+  updatedAt: string;
+  sources: VettedSource[];
+}

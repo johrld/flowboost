@@ -9,6 +9,8 @@ import { ContentStore, MediaAssetStore } from "../models/content.js";
 import { ContentMediaStore } from "../models/content-media.js";
 import { PipelineRunStore } from "../models/pipeline-run.js";
 import { TopicStore } from "../models/topic.js";
+import { JobStore } from "../models/job.js";
+import { MemoryStore } from "../models/memory.js";
 import { healthRoutes } from "./routes/health.js";
 import { customerRoutes } from "./routes/customers.js";
 import { projectRoutes } from "./routes/projects.js";
@@ -34,6 +36,8 @@ export interface AppContext {
   mediaFor(customerId: string, projectId: string): MediaAssetStore;
   pipelineRunsFor(customerId: string, projectId: string): PipelineRunStore;
   topicsFor(customerId: string, projectId: string): TopicStore;
+  jobsFor(customerId: string, projectId: string): JobStore;
+  memoryFor(customerId: string, projectId: string): MemoryStore;
 }
 
 declare module "fastify" {
@@ -71,6 +75,12 @@ export async function buildServer(dataDir: string) {
     },
     topicsFor(customerId: string, projectId: string) {
       return new TopicStore(path.join(dataDir, "customers", customerId, "projects", projectId, "topics"));
+    },
+    jobsFor(customerId: string, projectId: string) {
+      return new JobStore(path.join(dataDir, "customers", customerId, "projects", projectId, "jobs"));
+    },
+    memoryFor(customerId: string, projectId: string) {
+      return new MemoryStore(path.join(dataDir, "customers", customerId, "projects", projectId));
     },
   };
   app.decorate("ctx", ctx);

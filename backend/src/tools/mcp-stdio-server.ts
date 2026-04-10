@@ -338,6 +338,96 @@ server.tool(
   },
 );
 
+// ── Tool: Read Memory ───────────────────────────────────────────
+
+server.tool(
+  "flowboost_read_memory",
+  "Read project memory (competitor state, content gaps, trends, topic clusters, citation sources). Use resource='all' to get everything.",
+  {
+    resource: z.string().describe("Memory file path relative to memory/ dir (e.g., 'areas/competitor-landscape.json') or 'all' for everything"),
+  },
+  async (args) => {
+    if (!projectDir) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context" }) }] };
+    }
+    const memoryDir = path.join(projectDir, "memory");
+
+    if (args.resource === "all") {
+      // Load all memory files
+      const result: Record<string, unknown> = {};
+      if (fs.existsSync(memoryDir)) {
+        walkMemory(memoryDir, result, "");
+      }
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    }
+
+    const filePath = path.join(memoryDir, args.resource);
+    if (!fs.existsSync(filePath)) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: `Memory file not found: ${args.resource}` }) }] };
+    }
+    const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+  },
+);
+
+// ── Tool: Write Memory ──────────────────────────────────────────
+
+server.tool(
+  "flowboost_write_memory",
+  "Write/update a project memory file. Used by background monitor agents to persist knowledge.",
+  {
+    resource: z.string().describe("Memory file path relative to memory/ dir (e.g., 'areas/competitor-landscape.json')"),
+    data: z.string().describe("JSON string of the memory data to write"),
+    agentName: z.string().describe("Name of the agent writing this memory"),
+  },
+  async (args) => {
+    if (!projectDir) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context" }) }] };
+    }
+
+    const memoryDir = path.join(projectDir, "memory");
+    const filePath = path.join(memoryDir, args.resource);
+    const dir = path.dirname(filePath);
+    fs.mkdirSync(dir, { recursive: true });
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(args.data);
+    } catch {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "Invalid JSON data" }) }] };
+    }
+
+    fs.writeFileSync(filePath, JSON.stringify(parsed, null, 2), "utf-8");
+
+    // Update meta
+    const metaPath = path.join(memoryDir, "meta.json");
+    let meta = { lastUpdated: {} as Record<string, string>, lastRunBy: {} as Record<string, string> };
+    if (fs.existsSync(metaPath)) {
+      try { meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")); } catch { /* use default */ }
+    }
+    meta.lastUpdated[args.resource] = new Date().toISOString();
+    meta.lastRunBy[args.resource] = args.agentName;
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), "utf-8");
+
+    return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, resource: args.resource }) }] };
+  },
+);
+
+/** Helper: recursively walk memory directory and build a flat object */
+function walkMemory(dir: string, result: Record<string, unknown>, prefix: string): void {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      walkMemory(path.join(dir, entry.name), result, relPath);
+    } else if (entry.name.endsWith(".json") && entry.name !== "meta.json") {
+      try {
+        const key = relPath.replace(/\.json$/, "").replace(/\//g, ".");
+        result[key] = JSON.parse(fs.readFileSync(path.join(dir, entry.name), "utf-8"));
+      } catch { /* skip corrupt files */ }
+    }
+  }
+}
+
 // ── Start server ─────────────────────────────────────────────────
 
 const transport = new StdioServerTransport();
