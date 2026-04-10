@@ -1,6 +1,7 @@
+import fs from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
-import { runSimpleAgent } from "../../pipeline/engine.js";
+import { runSimpleAgent, getMcpServerPath } from "../../pipeline/engine.js";
 import { readChat, appendChat } from "../../models/chat.js";
 import { PipelineContext } from "../../pipeline/context.js";
 import { runProductionPipeline } from "../../pipeline/production/run.js";
@@ -9,99 +10,101 @@ import { ContentTypeStore } from "../../models/content-type.js";
 import type { ChatMessage, Topic, FlowInputType, ContentItem } from "../../models/types.js";
 import { processInput } from "../../pipeline/ingest/process-input.js";
 import { distillChat } from "../../pipeline/ingest/distill-chat.js";
+import { MemoryStore } from "../../models/memory.js";
+import { loadSkills } from "../../agents/executor.js";
+import { getAgent } from "../../agents/registry.js";
 import { createLogger } from "../../utils/logger.js";
 
 const log = createLogger("topic-chat");
 
-function buildSystemPrompt(topic: Topic): string {
-  const seo = topic.enrichment?.seo;
-  const parts = [
-    "You are a content strategist helping with a campaign. Be concise and actionable.",
-    "The user is on the flow overview page — they can see the briefing, sources, and content pieces.",
-    "This is a shared conversation — when the user edits a specific content piece, you'll see that context too.",
-    "",
-    `## Campaign`,
+/**
+ * Build the CMO system prompt for chat.
+ * Combines: CMO skill + topic context + project memory + content index summary.
+ */
+function buildCmoPrompt(
+  topic: Topic,
+  projectDir: string,
+  opts?: { contentItems?: ContentItem[] },
+): string {
+  const cmoAgent = getAgent("cmo");
+  const skillContent = loadSkills(cmoAgent?.skills ?? ["flowboost-api", "cmo"]);
+
+  const parts: string[] = [skillContent];
+
+  // ── Topic Context ──────────────────────────────────────
+  parts.push(
+    `## Current Flow`,
     `- **Title:** ${topic.title}`,
     `- **Category:** ${topic.category || "not set"}`,
-  ];
+    `- **Status:** ${topic.status}`,
+  );
 
-  if (topic.briefing) parts.push(`\n## Briefing\n${topic.briefing}`);
+  if (topic.briefing) parts.push(`\n### Briefing\n${topic.briefing}`);
+  if (topic.direction) parts.push(`- **Angle:** ${topic.direction}`);
 
-  if (seo?.searchIntent) {
-    parts.push(`- **Search Intent:** ${seo.searchIntent}`);
-  }
-
+  const seo = topic.enrichment?.seo;
   if (seo?.keywords?.primary) {
     parts.push(`- **Primary Keyword:** ${seo.keywords.primary}`);
-    if (seo.keywords.secondary?.length > 0)
-      parts.push(`- **Secondary Keywords:** ${seo.keywords.secondary.join(", ")}`);
-    if (seo.keywords.longTail?.length > 0)
-      parts.push(`- **Long-tail Keywords:** ${seo.keywords.longTail.join(", ")}`);
+    if (seo.keywords.secondary?.length) parts.push(`- **Secondary:** ${seo.keywords.secondary.join(", ")}`);
   }
+  if (seo?.competitorInsights) parts.push(`\n### Competitor Insights\n${seo.competitorInsights}`);
+  if (topic.enrichment?.reasoning) parts.push(`\n### AI Analysis\n${topic.enrichment.reasoning}`);
+  if (topic.userNotes) parts.push(`\n### User Notes\n${topic.userNotes}`);
 
-  if (topic.direction) parts.push(`- **Angle:** ${topic.direction}`);
-  if (seo?.competitorInsights) parts.push(`\n## Competitor Insights\n${seo.competitorInsights}`);
-  if (topic.enrichment?.reasoning) parts.push(`\n## AI Analysis\n${topic.enrichment.reasoning}`);
-  if (topic.userNotes) parts.push(`\n## User Notes\n${topic.userNotes}`);
-
-  // Flow Inputs — uses processed summaries when available
+  // Flow Inputs
   const inputs = topic.inputs ?? [];
   if (inputs.length > 0) {
-    parts.push("\n## Flow Inputs (uploaded by user)");
+    parts.push("\n### Sources");
     for (const input of inputs) {
-      if (input.type === "text" || input.type === "transcript") {
-        if (input.processed?.status === "completed" && input.processed.summary) {
-          parts.push(`\n### ${input.type === "transcript" ? "Voice Memo (Transcribed)" : "Note (Summarized)"}\n${input.processed.summary}`);
-          if (input.processed.keyPoints?.length) {
-            parts.push(`Key points: ${input.processed.keyPoints.join("; ")}`);
-          }
-        } else {
-          parts.push(`\n### ${input.type === "transcript" ? "Voice Memo" : "Note"}\n${input.content.slice(0, 2000)}`);
-        }
-      } else if (input.type === "url") {
-        if (input.processed?.status === "completed" && input.processed.summary) {
-          parts.push(`- **URL:** ${input.content}\n  Summary: ${input.processed.summary}`);
-        } else {
-          parts.push(`- **URL:** ${input.content}`);
-        }
-      } else if (input.type === "image") {
-        if (input.processed?.status === "completed" && input.processed.description) {
-          parts.push(`- **Image (${input.fileName ?? "image"}):** ${input.processed.description}`);
-        } else {
-          parts.push(`- **File:** ${input.fileName ?? input.type} (${input.mimeType ?? "unknown"})`);
-        }
-      } else if (input.type === "document") {
-        if (input.processed?.status === "completed" && input.processed.summary) {
-          parts.push(`- **Document (${input.fileName ?? "document"}):** ${input.processed.summary}`);
-        } else {
-          parts.push(`- **File:** ${input.fileName ?? input.type} (${input.mimeType ?? "unknown"})`);
-        }
+      const processed = input.processed?.status === "completed";
+      if (input.type === "url") {
+        parts.push(`- **URL:** ${input.content}${processed && input.processed?.summary ? ` — ${input.processed.summary}` : ""}`);
+      } else if (processed && input.processed?.summary) {
+        parts.push(`- **${input.fileName ?? input.type}:** ${input.processed.summary}`);
+      } else {
+        parts.push(`- **${input.fileName ?? input.type}** (${input.mimeType ?? input.type})`);
       }
     }
   }
 
-  parts.push(
-    "",
-    "## Your Role",
-    "Help the user with their campaign. You can brainstorm, suggest content ideas, refine the briefing, or discuss strategy.",
-    "",
-    "## Actions You Can Take",
-    "When the user asks you to update the campaign, include a JSON block at the end of your response.",
-    "The frontend will show an 'Apply' button to execute the changes.",
-    "",
-    "Available actions:",
-    "- **Update briefing**: `{\"actions\": [{\"type\": \"update_briefing\", \"value\": \"New briefing text...\"}]}`",
-    "- **Update title**: `{\"actions\": [{\"type\": \"update_title\", \"value\": \"New title\"}]}`",
-    "- **Update direction**: `{\"actions\": [{\"type\": \"update_direction\", \"value\": \"New angle\"}]}`",
-    "- **Create content piece**: `{\"actions\": [{\"type\": \"create_content\", \"contentTypeId\": \"linkedin-post\"}]}`",
-    "- **Multiple actions at once**: combine in the actions array",
-    "",
-    "Example — user says 'fill the briefing and add a LinkedIn post':",
-    "```json",
-    '{"actions": [{"type": "update_briefing", "value": "..."}, {"type": "create_content", "contentTypeId": "linkedin-post"}]}',
-    "```",
-    "Only include the JSON block when the user asks you to make changes. For normal conversation, just respond with text.",
-  );
+  // Content Items for this flow
+  if (opts?.contentItems?.length) {
+    parts.push("\n### Content Pieces in this Flow");
+    for (const item of opts.contentItems) {
+      parts.push(`- **${item.title}** (${item.type}${item.category ? `/${item.category}` : ""}) — ${item.status}`);
+    }
+  }
+
+  // ── Project Memory ─────────────────────────────────────
+  const memory = new MemoryStore(projectDir);
+  const allMemory = memory.getAll();
+  if (Object.keys(allMemory).length > 0) {
+    parts.push("\n## Project Memory");
+    for (const [key, value] of Object.entries(allMemory)) {
+      const label = key.replace(/\./g, " / ").replace(/-/g, " ");
+      const json = JSON.stringify(value);
+      // Truncate large memory files in the prompt
+      parts.push(`\n### ${label}\n${json.length > 2000 ? json.slice(0, 2000) + "..." : json}`);
+    }
+  }
+
+  // ── Content Index Summary ──────────────────────────────
+  const indexPath = path.join(projectDir, "content-index.json");
+  if (fs.existsSync(indexPath)) {
+    try {
+      const index = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
+      const entries = index.entries ?? [];
+      if (entries.length > 0) {
+        parts.push(`\n## Content Portfolio\n${entries.length} published items. Last sync: ${index.lastSyncedAt ?? "unknown"}`);
+        // Show first 20 entries as summary
+        const summary = entries.slice(0, 20).map((e: { site?: { translationKey: string }; status: string }) =>
+          `- ${e.site?.translationKey ?? "unknown"} (${e.status})`
+        ).join("\n");
+        parts.push(summary);
+        if (entries.length > 20) parts.push(`... and ${entries.length - 20} more`);
+      }
+    } catch { /* ignore corrupt index */ }
+  }
 
   return parts.join("\n");
 }
@@ -417,10 +420,31 @@ export async function topicRoutes(app: FastifyInstance) {
       promptParts.push(`User: ${message.trim()}`);
 
       try {
+        const projectDir = path.join(app.ctx.dataDir, "customers", customerId, "projects", projectId);
+        const contentItems = app.ctx.contentFor(customerId, projectId).list()
+          .filter((c: ContentItem) => c.flowId === topicId || c.topicId === topicId);
+
+        // Build MCP server config for CMO tools
+        const mcpServers = {
+          flowboost: {
+            command: "node",
+            args: [getMcpServerPath()],
+            env: {
+              FLOWBOOST_DATA_DIR: app.ctx.dataDir,
+              FLOWBOOST_CUSTOMER_DIR: path.join(app.ctx.dataDir, "customers", customerId),
+              FLOWBOOST_PROJECT_DIR: projectDir,
+              GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
+            },
+          },
+        };
+
+        const cmoAgent = getAgent("cmo");
         const result = await runSimpleAgent(promptParts.join("\n"), {
           model: "sonnet",
-          maxTurns: 1,
-          systemPrompt: buildSystemPrompt(topic),
+          maxTurns: cmoAgent?.maxTurns ?? 5,
+          systemPrompt: buildCmoPrompt(topic, projectDir, { contentItems }),
+          allowedTools: cmoAgent?.tools,
+          mcpServers,
         });
 
         const assistantText = result.text;

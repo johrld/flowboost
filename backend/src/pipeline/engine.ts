@@ -29,7 +29,7 @@ export interface AgentRunResult {
 /**
  * Resolve the absolute path to the MCP stdio server script.
  */
-function getMcpServerPath(): string {
+export function getMcpServerPath(): string {
   // In compiled dist/, the file is .js; in dev with tsx, it's .ts
   const jsPath = path.resolve(import.meta.dirname, "../tools/mcp-stdio-server.js");
   const tsPath = path.resolve(import.meta.dirname, "../tools/mcp-stdio-server.ts");
@@ -186,17 +186,23 @@ export async function runAgent(
 }
 
 /**
- * Run a lightweight agent via Claude Agent SDK without MCP tools or pipeline tracking.
- * Suitable for chat, enrichment, and other simple prompt→response tasks.
+ * Run a lightweight agent via Claude Agent SDK without pipeline tracking.
+ * Supports optional MCP tools for CMO chat and other tool-using agents.
  */
 export async function runSimpleAgent(
   prompt: string,
-  options?: { model?: string; maxTurns?: number; systemPrompt?: string; allowedTools?: string[] },
+  options?: {
+    model?: string;
+    maxTurns?: number;
+    systemPrompt?: string;
+    allowedTools?: string[];
+    mcpServers?: Record<string, { command: string; args: string[]; env: Record<string, string> }>;
+  },
 ): Promise<AgentRunResult> {
   const startTime = Date.now();
   const model = options?.model ?? "haiku";
 
-  log.info({ model }, "starting simple agent");
+  log.info({ model, hasMcp: !!options?.mcpServers }, "starting simple agent");
 
   try {
     let resultText = "";
@@ -213,6 +219,7 @@ export async function runSimpleAgent(
         maxTurns: options?.maxTurns ?? 1,
         systemPrompt: options?.systemPrompt,
         allowedTools: options?.allowedTools,
+        mcpServers: options?.mcpServers,
         permissionMode: "acceptEdits",
       },
     })) {
