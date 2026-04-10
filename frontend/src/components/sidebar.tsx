@@ -9,6 +9,7 @@ import {
   Activity,
   Cable,
   ImageIcon,
+  Library,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -160,6 +161,7 @@ export function Sidebar() {
   const archivedFlows = flows.filter((f) => f.status === "archived");
 
   const calendarActive = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+  const contentActive = pathname === "/content" || (pathname.startsWith("/content/") && !pathname.startsWith("/content/topics"));
   const monitorActive = pathname === "/monitor" || pathname.startsWith("/monitor/");
 
   return (
@@ -210,6 +212,18 @@ export function Sidebar() {
         >
           <CalendarDays className="h-4 w-4" />
           Calendar
+        </Link>
+        <Link
+          href="/content"
+          className={cn(
+            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            contentActive
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          )}
+        >
+          <Library className="h-4 w-4" />
+          Content
         </Link>
       </div>
 

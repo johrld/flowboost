@@ -41,12 +41,7 @@ import {
   Trash2,
   MoreHorizontal,
   Sparkles,
-  ArrowUp,
   RefreshCw,
-  Copy,
-  RotateCcw,
-  Bot,
-  User,
   X,
   Upload,
   Paperclip,
@@ -57,8 +52,6 @@ import {
 import { useProject } from "@/lib/project-context";
 import {
   getTopic,
-  getTopicChat,
-  sendTopicChat,
   addFlowInput,
   uploadFlowFile,
   deleteFlowInput,
@@ -72,9 +65,9 @@ import {
   updateTopic,
   type ContentTypeDefinition,
 } from "@/lib/api";
-import type { Topic, FlowInput, ChatMessage, ContentItem } from "@/lib/types";
+import { TopicChat } from "@/components/topic-chat";
+import type { Topic, FlowInput, ContentItem } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
-import ReactMarkdown from "react-markdown";
 
 // ── Icons & Config ────────────────────────────────────────────
 
@@ -152,48 +145,6 @@ function getContentTypeIcon(ct: { id?: string; connectorType?: string; category:
   return CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />;
 }
 
-// ── Thinking Animation ────────────────────────────────────────
-
-const THINKING_PHRASES = [
-  "Thinking",
-  "Reading your sources",
-  "Analyzing context",
-  "Crafting response",
-];
-
-function ThinkingIndicator() {
-  const [phraseIndex, setPhraseIndex] = useState(0);
-  const [charIndex, setCharIndex] = useState(0);
-  const phrase = THINKING_PHRASES[phraseIndex];
-
-  useEffect(() => {
-    if (charIndex < phrase.length) {
-      const timer = setTimeout(() => setCharIndex((c) => c + 1), 30);
-      return () => clearTimeout(timer);
-    }
-    // Pause at end, then move to next phrase
-    const timer = setTimeout(() => {
-      setPhraseIndex((i) => (i + 1) % THINKING_PHRASES.length);
-      setCharIndex(0);
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [charIndex, phrase.length, phraseIndex]);
-
-  return (
-    <div className="flex gap-3">
-      <div className="shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center bg-muted">
-        <Bot className="h-3.5 w-3.5" />
-      </div>
-      <div className="flex-1 min-w-0 pt-0.5">
-        <p className="text-sm text-muted-foreground">
-          {phrase.slice(0, charIndex)}
-          <span className="inline-block w-[2px] h-4 bg-muted-foreground/50 ml-0.5 animate-pulse align-text-bottom" />
-        </p>
-      </div>
-    </div>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────
 
 export default function FlowDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -202,13 +153,12 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
   const [topic, setTopic] = useState<Topic | null>(null);
   const [outputs, setOutputs] = useState<ContentItem[]>([]);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [contentTypes, setContentTypes] = useState<ContentTypeDefinition[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [chatInput, setChatInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [editingBriefing, setEditingBriefing] = useState(false);
+  const [briefingDraft, setBriefingDraft] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [addingInput, setAddingInput] = useState(false);
   const [sourceText, setSourceText] = useState("");
@@ -222,21 +172,18 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
   const [titleDraft, setTitleDraft] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // ── Data Loading ──────────────────────────────────────────
 
   const loadData = useCallback(async () => {
     if (!customerId || !projectId) return;
     try {
-      const [t, chat, contentRes, types] = await Promise.all([
+      const [t, contentRes, types] = await Promise.all([
         getTopic(customerId, projectId, id),
-        getTopicChat(customerId, projectId, id).catch(() => []),
         getContent(customerId, projectId).catch(() => ({ items: [] })),
         getContentTypes(customerId, projectId).catch(() => []),
       ]);
       setTopic(t);
-      setChatMessages(chat);
       setContentTypes(types);
       const linked = (contentRes.items ?? []).filter(
         (item: ContentItem) => item.flowId === id || item.topicId === id || item.briefingId === id,
@@ -260,37 +207,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
     return () => clearInterval(interval);
   }, [topic?.inputs, outputs, loadData]);
 
-  // Auto-scroll chat only when new messages arrive (not on initial load)
-  const prevMsgCount = useRef(chatMessages.length);
-  useEffect(() => {
-    if (chatMessages.length > prevMsgCount.current) {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-    prevMsgCount.current = chatMessages.length;
-  }, [chatMessages.length]);
-
   // ── Handlers ──────────────────────────────────────────────
-
-  const handleSendMessage = async (message: string) => {
-    if (!message.trim() || !customerId || !projectId || sending) return;
-    setSending(true);
-    try {
-      await sendTopicChat(customerId, projectId, id, message.trim());
-      setChatInput("");
-      const chat = await getTopicChat(customerId, projectId, id);
-      setChatMessages(chat);
-      const t = await getTopic(customerId, projectId, id);
-      setTopic(t);
-    } catch (err) {
-      console.error("Chat failed:", err);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleSendChat = async () => {
-    handleSendMessage(chatInput);
-  };
 
   const handleAddSource = async () => {
     if (!sourceText.trim() || !customerId || !projectId || addingInput) return;
@@ -439,7 +356,7 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div
-      className="h-screen overflow-y-auto relative"
+      className="flex h-full flex-col relative"
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setIsDragging(false); }}
       onDrop={(e) => { e.preventDefault(); setIsDragging(false); }}
@@ -461,248 +378,84 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      <div className="max-w-3xl mx-auto px-6">
+      {/* ── 2-Column Layout ──────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
 
-        {/* ── Flow Title ────────────────────────────────── */}
-        <div className="flex items-start justify-between pt-8 pb-6">
-          <div className="flex-1 min-w-0">
-            {editingTitle ? (
-              <input
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={handleSaveTitle}
-                onKeyDown={(e) => { if (e.key === "Enter") handleSaveTitle(); if (e.key === "Escape") setEditingTitle(false); }}
-                autoFocus
-                className="text-2xl font-semibold bg-transparent outline-none border-b-2 border-primary w-full"
-              />
-            ) : (
-              <h1
-                className="text-2xl font-semibold cursor-text hover:text-muted-foreground transition-colors"
-                onClick={() => { setTitleDraft(topic.title); setEditingTitle(true); }}
-              >
-                {topic.title}
-              </h1>
-            )}
-          </div>
-          <Button variant="outline" size="sm" className="shrink-0 ml-3" onClick={() => setChatOpen(true)}>
-            <MessageSquare className="mr-1.5 h-3.5 w-3.5" />Chat
-          </Button>
-        </div>
+        {/* ── Main Area ──────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-8 lg:px-10 max-w-3xl">
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          multiple
-          onChange={(e) => { handleFileUpload(e.target.files); e.target.value = ""; }}
-        />
-
-        {/* ── 1. Briefing ──────────────────────────────── */}
-        <div className="pb-12 space-y-10">
-          <div>
-            <div className="mb-3">
-              <h3 className="text-base font-semibold">Briefing</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Describe your project — what is it about, who is the audience, what tone should the content have?</p>
+            {/* ── Flow Title ──────────────────────────── */}
+            <div className="flex items-start justify-between pt-8 pb-6">
+              <div className="flex-1 min-w-0">
+                {editingTitle ? (
+                  <input
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onBlur={handleSaveTitle}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveTitle(); if (e.key === "Escape") setEditingTitle(false); }}
+                    autoFocus
+                    className="text-2xl font-semibold bg-transparent outline-none border-b-2 border-primary w-full"
+                  />
+                ) : (
+                  <h1
+                    className="text-2xl font-semibold cursor-text hover:text-muted-foreground transition-colors"
+                    onClick={() => { setTitleDraft(topic.title); setEditingTitle(true); }}
+                  >
+                    {topic.title}
+                  </h1>
+                )}
+              </div>
+              <Button variant="outline" size="sm" className="shrink-0 ml-3 lg:hidden" onClick={() => setMobileSidebarOpen(true)}>
+                <MessageSquare className="mr-1.5 h-3.5 w-3.5" />Chat
+              </Button>
             </div>
-            <textarea
-              value={topic?.briefing ?? ""}
-              onChange={(e) => {
-                if (topic) setTopic({ ...topic, briefing: e.target.value });
-              }}
-              onBlur={async () => {
-                if (!customerId || !projectId || !topic) return;
-                try {
-                  await updateTopic(customerId, projectId, id, { briefing: topic.briefing ?? "" } as Partial<import("@/lib/types").Topic>);
-                } catch { /* ignore */ }
-              }}
-              placeholder="Describe what this campaign is about — target audience, goals, key messages, tone..."
-              className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none min-h-[80px]"
-              rows={3}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              onChange={(e) => { handleFileUpload(e.target.files); e.target.value = ""; }}
             />
-          </div>
 
-          {/* ── 2. Sources ──────────────────────────────── */}
-          <div>
-            <div className="mb-3">
-              <h3 className="text-base font-semibold">Sources</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Add reference material — URLs, documents, images, or notes to give the AI context.</p>
-            </div>
-            <div className={inputs.length > 0 ? "rounded-xl bg-background border shadow-sm p-5" : ""}>
-
-            {inputs.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowAddSource(true)}
-                className="flex items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b"
-              >
-                <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center">
-                  <Plus className="h-4 w-4" />
-                </div>
-                Add Source
-              </button>
-            )}
-
-            {inputs.length > 0 && (
-              <div className="divide-y">
-                {inputs.map((input) => {
-                  const status = input.processed?.status;
-                  const isProcessing = status === "processing";
-                  const isCompleted = status === "completed";
-                  const isFailed = status === "failed";
-                  const notProcessed = !status || status === "pending";
-                  const hasSummary = isCompleted && (input.processed?.summary || input.processed?.description);
-
-                  return (
-                    <div
-                      key={input.id}
-                      className="flex items-center gap-3 py-3 group transition-colors hover:bg-muted/20 cursor-pointer"
-                      onClick={() => hasSummary && setSelectedInputId(input.id)}
-                    >
-                      <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
-                        {INPUT_ICONS[input.type] ?? <FileText className="h-4 w-4" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium truncate">{input.fileName ?? INPUT_LABELS[input.type] ?? input.type}</span>
-                          {isProcessing && (
-                            <span className="inline-flex items-center gap-1 text-xs text-amber-500">
-                              <Loader2 className="h-3 w-3 animate-spin" />Analyzing
-                            </span>
-                          )}
-                          {isCompleted && <span className="text-xs text-emerald-500">Analyzed</span>}
-                          {isFailed && <span className="text-xs text-destructive">Failed</span>}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {INPUT_LABELS[input.type] ?? input.type}
-                          {input.createdAt && ` · ${formatDistanceToNow(new Date(input.createdAt), { addSuffix: true })}`}
-                        </p>
-                        {input.type === "url" && (
-                          <a href={input.content} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                            {input.content.replace(/^https?:\/\//, "").slice(0, 50)}
-                            <ExternalLink className="h-2.5 w-2.5" />
-                          </a>
-                        )}
-                        {hasSummary && (
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{input.processed?.summary ?? input.processed?.description}</p>
-                        )}
-                        {isFailed && <p className="text-xs text-destructive/70 mt-0.5 truncate">{input.processed?.error}</p>}
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {(notProcessed || isFailed) && (
-                          <button type="button" onClick={(e) => { e.stopPropagation(); handleReanalyze(input.id); }} className="text-xs text-primary hover:underline px-2 py-1">
-                            {isFailed ? "Retry" : "Analyze"}
-                          </button>
-                        )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button type="button" onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {hasSummary && (
-                              <DropdownMenuItem onClick={() => setSelectedInputId(input.id)}>
-                                <Search className="mr-2 h-3.5 w-3.5" />View Summary
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onClick={() => handleReanalyze(input.id)}>
-                              <RefreshCw className="mr-2 h-3.5 w-3.5" />Refine
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteInput(input.id)}>
-                              <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  );
-                })}
+            {/* ── Content ──────────────────────────────── */}
+          <div className="pb-12">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-base font-semibold">Content</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Choose what to create — blog posts, social media, newsletters.</p>
               </div>
-            )}
-
-            {inputs.length === 0 && (
-              <div
-                className={`rounded-xl border-2 border-dashed p-14 text-center transition-colors ${
-                  isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/15"
-                }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <div className="flex items-center justify-center gap-2 mb-3 text-muted-foreground/30">
-                  <Upload className="h-5 w-5" />
-                  <Paperclip className="h-5 w-5" />
-                </div>
-                <p className="text-sm font-medium mb-1">Add context for your content</p>
-                <p className="text-xs text-muted-foreground mb-5">Upload files, paste URLs, or add notes to help the AI understand what you need.</p>
-                <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowAddSource(true)}>
-                  <Plus className="mr-1.5 h-3.5 w-3.5" />Add Source
-                </Button>
-              </div>
-            )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-xs">
+                    <Plus className="mr-1 h-3.5 w-3.5" />Add Content
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {contentTypes.length > 0 ? contentTypes.map((ct) => (
+                    <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleAddContent(ct.id)}>
+                      {CT_ICONS[ct.id] ?? CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
+                      {ct.label}
+                    </DropdownMenuItem>
+                  )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
+                    <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleAddContent(opt.contentTypeId)}>
+                      {opt.icon}{opt.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-          </div>
-
-          {/* ── 3. Content ──────────────────────────────── */}
-          <div>
-            <div className="mb-3">
-              <h3 className="text-base font-semibold">Content</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Choose what to create — blog posts, social media, newsletters. Generate with AI or write manually.</p>
-            </div>
-            <div className={outputs.length > 0 ? "rounded-xl bg-background border shadow-sm p-5" : ""}>
 
             {outputs.length === 0 ? (
               <div className="rounded-xl border-2 border-dashed p-10 text-center">
                 <Package className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
                 <p className="text-sm font-medium mb-1">No content yet</p>
-                <p className="text-xs text-muted-foreground mb-4">Create content pieces and generate them with AI or write manually.</p>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full">
-                      <Plus className="mr-1.5 h-3.5 w-3.5" />Add Content
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    {contentTypes.length > 0 ? contentTypes.map((ct) => (
-                      <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleAddContent(ct.id)}>
-                        {CT_ICONS[ct.id] ?? CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
-                        {ct.label}
-                      </DropdownMenuItem>
-                    )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
-                      <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleAddContent(opt.contentTypeId)}>
-                        {opt.icon}{opt.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <p className="text-xs text-muted-foreground">Create content pieces and generate them with AI or write manually.</p>
               </div>
             ) : (
-              <div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors py-3 w-full border-b">
-                      <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center">
-                        <Plus className="h-4 w-4" />
-                      </div>
-                      Add Content
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    {contentTypes.length > 0 ? contentTypes.map((ct) => (
-                      <DropdownMenuItem key={ct.id} className="gap-2" onClick={() => handleAddContent(ct.id)}>
-                        {CT_ICONS[ct.id] ?? CATEGORY_ICONS[ct.category] ?? <FileText className="h-3.5 w-3.5" />}
-                        {ct.label}
-                      </DropdownMenuItem>
-                    )) : FALLBACK_OUTPUT_OPTIONS.map((opt) => (
-                      <DropdownMenuItem key={opt.contentTypeId} className="gap-2" onClick={() => handleAddContent(opt.contentTypeId)}>
-                        {opt.icon}{opt.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <div className="divide-y mt-1">
+              <div className="rounded-xl bg-background border shadow-sm p-5">
+                <div className="divide-y">
                 {outputs.map((item) => {
                   const status = STATUS_BADGE[item.status] ?? { label: item.status, variant: "secondary" as const };
                   const isProducing = item.status === "producing";
@@ -798,10 +551,184 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
                 )}
               </div>
             )}
+          </div>
+
+          {/* ── Briefing ──────────────────────────────── */}
+          <div className="mt-10">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold">Briefing</h3>
+              <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setBriefingDraft(topic?.briefing ?? ""); setEditingBriefing(true); }}>
+                <Pencil className="mr-1 h-3.5 w-3.5" />Edit
+              </Button>
             </div>
+            <div
+              className="rounded-xl border bg-background shadow-sm p-5 cursor-pointer hover:bg-muted/20 transition-colors"
+              onClick={() => { setBriefingDraft(topic?.briefing ?? ""); setEditingBriefing(true); }}
+            >
+              <p className="text-sm text-muted-foreground line-clamp-4 whitespace-pre-wrap">
+                {topic?.briefing || "Describe your project — target audience, goals, key messages, tone..."}
+              </p>
+            </div>
+          </div>
+
+          {/* ── Sources ──────────────────────────────── */}
+          <div className="mt-6 pb-12">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold">Sources</h3>
+              <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAddSource(true)}>
+                <Plus className="mr-1 h-3.5 w-3.5" />Add Source
+              </Button>
+            </div>
+
+            {inputs.length > 0 ? (
+              <div className="rounded-xl border bg-background shadow-sm p-5">
+                <div className="divide-y">
+                  {inputs.map((input) => {
+                    const status = input.processed?.status;
+                    const isProcessing = status === "processing";
+                    const isCompleted = status === "completed";
+                    const isFailed = status === "failed";
+                    const notProcessed = !status || status === "pending";
+                    const hasSummary = isCompleted && (input.processed?.summary || input.processed?.description);
+
+                    return (
+                      <div
+                        key={input.id}
+                        className="flex items-center gap-3 py-3 group transition-colors hover:bg-muted/20 cursor-pointer"
+                        onClick={() => hasSummary && setSelectedInputId(input.id)}
+                      >
+                        <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                          {INPUT_ICONS[input.type] ?? <FileText className="h-4 w-4" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium truncate block">{input.fileName ?? INPUT_LABELS[input.type] ?? input.type}</span>
+                          <p className="text-xs text-muted-foreground">
+                            {INPUT_LABELS[input.type] ?? input.type}
+                            {input.createdAt && ` · ${formatDistanceToNow(new Date(input.createdAt), { addSuffix: true })}`}
+                          </p>
+                        </div>
+                        {isProcessing && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500 shrink-0" />}
+                        {isCompleted && <span className="text-xs text-emerald-500 shrink-0">Analyzed</span>}
+                        {isFailed && <span className="text-xs text-destructive shrink-0">Failed</span>}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {hasSummary && (
+                              <DropdownMenuItem onClick={() => setSelectedInputId(input.id)}>
+                                <Search className="mr-2 h-3.5 w-3.5" />View Summary
+                              </DropdownMenuItem>
+                            )}
+                            {(notProcessed || isFailed) && (
+                              <DropdownMenuItem onClick={() => handleReanalyze(input.id)}>
+                                <RefreshCw className="mr-2 h-3.5 w-3.5" />{isFailed ? "Retry" : "Analyze"}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteInput(input.id)}>
+                              <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div
+                className={`rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
+                  isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/15"
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <div className="flex items-center justify-center gap-2 mb-3 text-muted-foreground/30">
+                  <Upload className="h-5 w-5" />
+                  <Paperclip className="h-5 w-5" />
+                </div>
+                <p className="text-sm font-medium mb-1">Add context for your content</p>
+                <p className="text-xs text-muted-foreground mb-4">Upload files, paste URLs, or add notes to help the AI understand what you need.</p>
+                <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowAddSource(true)}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />Add Source
+                </Button>
+              </div>
+            )}
+          </div>
+          </div>
+        </div>
+
+        {/* ── Right Sidebar: Chat ──────────────────── */}
+        <div className="hidden lg:flex w-[400px] shrink-0 flex-col pt-[6.5rem] pr-6 pb-6">
+          <div className="flex-1 flex flex-col rounded-xl border bg-background shadow-sm overflow-hidden">
+            <div className="shrink-0 px-4 py-3 border-b">
+              <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                <MessageSquare className="h-3.5 w-3.5" />Chat
+              </h3>
+            </div>
+            {customerId && projectId && (
+              <TopicChat
+                customerId={customerId}
+                projectId={projectId}
+                topicId={id}
+                onTopicUpdated={(t) => { setTopic(t); loadData(); }}
+              />
+            )}
           </div>
         </div>
       </div>
+
+      {/* ── Mobile Chat Overlay ──────────────────── */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end lg:hidden">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="relative w-full max-w-md bg-background border-l shadow-xl flex flex-col h-full animate-in slide-in-from-right duration-200">
+            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+              <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                <MessageSquare className="h-3.5 w-3.5" />Chat
+              </h3>
+              <button type="button" onClick={() => setMobileSidebarOpen(false)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {customerId && projectId && (
+              <TopicChat customerId={customerId} projectId={projectId} topicId={id} onTopicUpdated={(t) => { setTopic(t); loadData(); }} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Briefing Edit Dialog ──────────────────────── */}
+      <Dialog open={editingBriefing} onOpenChange={setEditingBriefing}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Briefing</DialogTitle>
+          </DialogHeader>
+          <textarea
+            value={briefingDraft}
+            onChange={(e) => setBriefingDraft(e.target.value)}
+            placeholder="Describe what this campaign is about — target audience, goals, key messages, tone..."
+            className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none min-h-[160px]"
+            rows={6}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEditingBriefing(false)}>Cancel</Button>
+            <Button size="sm" onClick={async () => {
+              if (!customerId || !projectId || !topic) return;
+              try {
+                await updateTopic(customerId, projectId, id, { briefing: briefingDraft } as Partial<import("@/lib/types").Topic>);
+                setTopic({ ...topic, briefing: briefingDraft });
+                setEditingBriefing(false);
+              } catch { /* ignore */ }
+            }}>Save</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Add Source Dialog (Step 1: Drop + Buttons) ── */}
       <Dialog open={showAddSource} onOpenChange={(open) => { setShowAddSource(open); if (!open) setSourceText(""); }}>
@@ -881,166 +808,6 @@ export default function FlowDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* ── Chat Sidebar Overlay ──────────────────────── */}
-      {chatOpen && (
-        <div className="fixed inset-0 z-40 flex justify-end">
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/20" onClick={() => setChatOpen(false)} />
-          {/* Panel */}
-          <div className="relative w-full max-w-md bg-background border-l shadow-xl flex flex-col h-full animate-in slide-in-from-right duration-200">
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-              <h3 className="text-sm font-semibold">Chat</h3>
-              <button type="button" onClick={() => setChatOpen(false)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {chatMessages.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-10 text-center">
-                  <MessageCircle className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
-                  <p className="text-sm font-medium mb-1">Chat with AI</p>
-                  <p className="text-xs text-muted-foreground">Brainstorm ideas, get feedback on your content, or ask for help.</p>
-                </div>
-              ) : (
-                chatMessages.map((msg, i) => (
-                  msg.role === "user" ? (
-                    <div key={i} className="flex justify-end group">
-                      <div className="max-w-[80%]">
-                        <div className="bg-muted rounded-2xl rounded-br-sm px-4 py-2.5">
-                          <p className="text-sm">{msg.content}</p>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                          {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div key={i} className="flex gap-3 group">
-                      <div className="shrink-0 rounded-full p-1.5 h-7 w-7 flex items-center justify-center bg-muted mt-0.5">
-                        <Bot className="h-3.5 w-3.5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm prose prose-sm prose-neutral dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-hr:my-3 prose-blockquote:my-2 prose-a:text-primary">
-                          <ReactMarkdown>{msg.content.replace(/```json\s*\n?\{[\s\S]*?\}\s*\n?```/g, "").trim()}</ReactMarkdown>
-                        </div>
-                        {/* Apply Actions Button */}
-                        {(() => {
-                          const jsonMatch = msg.content.match(/```json\s*\n?([\s\S]*?)\n?```/);
-                          if (!jsonMatch) return null;
-                          try {
-                            const parsed = JSON.parse(jsonMatch[1]) as { actions?: Array<{ type: string; value?: string; contentTypeId?: string; updates?: Record<string, unknown> }>; updates?: Record<string, unknown> };
-                            const actions = parsed.actions ?? (parsed.updates ? [{ type: "update_content", updates: parsed.updates }] : []);
-                            if (actions.length === 0) return null;
-                            // Show what will change
-                            const actionLabels: Record<string, string> = {
-                              update_briefing: "Briefing",
-                              update_title: "Title",
-                              update_direction: "Direction",
-                              create_content: "Create content piece",
-                              update_content: "Content",
-                            };
-                            return (
-                              <div className="mt-2 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-950/30 p-3 space-y-2">
-                                {actions.map((a, idx) => (
-                                  <div key={idx} className="text-xs">
-                                    <span className="font-medium text-violet-700 dark:text-violet-400">{actionLabels[a.type] ?? a.type}:</span>{" "}
-                                    <span className="text-foreground/80">
-                                      {a.value ? (a.value.length > 150 ? a.value.slice(0, 150) + "..." : a.value) : a.contentTypeId ?? JSON.stringify(a.updates ?? {}).slice(0, 100)}
-                                    </span>
-                                  </div>
-                                ))}
-                                <button
-                                  type="button"
-                                  className="flex items-center gap-1.5 text-xs font-medium text-violet-600 hover:text-violet-700 bg-violet-100 hover:bg-violet-200 dark:bg-violet-900 dark:hover:bg-violet-800 px-3 py-1.5 rounded-lg transition-colors w-full justify-center"
-                                onClick={async () => {
-                                  if (!customerId || !projectId || !topic) return;
-                                  for (const action of actions) {
-                                    try {
-                                      if (action.type === "update_briefing" && action.value) {
-                                        await updateTopic(customerId, projectId, id, { briefing: action.value } as Partial<Topic>);
-                                        setTopic((prev) => prev ? { ...prev, briefing: action.value } : prev);
-                                      } else if (action.type === "update_title" && action.value) {
-                                        await updateTopic(customerId, projectId, id, { title: action.value } as Partial<Topic>);
-                                        setTopic((prev) => prev ? { ...prev, title: action.value! } : prev);
-                                      } else if (action.type === "update_direction" && action.value) {
-                                        await updateTopic(customerId, projectId, id, { direction: action.value } as Partial<Topic>);
-                                        setTopic((prev) => prev ? { ...prev, direction: action.value } : prev);
-                                      } else if (action.type === "create_content" && action.contentTypeId) {
-                                        const { createContent } = await import("@/lib/api");
-                                        const catMap: Record<string, string> = { "blog-post": "article", "linkedin-post": "social_post", "instagram-post": "social_post", "x-post": "social_post", "tiktok-post": "social_post", "newsletter": "newsletter" };
-                                        const platMap: Record<string, string> = { "linkedin-post": "linkedin", "instagram-post": "instagram", "x-post": "x", "tiktok-post": "tiktok" };
-                                        await createContent(customerId, projectId, { type: (catMap[action.contentTypeId] ?? "article") as import("@/lib/types").ContentType, title: topic.title, category: platMap[action.contentTypeId], flowId: id });
-                                      }
-                                    } catch (err) { console.error("Action failed:", err); }
-                                  }
-                                  await loadData();
-                                }}
-                              >
-                                <Sparkles className="h-3.5 w-3.5" />
-                                Apply {actions.length > 1 ? `${actions.length} changes` : "changes"}
-                                </button>
-                              </div>
-                            );
-                          } catch { return null; }
-                        })()}
-                        <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            onClick={() => navigator.clipboard.writeText(msg.content)}
-                            className="p-1 rounded hover:bg-muted text-muted-foreground"
-                            title="Copy"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                          <span className="text-xs text-muted-foreground ml-1">
-                            {formatDistanceToNow(new Date(msg.ts), { addSuffix: true })}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                ))
-              )}
-              {sending && <ThinkingIndicator />}
-              <div ref={chatEndRef} />
-            </div>
-            {/* Chat Input */}
-            <div className="p-4 border-t shrink-0">
-              <div className="rounded-2xl border shadow-sm px-4 py-3 bg-background">
-                <div className="flex gap-3 items-center">
-                  <input
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
-                    placeholder={`Message in ${topic.title.slice(0, 30)}...`}
-                    disabled={sending}
-                    className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="shrink-0 p-1.5 rounded-lg hover:bg-muted text-muted-foreground"
-                    title="Attach file"
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSendChat}
-                    disabled={!chatInput.trim() || sending}
-                    className="shrink-0 p-1.5 rounded-lg bg-foreground text-background disabled:opacity-30"
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Source Detail Dialog ─────────────────────────── */}
       <Dialog open={!!selectedInputId} onOpenChange={(open) => { if (!open) { setSelectedInputId(null); setShowReanalyzeNote(false); setReanalyzeNote(""); } }}>
