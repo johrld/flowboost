@@ -19,6 +19,7 @@ const FLOWBOOST_MCP_TOOLS = [
   "mcp__flowboost__flowboost_validate_newsletter",
   "mcp__flowboost__flowboost_assemble_article",
   "mcp__flowboost__flowboost_generate_image",
+  "mcp__flowboost__flowboost_query_competitor_blog",
 ];
 
 export const AGENTS: Record<string, AgentDefinition> = {

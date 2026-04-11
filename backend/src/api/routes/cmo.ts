@@ -29,16 +29,16 @@ function buildProjectCmoPrompt(projectDir: string, projectName: string): string 
   parts.push(`\n## Project: ${projectName}`);
   parts.push("You are in the project-level chat — not within a specific flow. Help with overall content strategy.");
 
-  // Project Memory
+  // Project Memory (HOT tier only — ~4-6 KB)
   const memory = new MemoryStore(projectDir);
-  const allMemory = memory.getAll();
-  if (Object.keys(allMemory).length > 0) {
-    parts.push("\n## Project Memory");
-    for (const [key, value] of Object.entries(allMemory)) {
+  const hotMemory = memory.getHotMemory();
+  if (Object.keys(hotMemory).length > 0) {
+    parts.push("\n## Project Intelligence (from background monitors)");
+    for (const [key, value] of Object.entries(hotMemory)) {
       const label = key.replace(/\./g, " / ").replace(/-/g, " ");
-      const json = JSON.stringify(value);
-      parts.push(`\n### ${label}\n${json.length > 2000 ? json.slice(0, 2000) + "..." : json}`);
+      parts.push(`\n### ${label}\n${JSON.stringify(value, null, 2)}`);
     }
+    parts.push("\nFor deeper competitor details, use `flowboost_read_memory` or `flowboost_query_competitor_blog` tools.");
   }
 
   // Content Index Summary

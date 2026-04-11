@@ -338,6 +338,69 @@ server.tool(
   },
 );
 
+// ── Tool: Query Competitor Blog ──────────────────────────────────
+
+server.tool(
+  "flowboost_query_competitor_blog",
+  "Query a competitor's blog index. Returns matching articles filtered by topic cluster, keyword, or date. Use this instead of loading the full blog index.",
+  {
+    competitor: z.string().describe("Competitor slug (e.g., 'calm', 'headspace')"),
+    cluster: z.string().optional().describe("Filter by topic cluster (e.g., 'breathing-techniques')"),
+    search: z.string().optional().describe("Search term to match in article titles"),
+    since: z.string().optional().describe("ISO date — only articles published/discovered after this date"),
+    limit: z.number().optional().default(20).describe("Max results (default 20)"),
+  },
+  async (args) => {
+    if (!projectDir) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: "No project context" }) }] };
+    }
+
+    const indexPath = path.join(projectDir, "memory", "areas", "competitors", args.competitor, "blog-index.json");
+    if (!fs.existsSync(indexPath)) {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ error: `No blog index for competitor: ${args.competitor}` }) }] };
+    }
+
+    const blogIndex = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
+    let articles = blogIndex.articles ?? [];
+
+    // Apply filters
+    if (args.cluster) {
+      articles = articles.filter((a: { topicCluster?: string }) =>
+        a.topicCluster?.toLowerCase() === args.cluster!.toLowerCase()
+      );
+    }
+    if (args.search) {
+      const searchLower = args.search.toLowerCase();
+      articles = articles.filter((a: { title?: string }) =>
+        a.title?.toLowerCase().includes(searchLower)
+      );
+    }
+    if (args.since) {
+      articles = articles.filter((a: { publishedAt?: string; discoveredAt?: string }) =>
+        (a.publishedAt ?? a.discoveredAt ?? "") >= args.since!
+      );
+    }
+
+    // Limit and return compact format
+    const limited = articles.slice(0, args.limit ?? 20);
+    const result = {
+      competitor: args.competitor,
+      totalMatches: articles.length,
+      returned: limited.length,
+      articles: limited.map((a: { url: string; title: string; topicCluster?: string; publishedAt?: string; h2Headings?: string[]; estimatedWordCount?: number }) => ({
+        url: a.url,
+        title: a.title,
+        cluster: a.topicCluster,
+        date: a.publishedAt,
+        h2s: a.h2Headings?.slice(0, 8),
+        words: a.estimatedWordCount,
+      })),
+    };
+
+    return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+  },
+);
+
 // ── Tool: Read Memory ───────────────────────────────────────────
 
 server.tool(

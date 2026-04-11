@@ -918,3 +918,111 @@ export interface CitationSources {
   updatedAt: string;
   sources: VettedSource[];
 }
+
+// ─── Per-Competitor Intelligence ────────────────────────────────
+
+export interface CompetitorIndex {
+  projectId: string;
+  updatedAt: string;
+  competitors: CompetitorIndexEntry[];
+  ourTotalArticles: number;
+  topGaps: string[];
+  topOpportunities: string[];
+}
+
+export interface CompetitorIndexEntry {
+  slug: string;
+  name: string;
+  domain: string;
+  blogUrl: string;
+  sitemapUrl: string | null;
+  totalArticles: number;
+  lastScanAt: string;
+  newSinceLastScan: number;
+  topClusters: string[];
+  recentHighlight: string;
+}
+
+export interface CompetitorProfile {
+  slug: string;
+  name: string;
+  domain: string;
+  description: string;
+  blogUrl: string;
+  sitemapUrl: string | null;
+  channels: string[];
+  knownStrengths: string[];
+  knownWeaknesses: string[];
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompetitorBlogIndex {
+  competitorSlug: string;
+  sitemapUrl: string | null;
+  lastCrawlAt: string;
+  totalArticles: number;
+  articles: CompetitorArticle[];
+}
+
+export interface CompetitorArticle {
+  url: string;
+  title: string;
+  slug: string;
+  publishedAt: string | null;
+  discoveredAt: string;
+  topicCluster: string | null;
+  h2Headings: string[];
+  estimatedWordCount: number | null;
+  hasBeenAnalyzed: boolean;
+}
+
+export interface CompetitorTopicCoverage {
+  competitorSlug: string;
+  updatedAt: string;
+  clusters: CompetitorClusterEntry[];
+  uncoveredClusters: string[];
+}
+
+export interface CompetitorClusterEntry {
+  cluster: string;
+  articleCount: number;
+  depth: "deep" | "moderate" | "thin";
+  latestArticleAt: string | null;
+  trend: "growing" | "stable" | "dormant";
+}
+
+export interface CompetitorRecentActivity {
+  competitorSlug: string;
+  updatedAt: string;
+  newArticles: Array<{
+    url: string;
+    title: string;
+    topicCluster: string | null;
+    publishedAt: string | null;
+  }>;
+}
+
+export interface ContentGapMatrix {
+  projectId: string;
+  updatedAt: string;
+  clusters: ContentGapCluster[];
+  summary: {
+    totalClusters: number;
+    weLead: number;
+    weLag: number;
+    mutualGaps: number;
+    saturated: number;
+  };
+}
+
+export interface ContentGapCluster {
+  cluster: string;
+  ourCount: number;
+  ourDepth: "deep" | "moderate" | "thin" | "none";
+  competitors: Record<string, { count: number; depth: "deep" | "moderate" | "thin" | "none" }>;
+  gapType: "we_lead" | "we_lag" | "mutual_gap" | "saturated" | "our_exclusive";
+  priority: "high" | "medium" | "low";
+  recommendation: string;
+}

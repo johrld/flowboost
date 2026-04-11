@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { createLogger } from "../../utils/logger.js";
 import { PipelineContext } from "../../pipeline/context.js";
-import { runCompetitorMonitor, runTrendScanner, runContentWatcher } from "../../agents/workflows/monitor.js";
+import { runTrendScanner, runContentWatcher } from "../../agents/workflows/monitor.js";
+import { runCompetitorScan } from "../../agents/workflows/competitor-scan.js";
 import { getMonitorAgents } from "../../agents/registry.js";
 
 const log = createLogger("api:heartbeat");
@@ -55,8 +56,8 @@ export async function heartbeatRoutes(app: FastifyInstance) {
       if (!ctx) return reply.status(404).send({ error: "Project not found" });
 
       const jobs = app.ctx.jobsFor(customerId, projectId);
-      runCompetitorMonitor(ctx, jobs).catch((err) => {
-        log.error({ err }, "competitor monitor failed");
+      runCompetitorScan(ctx, jobs).catch((err) => {
+        log.error({ err }, "competitor scan failed");
       });
 
       return { message: "Competitor scan started", runId: ctx.run.id };
@@ -125,7 +126,7 @@ export async function heartbeatRoutes(app: FastifyInstance) {
           const jobs = app.ctx.jobsFor(customerId, projectId);
 
           if (agent.name === "monitor-competitors") {
-            runCompetitorMonitor(ctx, jobs).catch((err) => log.error({ err }, "competitor monitor failed"));
+            runCompetitorScan(ctx, jobs).catch((err) => log.error({ err }, "competitor scan failed"));
           } else if (agent.name === "monitor-trends") {
             runTrendScanner(ctx, jobs).catch((err) => log.error({ err }, "trend scanner failed"));
           } else if (agent.name === "monitor-content") {

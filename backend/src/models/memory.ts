@@ -87,6 +87,36 @@ export class MemoryStore {
     return this.memoryDir;
   }
 
+  /** Load only HOT memory files for prompt injection (~4-6 KB) */
+  getHotMemory(): Record<string, unknown> {
+    const HOT_FILES = [
+      "areas/competitors/_index.json",
+      "areas/trend-watch.json",
+      "areas/content-gaps.json",
+    ];
+    const result: Record<string, unknown> = {};
+    for (const file of HOT_FILES) {
+      const data = this.load(file);
+      if (data) {
+        const key = file.replace(/\.json$/, "").replace(/\//g, ".");
+        result[key] = data;
+      }
+    }
+    // Gap matrix: include summary only (not full cluster list)
+    const gapMatrix = this.load<{ summary?: unknown; clusters?: Array<{ gapType: string; priority: string; cluster: string; recommendation: string }> }>("areas/competitors/_gap-matrix.json");
+    if (gapMatrix) {
+      result["areas.competitors._gap-matrix"] = {
+        summary: gapMatrix.summary,
+        topGaps: (gapMatrix.clusters ?? [])
+          .filter((c) => c.gapType === "we_lag")
+          .sort((a, b) => (a.priority === "high" ? -1 : 1))
+          .slice(0, 10)
+          .map((c) => ({ cluster: c.cluster, recommendation: c.recommendation })),
+      };
+    }
+    return result;
+  }
+
   /** List all memory files (relative paths) */
   listFiles(): string[] {
     const files: string[] = [];
