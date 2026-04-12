@@ -218,50 +218,26 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
 
-    if (article && article.textContent && article.textContent.length > 100) {
-      // Parse headings from the clean article content (no nav/sidebar headings)
-      const articleDom = new JSDOM(article.content ?? "");
-      const doc = articleDom.window.document;
-      const h2Headings = [...doc.querySelectorAll("h2")]
-        .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
-        .filter((h) => h.length > 2 && h.length < 200);
-      const h3Headings = [...doc.querySelectorAll("h3")]
-        .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
-        .filter((h) => h.length > 2 && h.length < 200);
+    // ── Extract headings from full DOM (jsdom, not regex) ───
+    // This works better than Readability for some sites (React SPAs)
+    const fullDoc = dom.window.document;
 
-      const title = decodeHtmlEntities(jsonLdTitle ?? article.title ?? "");
-      const estimatedWordCount = jsonLdWordCount ?? article.textContent.split(/\s+/).filter(Boolean).length;
+    // Get H2/H3 from <main> or <article> if available, else from full body
+    const contentRoot = fullDoc.querySelector("main") ?? fullDoc.querySelector("article") ?? fullDoc.body;
+    const domH2s = [...contentRoot.querySelectorAll("h2")]
+      .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
+      .filter((h) => h.length > 3 && h.length < 200 && !(h === h.toUpperCase() && h.split(/\s+/).length <= 2));
+    const domH3s = [...contentRoot.querySelectorAll("h3")]
+      .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
+      .filter((h) => h.length > 3 && h.length < 200);
 
-      return {
-        url,
-        title,
-        slug,
-        h2Headings,
-        h3Headings,
-        estimatedWordCount,
-        metaDescription: article.excerpt ?? undefined,
-        author: jsonLdAuthor ?? article.byline ?? undefined,
-        publishedAt: jsonLdDate,
-      };
-    }
+    // ── Use Readability for content + word count ─────────
+    const readabilityWordCount = article?.textContent
+      ? article.textContent.split(/\s+/).filter(Boolean).length
+      : 0;
 
-    // ── Fallback: regex-based extraction ──────────────────
-    log.debug({ url }, "Readability failed, using regex fallback");
-
-    const h1Match = html.match(/<h1[^>]*>(.*?)<\/h1>/is);
-    const h1Title = h1Match?.[1]?.replace(/<[^>]+>/g, "").trim();
-    const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/) ||
-      html.match(/<meta\s+content="([^"]*)"\s+property="og:title"/);
-    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is);
-    const rawTitle = titleMatch?.[1]?.replace(/\s*[|–-]\s*.+$/, "").trim();
-    const title = decodeHtmlEntities(
-      jsonLdTitle ?? (h1Title && h1Title.length > 5 ? h1Title : ogTitleMatch?.[1] ?? rawTitle ?? ""),
-    );
-
-    const h2Headings = extractHeadings(html, "h2");
-    const h3Headings = extractHeadings(html, "h3");
-
-    const textContent = html
+    // Compute raw HTML word count (stripped, as fallback)
+    const strippedText = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
       .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
@@ -270,6 +246,39 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+    const rawWordCount = strippedText.split(/\s+/).length;
+
+    // Use Readability word count if it captured enough, otherwise use raw (with inflation factor)
+    // Readability is more accurate when it works; raw includes nav/footer text
+    const estimatedWordCount = jsonLdWordCount
+      ?? (readabilityWordCount > 500 ? readabilityWordCount : Math.round(rawWordCount * 0.7)); // ~70% of raw is usually article content
+
+    // Use Readability headings if it extracted enough, otherwise use DOM headings
+    let h2Headings: string[];
+    let h3Headings: string[];
+    if (article && readabilityWordCount > 500) {
+      const articleDom2 = new JSDOM(article.content ?? "");
+      h2Headings = [...articleDom2.window.document.querySelectorAll("h2")]
+        .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
+        .filter((h) => h.length > 3 && h.length < 200);
+      h3Headings = [...articleDom2.window.document.querySelectorAll("h3")]
+        .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
+        .filter((h) => h.length > 3 && h.length < 200);
+    } else {
+      h2Headings = domH2s;
+      h3Headings = domH3s;
+    }
+
+    // Title: JSON-LD > Readability > H1 > og:title > <title>
+    const h1El = fullDoc.querySelector("h1");
+    const h1Title = h1El?.textContent?.trim();
+    const ogMeta = fullDoc.querySelector('meta[property="og:title"]');
+    const ogTitle = ogMeta?.getAttribute("content");
+    const titleEl = fullDoc.querySelector("title");
+    const rawTitle = titleEl?.textContent?.replace(/\s*[|–-]\s*.+$/, "").trim();
+    const title = decodeHtmlEntities(
+      jsonLdTitle ?? article?.title ?? (h1Title && h1Title.length > 5 ? h1Title : ogTitle ?? rawTitle ?? ""),
+    );
 
     return {
       url,
@@ -277,9 +286,9 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
       slug,
       h2Headings,
       h3Headings,
-      estimatedWordCount: jsonLdWordCount ?? textContent.split(/\s+/).length,
-      metaDescription: undefined,
-      author: jsonLdAuthor,
+      estimatedWordCount,
+      metaDescription: article?.excerpt ?? undefined,
+      author: jsonLdAuthor ?? article?.byline ?? undefined,
       publishedAt: jsonLdDate,
     };
   } catch (err) {
