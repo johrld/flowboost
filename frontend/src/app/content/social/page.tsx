@@ -1,7 +1,7 @@
 "use client";
 
-import ContentLibraryPage from "../page";
+import { ContentLibrary } from "@/components/content-library";
 
 export default function SocialPage() {
-  return <ContentLibraryPage contentTypeFilter="social" hideChannelTabs />;
+  return <ContentLibrary contentTypeFilter="social" hideChannelTabs />;
 }

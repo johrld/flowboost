@@ -179,7 +179,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
       {/* Logo */}
-      <Link href="/content" className="flex items-center gap-2.5 border-b px-4 py-4 hover:bg-muted/50 transition-colors">
+      <Link href="/content/articles" className="flex items-center gap-2.5 border-b px-4 py-4 hover:bg-muted/50 transition-colors">
         <Image src="/logo.png" alt="FlowBoost" width={28} height={28} className="rounded-md" />
         <span className="text-lg font-semibold">flowboost</span>
       </Link>
@@ -211,30 +211,14 @@ export function Sidebar() {
         </DropdownMenu>
       </div>
 
-      {/* Calendar */}
-      <div className="px-3 pt-4 pb-1">
-        <Link
-          href="/dashboard"
-          className={cn(
-            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-            calendarActive
-              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-          )}
-        >
-          <CalendarDays className="h-4 w-4" />
-          Calendar
-        </Link>
-      </div>
-
       {/* Content Section */}
-      <div className="px-3 pt-2 pb-1">
+      <div className="px-3 pt-4 pb-1">
         <div className="px-3 pb-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Content</span>
         </div>
         <div className="space-y-0.5">
-          <Link href="/content" className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors", pathname === "/content" ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
-            <Library className="h-4 w-4" />All
+          <Link href="/dashboard" className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors", calendarActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+            <CalendarDays className="h-4 w-4" />Calendar
           </Link>
           <Link href="/content/articles" className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors", pathname === "/content/articles" ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
             <FileText className="h-4 w-4" />Articles
@@ -244,6 +228,9 @@ export function Sidebar() {
           </Link>
           <Link href="/content/newsletters" className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors", pathname === "/content/newsletters" ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
             <Mail className="h-4 w-4" />Newsletters
+          </Link>
+          <Link href="/media" className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors", (pathname === "/media" || pathname.startsWith("/media/")) ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
+            <ImageIcon className="h-4 w-4" />Media
           </Link>
           <Link href="/content/campaigns" className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors", pathname.startsWith("/content/campaigns") ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground")}>
             <Layers className="h-4 w-4" />Campaigns
@@ -296,23 +283,38 @@ export function Sidebar() {
         </div>
       </div>
 
+      {/* Settings */}
+      <div className="px-3 pt-3 pb-1">
+        <div className="px-3 pb-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Settings</span>
+        </div>
+        <div className="space-y-0.5">
+          {settingsItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Media + Monitor */}
+      {/* Monitor + CMO Chat */}
       <div className="px-3 pb-1 space-y-0.5">
-        <Link
-          href="/media"
-          className={cn(
-            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-            (pathname === "/media" || pathname.startsWith("/media/"))
-              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-          )}
-        >
-          <ImageIcon className="h-4 w-4" />
-          Media
-        </Link>
         <Link
           href="/monitor"
           className={cn(
@@ -325,10 +327,6 @@ export function Sidebar() {
           <Activity className="h-4 w-4" />
           Monitor
         </Link>
-      </div>
-
-      {/* CMO Chat Button */}
-      <div className="px-3 pb-1">
         <button
           type="button"
           onClick={() => setCmoOpen(true)}
@@ -337,28 +335,6 @@ export function Sidebar() {
           <MessageSquare className="h-4 w-4" />
           CMO Chat
         </button>
-      </div>
-
-      {/* Settings */}
-      <div className="border-t px-3 py-3 space-y-0.5">
-        {settingsItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          );
-        })}
       </div>
 
       {/* Footer */}

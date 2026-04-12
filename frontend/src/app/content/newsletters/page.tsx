@@ -1,7 +1,7 @@
 "use client";
 
-import ContentLibraryPage from "../page";
+import { ContentLibrary } from "@/components/content-library";
 
 export default function NewslettersPage() {
-  return <ContentLibraryPage contentTypeFilter="newsletter" hideChannelTabs />;
+  return <ContentLibrary contentTypeFilter="newsletter" hideChannelTabs />;
 }
