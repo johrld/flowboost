@@ -40,6 +40,9 @@ export default function CompetitorsPage() {
   const { customerId, projectId, loading: projectLoading } = useProject();
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [scanRunId, setScanRunId] = useState<string | null>(null);
+  const [scanEvents, setScanEvents] = useState<Array<{ tool: string; input: string }>>([]);
+  const [scanDone, setScanDone] = useState(false);
   const [competitors, setCompetitors] = useState<CompetitorEntry[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [detail, setDetail] = useState<CompetitorDetailData | null>(null);
@@ -78,25 +81,54 @@ export default function CompetitorsPage() {
     finally { setDetailLoading(false); }
   };
 
+  const startScanPolling = (runId: string) => {
+    setScanRunId(runId);
+    setScanEvents([]);
+    setScanDone(false);
+    setScanning(true);
+
+    const poll = setInterval(async () => {
+      try {
+        const runRes = await fetch(`${API_URL}/customers/${customerId}/projects/${projectId}/pipeline/runs/${runId}`);
+        if (!runRes.ok) return;
+        const run = await runRes.json() as { status: string; phases: Array<{ agentCalls: Array<{ events?: Array<{ tool: string; input: string }> }> }> };
+
+        const events: Array<{ tool: string; input: string }> = [];
+        for (const phase of run.phases) {
+          for (const call of phase.agentCalls) {
+            if (call.events) events.push(...call.events);
+          }
+        }
+        setScanEvents(events);
+
+        if (run.status === "completed" || run.status === "failed") {
+          setScanDone(true);
+          setScanning(false);
+          clearInterval(poll);
+          loadData();
+        }
+      } catch { /* ignore */ }
+    }, 2000);
+    setTimeout(() => { clearInterval(poll); setScanning(false); setScanDone(true); }, 300000);
+  };
+
   const handleScan = async () => {
     if (!customerId || !projectId || scanning) return;
-    setScanning(true);
     try {
-      await triggerMonitor(customerId, projectId, "competitor-scan");
-      // Poll until done
-      const poll = setInterval(async () => {
-        try {
-          const result = await getCompetitors(customerId, projectId);
-          const idx = result.index as { competitors: CompetitorEntry[] } | null;
-          if (idx?.competitors && JSON.stringify(idx.competitors) !== JSON.stringify(competitors)) {
-            setCompetitors(idx.competitors);
-            setScanning(false);
-            clearInterval(poll);
-          }
-        } catch { /* ignore */ }
-      }, 5000);
-      setTimeout(() => { clearInterval(poll); setScanning(false); }, 300000);
-    } catch { setScanning(false); }
+      const result = await triggerMonitor(customerId, projectId, "competitor-scan");
+      startScanPolling(result.runId);
+    } catch { /* ignore */ }
+  };
+
+  const handleSingleScan = async (slug: string) => {
+    if (!customerId || !projectId || scanning) return;
+    try {
+      const res = await fetch(`${API_URL}/customers/${customerId}/projects/${projectId}/cmo/competitors/${slug}/scan`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      });
+      const { runId } = await res.json() as { runId: string };
+      startScanPolling(runId);
+    } catch { /* ignore */ }
   };
 
   const handleAddCompetitor = async () => {
@@ -104,13 +136,20 @@ export default function CompetitorsPage() {
     setAdding(true);
     setOnboardingEvents([]);
     setOnboardingDone(false);
+
+    // Normalize domain
+    let normalizedDomain = addDomain.trim();
+    if (!normalizedDomain.startsWith("http://") && !normalizedDomain.startsWith("https://")) {
+      normalizedDomain = `https://${normalizedDomain}`;
+    }
+
     try {
       // Add to project settings
       await fetch(`${API_URL}/customers/${customerId}/projects/${projectId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          addCompetitor: { domain: addDomain.trim(), name: addName.trim(), notes: "" },
+          addCompetitor: { domain: normalizedDomain, name: addName.trim(), notes: "" },
         }),
       });
 
@@ -118,7 +157,7 @@ export default function CompetitorsPage() {
       const res = await fetch(`${API_URL}/customers/${customerId}/projects/${projectId}/cmo/competitors/onboard`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: addDomain.trim(), name: addName.trim() }),
+        body: JSON.stringify({ domain: normalizedDomain, name: addName.trim() }),
       });
       const { runId } = await res.json() as { runId: string };
       setOnboardingRunId(runId);
@@ -354,7 +393,7 @@ export default function CompetitorsPage() {
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditComp({ slug: c.slug, name: c.name, domain: c.domain }); setEditName(c.name); setEditDomain(c.domain); }}>
                         <Pencil className="mr-2 h-3.5 w-3.5" />Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await fetch(`${API_URL}/customers/${customerId}/projects/${projectId}/cmo/competitors/${c.slug}/scan`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }); }}>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleSingleScan(c.slug); }}>
                         <RotateCcw className="mr-2 h-3.5 w-3.5" />Re-scan
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -378,10 +417,33 @@ export default function CompetitorsPage() {
               </p>
             </div>
           ))}
-          {scanning && (
-            <div className="rounded-xl border-2 border-dashed p-5 flex items-center justify-center">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mr-2" />
-              <span className="text-sm text-muted-foreground">Scanning...</span>
+          {(scanning || (scanDone && scanEvents.length > 0)) && (
+            <div className="col-span-full rounded-xl border bg-background shadow-sm p-5 space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>✅</span>}
+                  {scanning ? "Scanning..." : "Scan Complete"}
+                </h3>
+                {scanDone && (
+                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setScanRunId(null); setScanEvents([]); setScanDone(false); }}>
+                    Close
+                  </Button>
+                )}
+              </div>
+              <div className="max-h-[250px] overflow-y-auto space-y-1">
+                {scanEvents.map((ev, i) => {
+                  const icon = ev.tool.includes("sitemap") ? "🔍" : ev.tool === "diff" ? "📊" : ev.tool.includes("crawl") ? "📄" : ev.tool.includes("index") ? "✅" : ev.tool.includes("gap") ? "📈" : "⚙️";
+                  return (
+                    <p key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                      <span className="shrink-0">{icon}</span>
+                      <span>{ev.input}</span>
+                    </p>
+                  );
+                })}
+                {scanning && scanEvents.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Starting scan...</p>
+                )}
+              </div>
             </div>
           )}
         </div>

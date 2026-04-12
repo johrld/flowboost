@@ -63,11 +63,17 @@ export async function analyzeCompetitor(
   const memory = new MemoryStore(projectDir);
   const now = new Date().toISOString();
 
+  // Normalize domain — ensure https:// prefix
+  if (!domain.startsWith("http://") && !domain.startsWith("https://")) {
+    domain = `https://${domain}`;
+  }
+  domain = domain.replace(/\/$/, "");
+
   log.info({ domain, name }, "analyzing competitor site structure");
   emit({ step: "discover-sitemap", status: "running", detail: `Searching for sitemap on ${domain}` });
 
   // ── Step 1: Discover sitemap ────────────────────────────
-  const sitemapUrl = await discoverSitemapUrl(domain);
+  let sitemapUrl = await discoverSitemapUrl(domain);
   let sitemapEntries: Array<{ url: string; lastmod?: string }> = [];
   if (sitemapUrl) {
     sitemapEntries = await fetchSitemap(sitemapUrl);
@@ -144,10 +150,94 @@ export async function analyzeCompetitor(
     articleUrls.push(...longPathUrls);
   }
 
+  // ── Fallback: if no articles from sitemap, crawl the website for blog links ──
+  if (articleUrls.length === 0) {
+    emit({ step: "discover-blog", status: "running", detail: "No articles in sitemap — scanning website for blog links" });
+
+    try {
+      const { chromium: chr } = await import("playwright");
+      const fb = await chr.launch({ headless: true });
+      const fbCtx = await fb.newContext({ userAgent: "FlowBoost/1.0 (content research bot)" });
+      const fbPage = await fbCtx.newPage();
+      await fbPage.goto(domain, { waitUntil: "domcontentloaded", timeout: 15000 });
+      await fbPage.waitForTimeout(2000);
+
+      // Find blog-like links on the page
+      const blogLinks = await fbPage.evaluate(() => {
+        const links = [...document.querySelectorAll("a[href]")] as HTMLAnchorElement[];
+        const blogPatterns = /blog|artikel|articles|news|journal|magazine|beitr|posts|stories|ratgeber|magazin/i;
+        return links
+          .map((a: HTMLAnchorElement) => ({ href: a.href, text: a.textContent?.trim() ?? "" }))
+          .filter((l) => blogPatterns.test(l.href) || blogPatterns.test(l.text))
+          .filter((l) => l.href.startsWith("http"))
+          .slice(0, 10);
+      });
+
+      await fb.close();
+
+      if (blogLinks.length > 0) {
+        emit({ step: "discover-blog", status: "done", detail: `Found ${blogLinks.length} blog links: ${blogLinks.map((l) => l.text || l.href).join(", ").slice(0, 100)}` });
+
+        // Try to find a blog section sitemap from discovered links
+        for (const link of blogLinks) {
+          try {
+            const blogBase = new URL(link.href).origin + new URL(link.href).pathname.replace(/\/$/, "");
+            const blogSitemapCandidates = [
+              `${blogBase}/sitemap.xml`,
+              `${blogBase}/sitemap_index.xml`,
+              `${blogBase}/feed`,
+            ];
+            for (const candidate of blogSitemapCandidates) {
+              const res = await fetch(candidate, { signal: AbortSignal.timeout(5000) });
+              if (res.ok) {
+                const text = await res.text();
+                if (text.includes("<urlset") || text.includes("<sitemapindex")) {
+                  emit({ step: "discover-blog", status: "done", detail: `Blog sitemap found: ${candidate}` });
+                  // Re-run sitemap discovery with the blog URL
+                  const blogEntries = await fetchSitemap(candidate);
+                  if (blogEntries.length > 0) {
+                    sitemapEntries = blogEntries;
+                    sitemapUrl = candidate;
+                    // Re-pick sample articles
+                    const blogArticleUrls = blogEntries
+                      .filter((e) => !/privacy|terms|legal|about|contact/i.test(e.url))
+                      .slice(0, 3)
+                      .map((e) => e.url);
+                    articleUrls.push(...blogArticleUrls);
+                  }
+                  break;
+                }
+              }
+            }
+            if (articleUrls.length > 0) break;
+          } catch { /* try next */ }
+        }
+
+        // If still no sitemap articles, crawl the blog links directly as samples
+        if (articleUrls.length === 0) {
+          for (const link of blogLinks.slice(0, 5)) {
+            try {
+              // Follow the link and look for article links on that page
+              const blogPage = await fbCtx?.newPage().catch(() => null);
+              if (!blogPage) break;
+              // Just use the blog links themselves as samples
+              articleUrls.push(link.href);
+              if (articleUrls.length >= 3) break;
+            } catch { /* skip */ }
+          }
+        }
+      } else {
+        emit({ step: "discover-blog", status: "error", detail: "No blog section found on website" });
+      }
+    } catch (err) {
+      emit({ step: "discover-blog", status: "error", detail: `Website scan failed: ${String(err).slice(0, 100)}` });
+    }
+  }
+
   if (articleUrls.length === 0) {
     log.warn({ domain }, "no sample articles found");
-    emit({ step: "complete", status: "error", detail: "No sample articles found" });
-    return createEmptyProfile(domain, name, sitemapUrl, sitemapEntries.length);
+    emit({ step: "complete", status: "error", detail: "No blog articles found — this site may not have a blog" });
+    return createEmptyProfile(domain, name, sitemapUrl ?? null, sitemapEntries.length);
   }
 
   emit({ step: "test-extraction", status: "running", detail: `Testing ${articleUrls.length} sample articles` });

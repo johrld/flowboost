@@ -58,7 +58,12 @@ export interface CrawledPage {
  * Tries common patterns: /sitemap.xml, /blog/sitemap.xml, /post-sitemap.xml
  */
 export async function discoverSitemapUrl(blogUrl: string): Promise<string | null> {
-  const base = blogUrl.replace(/\/$/, "");
+  // Normalize URL
+  let normalizedUrl = blogUrl;
+  if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
+    normalizedUrl = `https://${normalizedUrl}`;
+  }
+  const base = normalizedUrl.replace(/\/$/, "");
   const domain = new URL(base).origin;
   const hostname = new URL(base).hostname;
 
@@ -230,9 +235,10 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
     const domH2s = [...contentRoot.querySelectorAll("h2")]
       .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
       .filter((h) => h.length > 3 && h.length < 200 && !(h === h.toUpperCase() && h.split(/\s+/).length <= 2));
+    const h2Set = new Set(domH2s.map((h) => h.toLowerCase()));
     const domH3s = [...contentRoot.querySelectorAll("h3")]
       .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
-      .filter((h) => h.length > 3 && h.length < 200);
+      .filter((h) => h.length > 3 && h.length < 200 && !h2Set.has(h.toLowerCase()));
 
     // ── Use Readability for content + word count ─────────
     const readabilityWordCount = article?.textContent
@@ -264,9 +270,10 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
       h2Headings = [...articleDom2.window.document.querySelectorAll("h2")]
         .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
         .filter((h) => h.length > 3 && h.length < 200);
+      const rH2Set = new Set(h2Headings.map((h) => h.toLowerCase()));
       h3Headings = [...articleDom2.window.document.querySelectorAll("h3")]
         .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
-        .filter((h) => h.length > 3 && h.length < 200);
+        .filter((h) => h.length > 3 && h.length < 200 && !rH2Set.has(h.toLowerCase()));
     } else {
       h2Headings = domH2s;
       h3Headings = domH3s;
