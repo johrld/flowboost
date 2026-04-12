@@ -974,6 +974,7 @@ export interface CompetitorArticle {
   discoveredAt: string;
   topicCluster: string | null;
   h2Headings: string[];
+  h3Headings?: string[];
   estimatedWordCount: number | null;
   hasBeenAnalyzed: boolean;
 }

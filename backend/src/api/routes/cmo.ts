@@ -264,6 +264,67 @@ export async function cmoRoutes(app: FastifyInstance) {
     },
   );
 
+  // POST /cmo/competitors/:slug/scan — scan a single competitor
+  app.post<{
+    Params: { customerId: string; projectId: string; slug: string };
+  }>(
+    "/competitors/:slug/scan",
+    async (request, reply) => {
+      const { customerId, projectId, slug } = request.params;
+      const project = app.ctx.projectsFor(customerId).get(projectId);
+      if (!project) return reply.status(404).send({ error: "Project not found" });
+
+      // Find this competitor in settings
+      const comp = (project.competitors ?? []).find((c) => {
+        const s = c.domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "").replace(/\..+$/, "").replace(/[^a-z0-9]/gi, "-").toLowerCase();
+        return s === slug;
+      });
+      if (!comp) return reply.status(404).send({ error: "Competitor not found in settings" });
+
+      // Create a pipeline run with just this competitor
+      const run = app.ctx.pipelineRunsFor(customerId, projectId).create({
+        customerId,
+        projectId,
+        type: "strategy",
+        status: "pending",
+        phases: [
+          { name: `crawl:${comp.name}`, status: "pending" as const, agentCalls: [] },
+          { name: "classify", status: "pending" as const, agentCalls: [] },
+          { name: "analyze", status: "pending" as const, agentCalls: [] },
+        ],
+        totalCostUsd: 0,
+        totalTokens: { input: 0, output: 0 },
+        createdAt: new Date().toISOString(),
+      });
+
+      // Run scan for just this competitor
+      const { PipelineContext } = await import("../../pipeline/context.js");
+      const ctx = new PipelineContext(
+        customerId, project, run,
+        {
+          customers: app.ctx.customers,
+          projects: app.ctx.projectsFor(customerId),
+          content: app.ctx.contentFor(customerId, projectId),
+          pipelineRuns: app.ctx.pipelineRunsFor(customerId, projectId),
+          topics: app.ctx.topicsFor(customerId, projectId),
+        },
+        app.ctx.dataDir,
+      );
+
+      const jobs = app.ctx.jobsFor(customerId, projectId);
+
+      // Import and run single-competitor scan
+      (async () => {
+        const { runSingleCompetitorScan } = await import("../../agents/workflows/competitor-scan.js");
+        await runSingleCompetitorScan(ctx, jobs, comp).catch((err) => {
+          log.error({ err, slug }, "single competitor scan failed");
+        });
+      })();
+
+      return { message: `Scan started for ${comp.name}`, runId: run.id };
+    },
+  );
+
   // POST /cmo/competitors/onboard — analyze a new competitor with live events
   app.post<{
     Params: { customerId: string; projectId: string };

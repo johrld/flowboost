@@ -18,6 +18,7 @@ import { classifyBatch } from "../../services/topic-classifier.js";
 import { computeTopicCoverage, computeGapMatrix, computeCompetitorIndex } from "../../services/gap-analyzer.js";
 import type {
   Job,
+  Competitor,
   CompetitorBlogIndex,
   CompetitorArticle,
   CompetitorProfile,
@@ -187,6 +188,7 @@ export async function runCompetitorScan(
         discoveredAt: now(),
         topicCluster,
         h2Headings: contentHeadings,
+        h3Headings: page.h3Headings,
         estimatedWordCount: page.estimatedWordCount,
         hasBeenAnalyzed: true,
       });
@@ -357,4 +359,168 @@ export async function runCompetitorScan(
     },
     "competitor scan completed",
   );
+}
+
+/**
+ * Scan a single competitor (not all). Used by per-competitor "Re-scan" button.
+ * Runs the same crawl + classify + gap-analyze flow but only for one competitor.
+ */
+export async function runSingleCompetitorScan(
+  ctx: PipelineContext,
+  jobs: JobStore,
+  comp: Competitor,
+): Promise<void> {
+  const { project } = ctx;
+  const memory = new MemoryStore(ctx.projectDir);
+  const now = () => new Date().toISOString();
+  const slug = domainSlug(comp.domain);
+  const competitorDir = `areas/competitors/${slug}`;
+  const phaseName = `crawl:${comp.name}`;
+
+  ctx.updateRun({ status: "running", startedAt: now() });
+
+  function logEvent(phase: string, tool: string, input: string) {
+    try {
+      ctx.stores.pipelineRuns.addAgentCall(ctx.run.id, phase, {
+        agent: "competitor-scan",
+        model: "code",
+        status: "completed",
+        costUsd: 0,
+        tokens: { input: 0, output: 0 },
+        durationMs: 0,
+        events: [{ type: "tool_call", timestamp: now(), tool, input }],
+      });
+    } catch { /* ignore */ }
+  }
+
+  ctx.startPhase(phaseName);
+
+  // Load profile or use auto-discovery
+  let profile = memory.load<CrawlProfile>(`${competitorDir}/crawl-profile.json`);
+  if (!profile) {
+    logEvent(phaseName, "analyze-site", `First scan — analyzing ${comp.domain}`);
+    try {
+      profile = await analyzeCompetitor(comp.domain, comp.name, ctx.projectDir);
+      logEvent(phaseName, "profile-created", `Method: ${profile.extraction.method}`);
+    } catch {
+      logEvent(phaseName, "profile-fallback", "Profiler failed, using auto-discovery");
+    }
+  }
+
+  let blogIndex = memory.load<CompetitorBlogIndex>(`${competitorDir}/blog-index.json`) ?? {
+    competitorSlug: slug, sitemapUrl: profile?.blog.sitemapUrl ?? null, lastCrawlAt: "", totalArticles: 0, articles: [],
+  };
+
+  if (!blogIndex.sitemapUrl) {
+    blogIndex.sitemapUrl = profile?.blog.sitemapUrl ?? await discoverSitemapUrl(comp.domain);
+  }
+
+  if (!blogIndex.sitemapUrl) {
+    logEvent(phaseName, "error", "No sitemap found");
+    ctx.completePhase(phaseName);
+    ctx.updateRun({ status: "completed", completedAt: now() });
+    return;
+  }
+
+  logEvent(phaseName, "fetch-sitemap", blogIndex.sitemapUrl);
+  let sitemapEntries = await fetchSitemap(blogIndex.sitemapUrl);
+
+  const pathFilter = profile?.blog.pathFilter;
+  if (pathFilter) {
+    sitemapEntries = sitemapEntries.filter((e) => e.url.includes(pathFilter));
+    logEvent(phaseName, "path-filter", `${pathFilter}: ${sitemapEntries.length} URLs`);
+  }
+
+  const knownUrls = new Set(blogIndex.articles.map((a) => a.url));
+  const { newEntries } = diffArticles(knownUrls, sitemapEntries);
+  logEvent(phaseName, "diff", `${newEntries.length} new URLs (${knownUrls.size} known)`);
+
+  const toCrawl = newEntries.slice(0, MAX_PAGES_TO_CRAWL_PER_SCAN);
+  logEvent(phaseName, "crawl-start", `Crawling ${toCrawl.length} pages`);
+
+  const newArticles: CompetitorArticle[] = [];
+  for (const entry of toCrawl) {
+    const page = await crawlPage(entry.url);
+    if (!page || page.estimatedWordCount < 200 || !page.title || page.title.length < 5) continue;
+    const headingsForClassify = page.h2Headings.length > 0 ? page.h2Headings : page.h3Headings;
+    const cluster = classifyBatch([{ url: page.url, title: page.title, h2Headings: headingsForClassify }]);
+    const contentHeadings = page.h2Headings.length > 0 ? page.h2Headings : page.h3Headings;
+    newArticles.push({
+      url: page.url, title: page.title, slug: page.slug,
+      publishedAt: entry.lastmod ?? null, discoveredAt: now(),
+      topicCluster: cluster.classified[0]?.topicCluster ?? null,
+      h2Headings: contentHeadings, estimatedWordCount: page.estimatedWordCount, hasBeenAnalyzed: true,
+    });
+  }
+
+  blogIndex.articles.push(...newArticles);
+  blogIndex.totalArticles = blogIndex.articles.length;
+  blogIndex.lastCrawlAt = now();
+  memory.save(`${competitorDir}/blog-index.json`, blogIndex, "competitor-scan");
+
+  if (!memory.load(`${competitorDir}/profile.json`)) {
+    memory.save(`${competitorDir}/profile.json`, {
+      slug, name: comp.name, domain: comp.domain, description: "", blogUrl: comp.domain,
+      sitemapUrl: blogIndex.sitemapUrl, channels: ["blog"], knownStrengths: [], knownWeaknesses: [],
+      notes: comp.notes ?? "", createdAt: now(), updatedAt: now(),
+    } satisfies CompetitorProfile, "competitor-scan");
+  }
+
+  memory.save(`${competitorDir}/recent-activity.json`, {
+    competitorSlug: slug, updatedAt: now(),
+    newArticles: newArticles.map((a) => ({ url: a.url, title: a.title, topicCluster: a.topicCluster, publishedAt: a.publishedAt })),
+  } satisfies CompetitorRecentActivity, "competitor-scan");
+
+  logEvent(phaseName, "indexed", `${newArticles.length} articles saved (${blogIndex.totalArticles} total)`);
+  ctx.completePhase(phaseName);
+
+  // Recompute coverage + gap matrix for all competitors
+  ctx.startPhase("classify");
+  logEvent("classify", "done", "Classification complete");
+  ctx.completePhase("classify");
+
+  ctx.startPhase("analyze");
+  logEvent("analyze", "compute-coverage", "Recomputing topic coverage");
+
+  const allCompetitors = project.competitors ?? [];
+  const competitorCoverages: Array<{ slug: string; coverage: ReturnType<typeof computeTopicCoverage> }> = [];
+  for (const c of allCompetitors) {
+    const s = domainSlug(c.domain);
+    const idx = memory.load<CompetitorBlogIndex>(`areas/competitors/${s}/blog-index.json`);
+    if (!idx) continue;
+    const coverage = computeTopicCoverage(s, idx);
+    memory.save(`areas/competitors/${s}/topic-coverage.json`, coverage, "competitor-scan");
+    competitorCoverages.push({ slug: s, coverage });
+  }
+
+  const ourArticlesByCluster: Record<string, number> = {};
+  const contentIndexPath = path.join(ctx.projectDir, "content-index.json");
+  if (fs.existsSync(contentIndexPath)) {
+    try {
+      const contentIndex = JSON.parse(fs.readFileSync(contentIndexPath, "utf-8")) as ContentIndex;
+      for (const entry of contentIndex.entries ?? []) {
+        const category = entry.site?.category ?? "uncategorized";
+        ourArticlesByCluster[category] = (ourArticlesByCluster[category] ?? 0) + 1;
+      }
+    } catch { /* ignore */ }
+  }
+
+  const gapMatrix = computeGapMatrix(project.id, ourArticlesByCluster, competitorCoverages);
+  memory.save("areas/competitors/_gap-matrix.json", gapMatrix, "competitor-scan");
+
+  const blogIndexes = allCompetitors.map((c) => {
+    const s = domainSlug(c.domain);
+    const idx = memory.load<CompetitorBlogIndex>(`areas/competitors/${s}/blog-index.json`);
+    return { slug: s, name: c.name, domain: c.domain, blogUrl: c.domain, sitemapUrl: idx?.sitemapUrl ?? null,
+      index: idx ?? { competitorSlug: s, sitemapUrl: null, lastCrawlAt: "", totalArticles: 0, articles: [] } };
+  });
+  const ourArticleCount = Object.values(ourArticlesByCluster).reduce((a, b) => a + b, 0);
+  const competitorIndex = computeCompetitorIndex(project.id, blogIndexes, gapMatrix, ourArticleCount);
+  memory.save("areas/competitors/_index.json", competitorIndex, "competitor-scan");
+
+  logEvent("analyze", "done", `Scan complete — ${newArticles.length} new articles for ${comp.name}`);
+  ctx.completePhase("analyze");
+  ctx.updateRun({ status: "completed", completedAt: now() });
+
+  log.info({ competitor: slug, newArticles: newArticles.length, total: blogIndex.totalArticles }, "single competitor scan completed");
 }

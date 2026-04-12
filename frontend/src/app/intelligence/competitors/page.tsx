@@ -33,7 +33,7 @@ import { getCompetitors, getCompetitorDetail, triggerMonitor } from "@/lib/api";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
 
 type CompetitorEntry = { slug: string; name: string; domain: string; totalArticles: number; lastScanAt: string; newSinceLastScan: number; topClusters: string[]; recentHighlight: string };
-type ArticleData = { url: string; title: string; topicCluster: string | null; h2Headings: string[]; estimatedWordCount: number | null; publishedAt: string | null };
+type ArticleData = { url: string; title: string; topicCluster: string | null; h2Headings: string[]; h3Headings?: string[]; estimatedWordCount: number | null; publishedAt: string | null };
 type CompetitorDetailData = { profile: Record<string, unknown>; topicCoverage: { clusters: Array<{ cluster: string; articleCount: number; depth: string; trend: string }> }; recentActivity: { newArticles: Array<{ url: string; title: string; topicCluster: string | null }> }; blogStats: { totalArticles: number; lastCrawlAt: string } | null; articles: ArticleData[] };
 
 export default function CompetitorsPage() {
@@ -270,7 +270,7 @@ export default function CompetitorsPage() {
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         {a.topicCluster ? <span className="capitalize">{a.topicCluster.replace(/-/g, " ")}</span> : null}
                         {a.estimatedWordCount ? <span>· {a.estimatedWordCount.toLocaleString()} words</span> : null}
-                        {a.h2Headings?.length > 0 ? <span>· {a.h2Headings.length} sections</span> : null}
+                        {(a.h2Headings?.length > 0 || a.h3Headings?.length) ? <span>· {(a.h2Headings?.length ?? 0) + (a.h3Headings?.length ?? 0)} sections</span> : null}
                       </div>
                     </div>
                     <a href={a.url} target="_blank" rel="noopener noreferrer" className="shrink-0 p-1 hover:bg-muted rounded" onClick={(e) => e.stopPropagation()}>
@@ -279,11 +279,14 @@ export default function CompetitorsPage() {
                   </summary>
                   <div className="px-5 pb-4 pt-1 ml-7 space-y-2">
                     <p className="text-xs text-muted-foreground font-mono truncate">{a.url}</p>
-                    {a.h2Headings?.length > 0 && (
+                    {(a.h2Headings?.length > 0 || a.h3Headings?.length) && (
                       <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground">H2 Structure:</p>
-                        {a.h2Headings.map((h, j) => (
-                          <p key={j} className="text-xs text-muted-foreground pl-3 border-l-2 border-muted">{h}</p>
+                        <p className="text-xs font-medium text-muted-foreground">Article Structure:</p>
+                        {a.h2Headings?.map((h, j) => (
+                          <p key={`h2-${j}`} className="text-xs text-muted-foreground pl-3 border-l-2 border-foreground/20 font-medium">{h}</p>
+                        ))}
+                        {a.h3Headings?.map((h, j) => (
+                          <p key={`h3-${j}`} className="text-xs text-muted-foreground pl-6 border-l-2 border-muted">{h}</p>
                         ))}
                       </div>
                     )}
@@ -351,7 +354,7 @@ export default function CompetitorsPage() {
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditComp({ slug: c.slug, name: c.name, domain: c.domain }); setEditName(c.name); setEditDomain(c.domain); }}>
                         <Pencil className="mr-2 h-3.5 w-3.5" />Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); triggerMonitor(customerId!, projectId!, "competitor-scan"); }}>
+                      <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await fetch(`${API_URL}/customers/${customerId}/projects/${projectId}/cmo/competitors/${c.slug}/scan`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }); }}>
                         <RotateCcw className="mr-2 h-3.5 w-3.5" />Re-scan
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
