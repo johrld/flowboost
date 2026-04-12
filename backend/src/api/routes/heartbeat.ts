@@ -24,8 +24,16 @@ export async function heartbeatRoutes(app: FastifyInstance) {
     // Build phases: for competitor scan, one phase per competitor + classify + analyze
     const project2 = app.ctx.projectsFor(customerId).get(projectId);
     const competitors = project2?.competitors ?? [];
+    // Check which competitors need profiling (first scan)
+    const memory2 = app.ctx.memoryFor(customerId, projectId);
+    const needsProfiling = competitors.filter((c) => {
+      const slug2 = c.domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "").replace(/\..+$/, "").replace(/[^a-z0-9]/gi, "-").toLowerCase();
+      return !memory2.exists(`areas/competitors/${slug2}/crawl-profile.json`);
+    });
+
     const phases = agentName === "monitor-competitors" && competitors.length > 0
       ? [
+          ...(needsProfiling.length > 0 ? [{ name: "onboarding", status: "pending" as const, agentCalls: [] }] : []),
           ...competitors.map((c) => ({ name: `crawl:${c.name}`, status: "pending" as const, agentCalls: [] })),
           { name: "classify", status: "pending" as const, agentCalls: [] },
           { name: "analyze", status: "pending" as const, agentCalls: [] },

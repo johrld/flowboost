@@ -13,6 +13,7 @@ import {
   crawlPage,
   type CrawledPage,
 } from "../../services/sitemap-crawler.js";
+import { analyzeCompetitor, type CrawlProfile } from "../../services/crawl-profiler.js";
 import { classifyBatch } from "../../services/topic-classifier.js";
 import { computeTopicCoverage, computeGapMatrix, computeCompetitorIndex } from "../../services/gap-analyzer.js";
 import type {
@@ -91,20 +92,33 @@ export async function runCompetitorScan(
 
     log.info({ competitor: slug, domain: comp.domain }, "scanning competitor");
     ctx.startPhase(phaseName);
-    logEvent(phaseName, "discover-sitemap", comp.domain);
+
+    // Load or create crawl profile (Playwright-based analysis on first run)
+    let profile = memory.load<CrawlProfile>(`${competitorDir}/crawl-profile.json`);
+    if (!profile) {
+      logEvent(phaseName, "analyze-site", `First scan — analyzing ${comp.domain} with browser`);
+      try {
+        profile = await analyzeCompetitor(comp.domain, comp.name, ctx.projectDir);
+        logEvent(phaseName, "profile-created", `Method: ${profile.extraction.method}, confidence: ${profile.validation.confidence}, avg ${profile.validation.avgWordCount} words`);
+      } catch (err) {
+        log.warn({ err, competitor: slug }, "crawl profiler failed, using defaults");
+        logEvent(phaseName, "profile-fallback", "Profiler failed, using auto-discovery");
+      }
+    }
 
     // Load or initialize blog index
     let blogIndex = memory.load<CompetitorBlogIndex>(`${competitorDir}/blog-index.json`) ?? {
       competitorSlug: slug,
-      sitemapUrl: null,
+      sitemapUrl: profile?.blog.sitemapUrl ?? null,
       lastCrawlAt: "",
       totalArticles: 0,
       articles: [],
     };
 
-    // Discover sitemap if not known
+    // Use profile sitemap URL if available, otherwise discover
     if (!blogIndex.sitemapUrl) {
-      const sitemapUrl = await discoverSitemapUrl(comp.domain);
+      logEvent(phaseName, "discover-sitemap", comp.domain);
+      const sitemapUrl = profile?.blog.sitemapUrl ?? await discoverSitemapUrl(comp.domain);
       blogIndex.sitemapUrl = sitemapUrl;
     }
 
@@ -118,12 +132,20 @@ export async function runCompetitorScan(
     logEvent(phaseName, "fetch-sitemap", blogIndex.sitemapUrl);
 
     // Fetch sitemap
-    const sitemapEntries = await fetchSitemap(blogIndex.sitemapUrl);
+    let sitemapEntries = await fetchSitemap(blogIndex.sitemapUrl);
     if (sitemapEntries.length === 0) {
       log.warn({ competitor: slug }, "empty sitemap");
       logEvent(phaseName, "error", "Empty sitemap");
       ctx.completePhase(phaseName);
       continue;
+    }
+
+    // Apply path filter from crawl profile (e.g., only /blog/ or /articles/)
+    const pathFilter = profile?.blog.pathFilter;
+    if (pathFilter) {
+      const before = sitemapEntries.length;
+      sitemapEntries = sitemapEntries.filter((e) => e.url.includes(pathFilter));
+      logEvent(phaseName, "path-filter", `${pathFilter}: ${before} → ${sitemapEntries.length} URLs`);
     }
 
     logEvent(phaseName, "sitemap-parsed", `${sitemapEntries.length} URLs found`);
