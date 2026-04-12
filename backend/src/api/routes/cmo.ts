@@ -238,4 +238,131 @@ export async function cmoRoutes(app: FastifyInstance) {
       };
     },
   );
+
+  // DELETE /cmo/competitors/:slug — remove competitor from memory
+  app.delete<{ Params: { customerId: string; projectId: string; slug: string } }>(
+    "/competitors/:slug",
+    async (request) => {
+      const { customerId, projectId, slug } = request.params;
+      const memory = app.ctx.memoryFor(customerId, projectId);
+
+      // Remove per-competitor memory files
+      const fs = await import("node:fs");
+      const competitorDir = path.join(memory.getDir(), "areas", "competitors", slug);
+      if (fs.existsSync(competitorDir)) {
+        fs.rmSync(competitorDir, { recursive: true });
+      }
+
+      // Update _index.json — remove this competitor
+      const index = memory.load<{ competitors: Array<{ slug: string }> }>("areas/competitors/_index.json");
+      if (index) {
+        index.competitors = index.competitors.filter((c) => c.slug !== slug);
+        memory.save("areas/competitors/_index.json", index, "user");
+      }
+
+      return { message: `Competitor ${slug} removed` };
+    },
+  );
+
+  // POST /cmo/competitors/onboard — analyze a new competitor with live events
+  app.post<{
+    Params: { customerId: string; projectId: string };
+    Body: { domain: string; name: string };
+  }>(
+    "/competitors/onboard",
+    async (request, reply) => {
+      const { customerId, projectId } = request.params;
+      const { domain, name } = (request.body ?? {}) as { domain?: string; name?: string };
+
+      if (!domain || !name) return reply.status(400).send({ error: "domain and name required" });
+
+      const projectDir = path.join(app.ctx.dataDir, "customers", customerId, "projects", projectId);
+
+      // Create a pipeline run to track events
+      const run = app.ctx.pipelineRunsFor(customerId, projectId).create({
+        customerId,
+        projectId,
+        type: "strategy",
+        status: "pending",
+        phases: [
+          { name: "discover-sitemap", status: "pending" as const, agentCalls: [] },
+          { name: "test-extraction", status: "pending" as const, agentCalls: [] },
+          { name: "create-profile", status: "pending" as const, agentCalls: [] },
+        ],
+        totalCostUsd: 0,
+        totalTokens: { input: 0, output: 0 },
+        createdAt: new Date().toISOString(),
+      });
+
+      const runStore = app.ctx.pipelineRunsFor(customerId, projectId);
+
+      // Run profiler async with event tracking
+      (async () => {
+        runStore.update(run.id, { status: "running", startedAt: new Date().toISOString() });
+        try {
+          const { analyzeCompetitor } = await import("../../services/crawl-profiler.js");
+          await analyzeCompetitor(domain, name, projectDir, (event) => {
+            // Map events to pipeline phases + agent calls
+            const phaseMap: Record<string, string> = {
+              "discover-sitemap": "discover-sitemap",
+              "detect-blog-path": "discover-sitemap",
+              "test-extraction": "test-extraction",
+              "analyze-sample": "test-extraction",
+              "profile-created": "create-profile",
+              "complete": "create-profile",
+            };
+            const phaseName = phaseMap[event.step] ?? "test-extraction";
+
+            if (event.status === "running") {
+              runStore.updatePhase(run.id, phaseName, { status: "running", startedAt: new Date().toISOString() });
+            }
+
+            // Add event as agent call
+            runStore.addAgentCall(run.id, phaseName, {
+              agent: "crawl-profiler",
+              model: "code",
+              status: event.status === "error" ? "failed" : "completed",
+              costUsd: 0,
+              tokens: { input: 0, output: 0 },
+              durationMs: 0,
+              events: [{
+                type: "tool_call",
+                timestamp: new Date().toISOString(),
+                tool: event.step,
+                input: event.detail ?? "",
+              }],
+            });
+
+            if (event.status === "done" && (event.step === "profile-created" || event.step === "discover-sitemap")) {
+              runStore.updatePhase(run.id, phaseName, { status: "completed", completedAt: new Date().toISOString() });
+            }
+          });
+
+          // Add to _index.json so it appears in the UI immediately
+          const memory2 = app.ctx.memoryFor(customerId, projectId);
+          const slug2 = domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "").replace(/\..+$/, "").replace(/[^a-z0-9]/gi, "-").toLowerCase();
+          const existingIndex = memory2.load<{ competitors: Array<Record<string, unknown>>; [k: string]: unknown }>("areas/competitors/_index.json") ?? { projectId, updatedAt: new Date().toISOString(), competitors: [], ourTotalArticles: 0, topGaps: [], topOpportunities: [] };
+          if (!existingIndex.competitors.some((c) => c.slug === slug2)) {
+            existingIndex.competitors.push({
+              slug: slug2, name, domain, totalArticles: 0, lastScanAt: "",
+              newSinceLastScan: 0, topClusters: [], recentHighlight: "Just added — run a scan to index articles",
+            });
+            existingIndex.updatedAt = new Date().toISOString();
+            memory2.save("areas/competitors/_index.json", existingIndex, "onboarding");
+          }
+
+          // Mark all phases complete
+          for (const phase of ["discover-sitemap", "test-extraction", "create-profile"]) {
+            runStore.updatePhase(run.id, phase, { status: "completed", completedAt: new Date().toISOString() });
+          }
+          runStore.update(run.id, { status: "completed", completedAt: new Date().toISOString() });
+        } catch (err) {
+          log.error({ err }, "onboarding failed");
+          runStore.update(run.id, { status: "failed", completedAt: new Date().toISOString(), error: String(err) });
+        }
+      })();
+
+      return { message: "Onboarding started", runId: run.id };
+    },
+  );
 }

@@ -178,19 +178,16 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
-      {/* Logo */}
-      <Link href="/content/articles" className="flex items-center gap-2.5 border-b px-4 py-4 hover:bg-muted/50 transition-colors">
-        <Image src="/logo.png" alt="FlowBoost" width={28} height={28} className="rounded-md" />
-        <span className="text-lg font-semibold">flowboost</span>
-      </Link>
-
-      {/* Project Selector */}
-      <div className="border-b px-3 py-3">
+      {/* Logo + Project Selector */}
+      <div className="flex items-center gap-2 border-b px-3 py-2.5">
+        <Link href="/content/articles" className="shrink-0">
+          <Image src="/logo.png" alt="FlowBoost" width={28} height={28} className="rounded-md" />
+        </Link>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-between font-medium">
-              {project?.name ?? "Loading..."}
-              <ChevronDown className="h-4 w-4 opacity-50" />
+            <Button variant="ghost" size="sm" className="flex-1 justify-between font-medium h-8 px-2">
+              <span className="truncate">{project?.name ?? "Loading..."}</span>
+              <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0 ml-1" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
@@ -211,6 +208,39 @@ export function Sidebar() {
         </DropdownMenu>
       </div>
 
+      {/* Browse / Chat Tabs */}
+      <div className="px-3 py-2 border-b">
+        <div className="flex bg-muted/60 rounded-lg p-0.5">
+          <button
+            type="button"
+            onClick={() => setCmoOpen(false)}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              !cmoOpen ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Library className="h-3.5 w-3.5" />Browse
+          </button>
+          <button
+            type="button"
+            onClick={() => setCmoOpen(true)}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              cmoOpen ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />Chat
+          </button>
+        </div>
+      </div>
+
+      {/* Chat Mode — replaces navigation */}
+      {cmoOpen && customerId && projectId ? (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <CmoChat customerId={customerId} projectId={projectId} />
+        </div>
+      ) : (
+      <>
       {/* Content Section */}
       <div className="px-3 pt-4 pb-1">
         <div className="px-3 pb-2">
@@ -313,8 +343,8 @@ export function Sidebar() {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Monitor + CMO Chat */}
-      <div className="px-3 pb-1 space-y-0.5">
+      {/* Monitor */}
+      <div className="px-3 pb-1">
         <Link
           href="/monitor"
           className={cn(
@@ -327,15 +357,10 @@ export function Sidebar() {
           <Activity className="h-4 w-4" />
           Monitor
         </Link>
-        <button
-          type="button"
-          onClick={() => setCmoOpen(true)}
-          className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors w-full text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-        >
-          <MessageSquare className="h-4 w-4" />
-          CMO Chat
-        </button>
       </div>
+
+      </>
+      )}
 
       {/* Footer */}
       <div className="border-t px-4 py-3 text-xs text-muted-foreground flex items-center gap-2">
@@ -374,23 +399,6 @@ export function Sidebar() {
         </DialogContent>
       </Dialog>
 
-      {/* CMO Chat Overlay */}
-      {cmoOpen && customerId && projectId && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setCmoOpen(false)} />
-          <div className="relative w-full max-w-md bg-background border-l shadow-xl flex flex-col h-full animate-in slide-in-from-right duration-200">
-            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-              <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                <MessageSquare className="h-3.5 w-3.5" />CMO Chat
-              </h3>
-              <button type="button" onClick={() => setCmoOpen(false)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <CmoChat customerId={customerId} projectId={projectId} />
-          </div>
-        </div>
-      )}
     </aside>
   );
 }

@@ -67,13 +67,16 @@ export async function discoverSitemapUrl(blogUrl: string): Promise<string | null
 
   const candidates = [
     `${blogSubdomain}/sitemap.xml`,
-    `${base}/blog/sitemap.xml`,
+    `${domain}/blog/sitemap_index.xml`,
     `${domain}/blog/sitemap.xml`,
+    `${domain}/blog/post-sitemap.xml`,
+    `${domain}/blog/wp-sitemap-posts-post-1.xml`,
     `${base}/sitemap.xml`,
     `${domain}/sitemap.xml`,
     `${domain}/post-sitemap.xml`,
     `${domain}/sitemap_index.xml`,
     `${domain}/articles/sitemap.xml`,
+    `${domain}/wp-sitemap.xml`,
   ];
 
   for (const url of candidates) {

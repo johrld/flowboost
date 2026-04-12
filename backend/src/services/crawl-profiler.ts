@@ -45,16 +45,26 @@ export interface CrawlProfile {
  * Analyze a competitor website and create a crawl profile.
  * Uses Playwright to render pages in a real browser and validate extraction.
  */
+export interface ProfileEvent {
+  step: string;
+  status: "running" | "done" | "error";
+  detail?: string;
+  data?: Record<string, unknown>;
+}
+
 export async function analyzeCompetitor(
   domain: string,
   name: string,
   projectDir: string,
+  onEvent?: (event: ProfileEvent) => void,
 ): Promise<CrawlProfile> {
+  const emit = onEvent ?? (() => {});
   const slug = domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "").replace(/\..+$/, "").replace(/[^a-z0-9]/gi, "-").toLowerCase();
   const memory = new MemoryStore(projectDir);
   const now = new Date().toISOString();
 
   log.info({ domain, name }, "analyzing competitor site structure");
+  emit({ step: "discover-sitemap", status: "running", detail: `Searching for sitemap on ${domain}` });
 
   // ── Step 1: Discover sitemap ────────────────────────────
   const sitemapUrl = await discoverSitemapUrl(domain);
@@ -103,6 +113,17 @@ export async function analyzeCompetitor(
     }
   } catch { /* no blog subdomain */ }
 
+  if (sitemapUrl) {
+    emit({ step: "discover-sitemap", status: "done", detail: sitemapUrl, data: { urlCount: sitemapEntries.length, blogPathFilter } });
+  } else {
+    emit({ step: "discover-sitemap", status: "error", detail: "No sitemap found" });
+  }
+
+  if (blogPathFilter) {
+    const filteredCount = sitemapEntries.filter((e) => e.url.includes(blogPathFilter)).length;
+    emit({ step: "detect-blog-path", status: "done", detail: `${blogPathFilter} → ${filteredCount} article URLs`, data: { blogPathFilter, filteredCount } });
+  }
+
   log.info({ sitemapUrl, blogPathFilter, totalUrls: sitemapEntries.length }, "sitemap analysis done");
 
   // ── Step 2: Pick 3 sample article URLs ──────────────────
@@ -125,8 +146,11 @@ export async function analyzeCompetitor(
 
   if (articleUrls.length === 0) {
     log.warn({ domain }, "no sample articles found");
+    emit({ step: "complete", status: "error", detail: "No sample articles found" });
     return createEmptyProfile(domain, name, sitemapUrl, sitemapEntries.length);
   }
+
+  emit({ step: "test-extraction", status: "running", detail: `Testing ${articleUrls.length} sample articles` });
 
   // ── Step 3: Crawl samples with code + validate with Playwright ──
   const samples: CrawlProfile["validation"]["samples"] = [];
@@ -139,7 +163,9 @@ export async function analyzeCompetitor(
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ userAgent: "FlowBoost/1.0 (content research bot)" });
 
-    for (const url of articleUrls) {
+    for (let si = 0; si < articleUrls.length; si++) {
+      const url = articleUrls[si];
+      emit({ step: "analyze-sample", status: "running", detail: `Sample ${si + 1}/${articleUrls.length}: ${url.split("/").pop()}` });
       log.info({ url }, "analyzing sample article");
 
       // Code-based extraction
@@ -204,6 +230,13 @@ export async function analyzeCompetitor(
           wordCount: browserWords,
           h2Count: browserH2s || browserH3s,
           validated,
+        });
+
+        emit({
+          step: "analyze-sample",
+          status: "done",
+          detail: `"${browserData.title.slice(0, 50)}" — ${browserWords} words, ${browserH2s || browserH3s} sections`,
+          data: { url, title: browserData.title, wordCount: browserWords, h2Count: browserH2s, readabilityOk, validated },
         });
 
         log.info({
@@ -281,6 +314,13 @@ export async function analyzeCompetitor(
       confidence: allValidated && samples.length >= 2 ? "high" : samples.length >= 1 ? "medium" : "low",
     },
   };
+
+  emit({
+    step: "profile-created",
+    status: "done",
+    detail: `Method: ${profile.extraction.method}, Confidence: ${profile.validation.confidence}`,
+    data: { method: profile.extraction.method, confidence: profile.validation.confidence, avgWordCount, avgH2Count },
+  });
 
   // Save the profile
   const profileDir = `areas/competitors/${slug}`;
