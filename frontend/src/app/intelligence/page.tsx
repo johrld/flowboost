@@ -22,7 +22,8 @@ import { getProjectMemory, getCompetitors, getCompetitorDetail, triggerMonitor }
 
 type CompetitorEntry = { slug: string; name: string; domain: string; totalArticles: number; lastScanAt: string; newSinceLastScan: number; topClusters: string[]; recentHighlight: string };
 type GapCluster = { cluster: string; ourCount: number; ourDepth: string; competitors: Record<string, { count: number; depth: string }>; gapType: string; priority: string; recommendation: string };
-type CompetitorDetailData = { profile: Record<string, unknown>; topicCoverage: { clusters: Array<{ cluster: string; articleCount: number; depth: string; trend: string }> }; recentActivity: { newArticles: Array<{ url: string; title: string; topicCluster: string | null }> }; blogStats: { totalArticles: number; lastCrawlAt: string } | null };
+type ArticleData = { url: string; title: string; topicCluster: string | null; h2Headings: string[]; estimatedWordCount: number | null; publishedAt: string | null };
+type CompetitorDetailData = { profile: Record<string, unknown>; topicCoverage: { clusters: Array<{ cluster: string; articleCount: number; depth: string; trend: string }> }; recentActivity: { newArticles: Array<{ url: string; title: string; topicCluster: string | null }> }; blogStats: { totalArticles: number; lastCrawlAt: string } | null; articles: ArticleData[] };
 
 export default function IntelligencePage() {
   const { customerId, projectId, loading: projectLoading } = useProject();
@@ -149,20 +150,45 @@ export default function IntelligencePage() {
           </div>
         )}
 
-        {/* Recent Activity */}
-        {detail.recentActivity?.newArticles?.length > 0 && (
+        {/* Articles */}
+        {detail.articles?.length > 0 && (
           <div className="rounded-xl border bg-background shadow-sm">
-            <div className="px-5 py-4 border-b"><h3 className="text-sm font-semibold">Recent Articles</h3></div>
+            <div className="px-5 py-4 border-b">
+              <h3 className="text-sm font-semibold">Indexed Articles ({detail.articles.length})</h3>
+            </div>
             <div className="divide-y">
-              {detail.recentActivity.newArticles.filter((a) => a.title).map((a, i) => (
-                <div key={i} className="flex items-center gap-3 px-5 py-3">
-                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline truncate block">{a.title}</a>
-                    {a.topicCluster ? <span className="text-xs text-muted-foreground capitalize">{a.topicCluster.replace(/-/g, " ")}</span> : null}
+              {detail.articles.filter((a) => a.title).map((a, i) => (
+                <details key={i} className="group">
+                  <summary className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{a.title}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {a.topicCluster ? <span className="capitalize">{a.topicCluster.replace(/-/g, " ")}</span> : null}
+                        {a.estimatedWordCount ? <span>· {a.estimatedWordCount.toLocaleString()} words</span> : null}
+                        {a.h2Headings?.length > 0 ? <span>· {a.h2Headings.length} sections</span> : null}
+                      </div>
+                    </div>
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="shrink-0 p-1 hover:bg-muted rounded" onClick={(e) => e.stopPropagation()}>
+                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                    </a>
+                  </summary>
+                  <div className="px-5 pb-4 pt-1 ml-7 space-y-2">
+                    <p className="text-xs text-muted-foreground font-mono truncate">{a.url}</p>
+                    {a.h2Headings?.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">H2 Structure:</p>
+                        {a.h2Headings.map((h, j) => (
+                          <p key={j} className="text-xs text-muted-foreground pl-3 border-l-2 border-muted">{h}</p>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-4 text-xs text-muted-foreground">
+                      {a.estimatedWordCount ? <span>{a.estimatedWordCount.toLocaleString()} words</span> : null}
+                      {a.publishedAt ? <span>Published: {new Date(a.publishedAt).toLocaleDateString()}</span> : null}
+                    </div>
                   </div>
-                  <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
-                </div>
+                </details>
               ))}
             </div>
           </div>

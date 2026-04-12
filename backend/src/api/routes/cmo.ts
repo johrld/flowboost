@@ -228,12 +228,13 @@ export async function cmoRoutes(app: FastifyInstance) {
       if (!profile) return reply.status(404).send({ error: "Competitor not found" });
       const topicCoverage = memory.load(`areas/competitors/${slug}/topic-coverage.json`);
       const recentActivity = memory.load(`areas/competitors/${slug}/recent-activity.json`);
-      const blogIndex = memory.load<{ totalArticles: number; lastCrawlAt: string }>(`areas/competitors/${slug}/blog-index.json`);
+      const blogIndex = memory.load<{ totalArticles: number; lastCrawlAt: string; articles: Array<{ url: string; title: string; topicCluster: string | null; h2Headings: string[]; estimatedWordCount: number | null; publishedAt: string | null }> }>(`areas/competitors/${slug}/blog-index.json`);
       return {
         profile,
         topicCoverage,
         recentActivity,
         blogStats: blogIndex ? { totalArticles: blogIndex.totalArticles, lastCrawlAt: blogIndex.lastCrawlAt } : null,
+        articles: blogIndex?.articles ?? [],
       };
     },
   );
