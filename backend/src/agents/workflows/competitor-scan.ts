@@ -65,7 +65,21 @@ export async function runCompetitorScan(
   const now = () => new Date().toISOString();
 
   ctx.updateRun({ status: "running", startedAt: now() });
-  ctx.startPhase("competitor-scan");
+
+  /** Log an event to the current run phase (visible in Monitor UI) */
+  function logEvent(phase: string, tool: string, input: string) {
+    try {
+      ctx.stores.pipelineRuns.addAgentCall(ctx.run.id, phase, {
+        agent: "competitor-scan",
+        model: "code",
+        status: "completed",
+        costUsd: 0,
+        tokens: { input: 0, output: 0 },
+        durationMs: 0,
+        events: [{ type: "tool_call", timestamp: now(), tool, input }],
+      });
+    } catch { /* ignore logging errors */ }
+  }
 
   const allNewArticles: Array<{ competitor: string; articles: CompetitorArticle[] }> = [];
 
@@ -73,8 +87,11 @@ export async function runCompetitorScan(
   for (const comp of competitors) {
     const slug = domainSlug(comp.domain);
     const competitorDir = `areas/competitors/${slug}`;
+    const phaseName = `crawl:${comp.name}`;
 
     log.info({ competitor: slug, domain: comp.domain }, "scanning competitor");
+    ctx.startPhase(phaseName);
+    logEvent(phaseName, "discover-sitemap", comp.domain);
 
     // Load or initialize blog index
     let blogIndex = memory.load<CompetitorBlogIndex>(`${competitorDir}/blog-index.json`) ?? {
@@ -93,25 +110,36 @@ export async function runCompetitorScan(
 
     if (!blogIndex.sitemapUrl) {
       log.warn({ competitor: slug }, "no sitemap found, skipping");
+      logEvent(phaseName, "error", "No sitemap found");
+      ctx.completePhase(phaseName);
       continue;
     }
+
+    logEvent(phaseName, "fetch-sitemap", blogIndex.sitemapUrl);
 
     // Fetch sitemap
     const sitemapEntries = await fetchSitemap(blogIndex.sitemapUrl);
     if (sitemapEntries.length === 0) {
       log.warn({ competitor: slug }, "empty sitemap");
+      logEvent(phaseName, "error", "Empty sitemap");
+      ctx.completePhase(phaseName);
       continue;
     }
+
+    logEvent(phaseName, "sitemap-parsed", `${sitemapEntries.length} URLs found`);
 
     // Diff against known articles
     const knownUrls = new Set(blogIndex.articles.map((a) => a.url));
     const { newEntries } = diffArticles(knownUrls, sitemapEntries);
 
+    logEvent(phaseName, "diff", `${newEntries.length} new URLs (${knownUrls.size} known)`);
     log.info({ competitor: slug, total: sitemapEntries.length, new: newEntries.length }, "sitemap diffed");
 
     // Deep-crawl new pages (limited per scan)
     const toCrawl = newEntries.slice(0, MAX_PAGES_TO_CRAWL_PER_SCAN);
     const newArticles: CompetitorArticle[] = [];
+
+    logEvent(phaseName, "crawl-start", `Crawling ${toCrawl.length} pages`);
 
     for (const entry of toCrawl) {
       const page = await crawlPage(entry.url);
@@ -181,6 +209,8 @@ export async function runCompetitorScan(
 
     allNewArticles.push({ competitor: slug, articles: newArticles });
 
+    logEvent(phaseName, "indexed", `${newArticles.length} articles saved (${blogIndex.totalArticles} total)`);
+    ctx.completePhase(phaseName);
     log.info({ competitor: slug, newArticles: newArticles.length, total: blogIndex.totalArticles }, "blog index updated");
   }
 
@@ -189,7 +219,9 @@ export async function runCompetitorScan(
     .flatMap(({ articles }) => articles)
     .filter((a) => a.topicCluster === null && a.title);
 
+  ctx.startPhase("classify");
   if (unclassified.length > 0) {
+    logEvent("classify", "agent-classify", `${unclassified.length} articles need AI classification`);
     log.info({ count: unclassified.length }, "classifying unclassified articles via agent");
 
     const classifyJob = jobs.create({
@@ -234,7 +266,12 @@ export async function runCompetitorScan(
     }
   }
 
+  logEvent("classify", "done", `Classification complete`);
+  ctx.completePhase("classify");
+
   // ── Step 5: Recompute topic coverage per competitor ──────────
+  ctx.startPhase("analyze");
+  logEvent("analyze", "compute-coverage", "Recomputing topic coverage per competitor");
   const competitorCoverages: Array<{ slug: string; coverage: ReturnType<typeof computeTopicCoverage> }> = [];
 
   for (const comp of competitors) {
@@ -262,8 +299,10 @@ export async function runCompetitorScan(
     } catch { /* ignore */ }
   }
 
+  logEvent("analyze", "compute-gaps", "Computing gap matrix");
   const gapMatrix = computeGapMatrix(project.id, ourArticlesByCluster, competitorCoverages);
   memory.save("areas/competitors/_gap-matrix.json", gapMatrix, "competitor-scan");
+  logEvent("analyze", "gap-matrix", `${gapMatrix.summary.totalClusters} clusters, ${gapMatrix.summary.weLag} gaps`);
 
   // ── Step 7: Regenerate _index.json ──────────────────────────
   const blogIndexes = competitors.map((comp) => {
@@ -283,7 +322,8 @@ export async function runCompetitorScan(
   const competitorIndex = computeCompetitorIndex(project.id, blogIndexes, gapMatrix, ourArticleCount);
   memory.save("areas/competitors/_index.json", competitorIndex, "competitor-scan");
 
-  ctx.completePhase("competitor-scan");
+  logEvent("analyze", "done", "Analysis complete — index and gap matrix updated");
+  ctx.completePhase("analyze");
   ctx.updateRun({ status: "completed", completedAt: now() });
 
   log.info(

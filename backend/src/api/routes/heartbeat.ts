@@ -21,12 +21,23 @@ export async function heartbeatRoutes(app: FastifyInstance) {
     const project = app.ctx.projectsFor(customerId).get(projectId);
     if (!project) return null;
 
+    // Build phases: for competitor scan, one phase per competitor + classify + analyze
+    const project2 = app.ctx.projectsFor(customerId).get(projectId);
+    const competitors = project2?.competitors ?? [];
+    const phases = agentName === "monitor-competitors" && competitors.length > 0
+      ? [
+          ...competitors.map((c) => ({ name: `crawl:${c.name}`, status: "pending" as const, agentCalls: [] })),
+          { name: "classify", status: "pending" as const, agentCalls: [] },
+          { name: "analyze", status: "pending" as const, agentCalls: [] },
+        ]
+      : [{ name: agentName, status: "pending" as const, agentCalls: [] }];
+
     const run = app.ctx.pipelineRunsFor(customerId, projectId).create({
       customerId,
       projectId,
-      type: "monitor" as "strategy", // Using strategy as fallback until monitor is added to PipelineType union in pipeline-run store
+      type: "strategy",
       status: "pending",
-      phases: [{ name: agentName, status: "pending" as const, agentCalls: [] }],
+      phases,
       totalCostUsd: 0,
       totalTokens: { input: 0, output: 0 },
       createdAt: new Date().toISOString(),
