@@ -293,8 +293,13 @@ export default function ContentTypesPage() {
                 <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
                   onClick={async () => {
                     if (!confirm(`Delete "${ct.label}"? This cannot be undone.`)) return;
-                    await deleteContentType(customerId, projectId, ct.id);
-                    setTypes((prev) => prev.filter((t) => t.id !== ct.id));
+                    try {
+                      await deleteContentType(customerId, projectId, ct.id);
+                      setTypes((prev) => prev.filter((t) => t.id !== ct.id));
+                    } catch (err) {
+                      console.error("Delete failed:", err);
+                      alert(`Failed to delete "${ct.label}"`);
+                    }
                   }}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
