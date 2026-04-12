@@ -224,7 +224,7 @@ async function processAudio(
   if (!filePath) throw new Error("Audio file not found on disk");
 
   const fileBuffer = readFileGuarded(filePath);
-  const blob = new Blob([fileBuffer], { type: input.mimeType ?? "audio/mpeg" });
+  const blob = new Blob([new Uint8Array(fileBuffer)], { type: input.mimeType ?? "audio/mpeg" });
 
   const formData = new FormData();
   formData.append("file", blob, input.fileName ?? "audio.mp3");

@@ -1,6 +1,38 @@
+import { JSDOM } from "jsdom";
+import { Readability } from "@mozilla/readability";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const robotsParser = (await import("robots-parser")).default as unknown as (url: string, contents: string) => { isAllowed(url: string, ua?: string): boolean | undefined; getCrawlDelay(ua?: string): number | undefined };
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("sitemap-crawler");
+
+const USER_AGENT = "FlowBoost/1.0 (content research bot)";
+const REQUEST_DELAY_MS = 1000; // Politeness: 1s between requests to same domain
+
+// robots.txt cache per domain
+const robotsCache = new Map<string, { allowed: (url: string) => boolean; delay: number }>();
+
+async function checkRobots(url: string): Promise<boolean> {
+  const origin = new URL(url).origin;
+  if (!robotsCache.has(origin)) {
+    try {
+      const res = await fetch(`${origin}/robots.txt`, { signal: AbortSignal.timeout(5000) });
+      const txt = res.ok ? await res.text() : "";
+      const robots = robotsParser(`${origin}/robots.txt`, txt);
+      robotsCache.set(origin, {
+        allowed: (u: string) => robots.isAllowed(u, USER_AGENT) ?? true,
+        delay: robots.getCrawlDelay(USER_AGENT) ?? REQUEST_DELAY_MS / 1000,
+      });
+    } catch {
+      robotsCache.set(origin, { allowed: () => true, delay: REQUEST_DELAY_MS / 1000 });
+    }
+  }
+  return robotsCache.get(origin)!.allowed(url);
+}
+
+async function politeDelay(): Promise<void> {
+  await new Promise((r) => setTimeout(r, REQUEST_DELAY_MS));
+}
 
 export interface SitemapEntry {
   url: string;
@@ -17,6 +49,8 @@ export interface CrawledPage {
   h3Headings: string[];
   estimatedWordCount: number;
   metaDescription?: string;
+  author?: string;
+  publishedAt?: string;
 }
 
 /**
@@ -127,45 +161,106 @@ export function diffArticles(
 }
 
 /**
- * Fetch a page and extract title, H2/H3 headings, word count, meta description.
- * Used for deep-indexing new articles.
+ * Fetch a page and extract article content using Mozilla Readability.
+ * Falls back to regex parsing if Readability fails.
+ * Extracts JSON-LD structured data when available.
  */
 export async function crawlPage(url: string): Promise<CrawledPage | null> {
   try {
+    // Check robots.txt
+    const allowed = await checkRobots(url);
+    if (!allowed) {
+      log.debug({ url }, "blocked by robots.txt");
+      return null;
+    }
+
+    // Polite delay
+    await politeDelay();
+
     const res = await fetch(url, {
       signal: AbortSignal.timeout(15000),
-      headers: { "User-Agent": "FlowBoost/1.0 (content research bot)" },
+      headers: { "User-Agent": USER_AGENT },
     });
     if (!res.ok) return null;
 
     const html = await res.text();
+    const slug = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "";
 
-    // Extract title — prefer H1 > og:title > <title>
+    // ── Try JSON-LD first for metadata ────────────────────
+    let jsonLdTitle: string | undefined;
+    let jsonLdDate: string | undefined;
+    let jsonLdWordCount: number | undefined;
+    let jsonLdAuthor: string | undefined;
+
+    const jsonLdMatches = html.match(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+    if (jsonLdMatches) {
+      for (const match of jsonLdMatches) {
+        try {
+          const jsonStr = match.replace(/<script[^>]*>/i, "").replace(/<\/script>/i, "").trim();
+          const data = JSON.parse(jsonStr);
+          const items = Array.isArray(data) ? data : data["@graph"] ? data["@graph"] : [data];
+          const article = items.find((i: Record<string, unknown>) =>
+            ["Article", "BlogPosting", "NewsArticle", "WebPage"].includes(String(i["@type"] ?? "")),
+          );
+          if (article) {
+            jsonLdTitle = article.headline as string | undefined;
+            jsonLdDate = (article.datePublished ?? article.dateModified) as string | undefined;
+            jsonLdWordCount = article.wordCount as number | undefined;
+            jsonLdAuthor = typeof article.author === "string" ? article.author
+              : (article.author as Record<string, unknown>)?.name as string | undefined;
+          }
+        } catch { /* malformed JSON-LD */ }
+      }
+    }
+
+    // ── Use Readability for content extraction ────────────
+    const dom = new JSDOM(html, { url });
+    const reader = new Readability(dom.window.document);
+    const article = reader.parse();
+
+    if (article && article.textContent && article.textContent.length > 100) {
+      // Parse headings from the clean article content (no nav/sidebar headings)
+      const articleDom = new JSDOM(article.content ?? "");
+      const doc = articleDom.window.document;
+      const h2Headings = [...doc.querySelectorAll("h2")]
+        .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
+        .filter((h) => h.length > 2 && h.length < 200);
+      const h3Headings = [...doc.querySelectorAll("h3")]
+        .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
+        .filter((h) => h.length > 2 && h.length < 200);
+
+      const title = decodeHtmlEntities(jsonLdTitle ?? article.title ?? "");
+      const estimatedWordCount = jsonLdWordCount ?? article.textContent.split(/\s+/).filter(Boolean).length;
+
+      return {
+        url,
+        title,
+        slug,
+        h2Headings,
+        h3Headings,
+        estimatedWordCount,
+        metaDescription: article.excerpt ?? undefined,
+        author: jsonLdAuthor ?? article.byline ?? undefined,
+        publishedAt: jsonLdDate,
+      };
+    }
+
+    // ── Fallback: regex-based extraction ──────────────────
+    log.debug({ url }, "Readability failed, using regex fallback");
+
     const h1Match = html.match(/<h1[^>]*>(.*?)<\/h1>/is);
     const h1Title = h1Match?.[1]?.replace(/<[^>]+>/g, "").trim();
     const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/) ||
       html.match(/<meta\s+content="([^"]*)"\s+property="og:title"/);
     const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is);
     const rawTitle = titleMatch?.[1]?.replace(/\s*[|–-]\s*.+$/, "").trim();
-    // Use H1 if it looks like a real article title (not generic brand name)
     const title = decodeHtmlEntities(
-      (h1Title && h1Title.length > 5 && h1Title.length < 200) ? h1Title
-        : ogTitleMatch?.[1] ?? rawTitle ?? ""
+      jsonLdTitle ?? (h1Title && h1Title.length > 5 ? h1Title : ogTitleMatch?.[1] ?? rawTitle ?? ""),
     );
 
-    // Extract slug from URL
-    const slug = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "";
+    const h2Headings = extractHeadings(html, "h2");
+    const h3Headings = extractHeadings(html, "h3");
 
-    // Extract H2 and H3 headings
-    const rawH2 = extractHeadings(html, "h2");
-    const rawH3 = extractHeadings(html, "h3");
-
-    // Filter out navigation H2s: single-word ALL-CAPS headings are likely nav links, not content
-    const h2Headings = rawH2.filter((h) => !(h === h.toUpperCase() && h.split(/\s+/).length <= 2));
-    // If all H2s were filtered out, use H3s as the content structure
-    const h3Headings = h2Headings.length === 0 ? rawH3.filter((h) => !h.includes("${")) : rawH3;
-
-    // Estimate word count from text content
     const textContent = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -175,14 +270,18 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-    const estimatedWordCount = textContent.split(/\s+/).length;
 
-    // Extract meta description
-    const metaMatch = html.match(/<meta\s+name="description"\s+content="([^"]*)"/) ||
-      html.match(/<meta\s+content="([^"]*)"\s+name="description"/);
-    const metaDescription = metaMatch?.[1];
-
-    return { url, title, slug, h2Headings, h3Headings, estimatedWordCount, metaDescription };
+    return {
+      url,
+      title,
+      slug,
+      h2Headings,
+      h3Headings,
+      estimatedWordCount: jsonLdWordCount ?? textContent.split(/\s+/).length,
+      metaDescription: undefined,
+      author: jsonLdAuthor,
+      publishedAt: jsonLdDate,
+    };
   } catch (err) {
     log.warn({ url, err }, "page crawl failed");
     return null;
