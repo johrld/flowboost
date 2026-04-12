@@ -10,8 +10,11 @@ import {
   Cable,
   ImageIcon,
   Library,
+  BarChart3,
   Brain,
   MessageSquare,
+  TrendingUp,
+  Users,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -167,7 +170,7 @@ export function Sidebar() {
 
   const calendarActive = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
   const contentActive = pathname === "/content" || (pathname.startsWith("/content/") && !pathname.startsWith("/content/topics"));
-  const intelligenceActive = pathname === "/intelligence";
+  const intelligenceActive = pathname.startsWith("/intelligence");
   const monitorActive = pathname === "/monitor" || pathname.startsWith("/monitor/");
 
   return (
@@ -231,18 +234,51 @@ export function Sidebar() {
           <Library className="h-4 w-4" />
           Content
         </Link>
-        <Link
-          href="/intelligence"
-          className={cn(
-            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-            intelligenceActive
-              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-          )}
-        >
-          <Brain className="h-4 w-4" />
-          Intelligence
-        </Link>
+      </div>
+
+      {/* Intelligence Section */}
+      <div className="px-3 pt-3 pb-1">
+        <div className="px-3 pb-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Intelligence</span>
+        </div>
+        <div className="space-y-0.5">
+          <Link
+            href="/intelligence"
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              pathname === "/intelligence"
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Overview
+          </Link>
+          <Link
+            href="/intelligence/competitors"
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              pathname.startsWith("/intelligence/competitors")
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <Users className="h-4 w-4" />
+            Competitors
+          </Link>
+          <Link
+            href="/intelligence/trends"
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              pathname === "/intelligence/trends"
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <TrendingUp className="h-4 w-4" />
+            Trends
+          </Link>
+        </div>
       </div>
 
       {/* Flows Section */}

@@ -7,40 +7,26 @@ import {
   Brain,
   RefreshCw,
   Loader2,
-  TrendingUp,
-  Users,
   AlertTriangle,
-  BarChart3,
-  ExternalLink,
   Clock,
-  ArrowLeft,
-  FileText,
-  Globe,
+  Users,
+  TrendingUp,
+  BarChart3,
 } from "lucide-react";
+import Link from "next/link";
 import { useProject } from "@/lib/project-context";
-import { getProjectMemory, getCompetitors, getCompetitorDetail, triggerMonitor } from "@/lib/api";
+import { getProjectMemory, getCompetitors } from "@/lib/api";
 
-type CompetitorEntry = { slug: string; name: string; domain: string; totalArticles: number; lastScanAt: string; newSinceLastScan: number; topClusters: string[]; recentHighlight: string };
 type GapCluster = { cluster: string; ourCount: number; ourDepth: string; competitors: Record<string, { count: number; depth: string }>; gapType: string; priority: string; recommendation: string };
-type ArticleData = { url: string; title: string; topicCluster: string | null; h2Headings: string[]; estimatedWordCount: number | null; publishedAt: string | null };
-type CompetitorDetailData = { profile: Record<string, unknown>; topicCoverage: { clusters: Array<{ cluster: string; articleCount: number; depth: string; trend: string }> }; recentActivity: { newArticles: Array<{ url: string; title: string; topicCluster: string | null }> }; blogStats: { totalArticles: number; lastCrawlAt: string } | null; articles: ArticleData[] };
 
-export default function IntelligencePage() {
+export default function IntelligenceOverviewPage() {
   const { customerId, projectId, loading: projectLoading } = useProject();
   const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState<string | null>(null);
-
-  // Data
-  const [competitors, setCompetitors] = useState<CompetitorEntry[]>([]);
   const [gapClusters, setGapClusters] = useState<GapCluster[]>([]);
   const [gapSummary, setGapSummary] = useState<Record<string, number>>({});
-  const [memoryMeta, setMemoryMeta] = useState<{ lastUpdated: Record<string, string> }>({ lastUpdated: {} });
-  const [hasData, setHasData] = useState(false);
-
-  // Detail view
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const [detail, setDetail] = useState<CompetitorDetailData | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [meta, setMeta] = useState<{ lastUpdated: Record<string, string> }>({ lastUpdated: {} });
+  const [memoryFiles, setMemoryFiles] = useState<string[]>([]);
+  const [competitorCount, setCompetitorCount] = useState(0);
 
   const loadData = useCallback(async () => {
     if (!customerId || !projectId) return;
@@ -49,11 +35,11 @@ export default function IntelligencePage() {
         getProjectMemory(customerId, projectId),
         getCompetitors(customerId, projectId).catch(() => ({ index: null, gapMatrix: null })),
       ]);
-      setMemoryMeta(memResult.meta);
-      setHasData(memResult.files.length > 0);
+      setMeta(memResult.meta);
+      setMemoryFiles(memResult.files);
 
-      const idx = compResult.index as { competitors: CompetitorEntry[] } | null;
-      if (idx?.competitors) setCompetitors(idx.competitors);
+      const idx = compResult.index as { competitors: Array<unknown> } | null;
+      setCompetitorCount(idx?.competitors?.length ?? 0);
 
       const gap = compResult.gapMatrix as { clusters: GapCluster[]; summary: Record<string, number> } | null;
       if (gap?.clusters) setGapClusters(gap.clusters);
@@ -63,36 +49,6 @@ export default function IntelligencePage() {
   }, [customerId, projectId]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  const loadDetail = async (slug: string) => {
-    if (!customerId || !projectId) return;
-    setSelectedSlug(slug);
-    setDetailLoading(true);
-    try {
-      const d = await getCompetitorDetail(customerId, projectId, slug) as CompetitorDetailData;
-      setDetail(d);
-    } catch { setDetail(null); }
-    finally { setDetailLoading(false); }
-  };
-
-  const handleScan = async (type: "competitor-scan" | "trend-scan" | "content-watch") => {
-    if (!customerId || !projectId || scanning) return;
-    setScanning(type);
-    try {
-      await triggerMonitor(customerId, projectId, type);
-    } catch { /* ignore */ }
-    const poll = setInterval(async () => {
-      try {
-        const result = await getProjectMemory(customerId, projectId);
-        if (JSON.stringify(result.meta.lastUpdated) !== JSON.stringify(memoryMeta.lastUpdated)) {
-          clearInterval(poll);
-          setScanning(null);
-          loadData();
-        }
-      } catch { /* ignore */ }
-    }, 5000);
-    setTimeout(() => { clearInterval(poll); setScanning(null); }, 180000);
-  };
 
   const timeAgo = (iso: string): string => {
     const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -107,169 +63,63 @@ export default function IntelligencePage() {
     return <div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
-  // ── Detail View ─────────────────────────────────────
-  if (selectedSlug && detail) {
-    const comp = competitors.find((c) => c.slug === selectedSlug);
-    return (
-      <div className="p-8 max-w-5xl mx-auto space-y-6">
-        <button type="button" onClick={() => { setSelectedSlug(null); setDetail(null); }} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" />Back to Intelligence
-        </button>
+  const hasData = memoryFiles.length > 0;
 
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{String((detail.profile as Record<string, unknown>)?.name ?? comp?.name ?? selectedSlug)}</h1>
-            <a href={String((detail.profile as Record<string, unknown>)?.domain ?? comp?.domain ?? "")} target="_blank" rel="noopener noreferrer" className="text-sm text-primary flex items-center gap-1 hover:underline">
-              <Globe className="h-3 w-3" />{String((detail.profile as Record<string, unknown>)?.domain ?? "")}
-            </a>
-          </div>
-          <div className="text-right text-xs text-muted-foreground">
-            {detail.blogStats ? <p>{detail.blogStats.totalArticles} articles indexed</p> : null}
-            {detail.blogStats?.lastCrawlAt ? <p>Last scan: {timeAgo(detail.blogStats.lastCrawlAt)}</p> : null}
-          </div>
-        </div>
-
-        {/* Topic Coverage */}
-        {detail.topicCoverage?.clusters?.length > 0 && (
-          <div className="rounded-xl border bg-background shadow-sm">
-            <div className="px-5 py-4 border-b"><h3 className="text-sm font-semibold">Topic Coverage</h3></div>
-            <div className="divide-y">
-              {detail.topicCoverage.clusters.map((c) => (
-                <div key={c.cluster} className="flex items-center justify-between px-5 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium capitalize">{c.cluster.replace(/-/g, " ")}</span>
-                    <Badge variant={c.depth === "deep" ? "default" : "secondary"} className="text-[10px]">{c.depth}</Badge>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>{c.articleCount} articles</span>
-                    <Badge variant="outline" className="text-[10px]">{c.trend}</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Articles */}
-        {detail.articles?.length > 0 && (
-          <div className="rounded-xl border bg-background shadow-sm">
-            <div className="px-5 py-4 border-b">
-              <h3 className="text-sm font-semibold">Indexed Articles ({detail.articles.length})</h3>
-            </div>
-            <div className="divide-y">
-              {detail.articles.filter((a) => a.title).map((a, i) => (
-                <details key={i} className="group">
-                  <summary className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-muted/30 transition-colors">
-                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{a.title}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {a.topicCluster ? <span className="capitalize">{a.topicCluster.replace(/-/g, " ")}</span> : null}
-                        {a.estimatedWordCount ? <span>· {a.estimatedWordCount.toLocaleString()} words</span> : null}
-                        {a.h2Headings?.length > 0 ? <span>· {a.h2Headings.length} sections</span> : null}
-                      </div>
-                    </div>
-                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="shrink-0 p-1 hover:bg-muted rounded" onClick={(e) => e.stopPropagation()}>
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                    </a>
-                  </summary>
-                  <div className="px-5 pb-4 pt-1 ml-7 space-y-2">
-                    <p className="text-xs text-muted-foreground font-mono truncate">{a.url}</p>
-                    {a.h2Headings?.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground">H2 Structure:</p>
-                        {a.h2Headings.map((h, j) => (
-                          <p key={j} className="text-xs text-muted-foreground pl-3 border-l-2 border-muted">{h}</p>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex gap-4 text-xs text-muted-foreground">
-                      {a.estimatedWordCount ? <span>{a.estimatedWordCount.toLocaleString()} words</span> : null}
-                      {a.publishedAt ? <span>Published: {new Date(a.publishedAt).toLocaleDateString()}</span> : null}
-                    </div>
-                  </div>
-                </details>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── Main View ───────────────────────────────────────
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Brain className="h-6 w-6" />Intelligence</h1>
-          <p className="text-sm text-muted-foreground">What the CMO knows about your content landscape.</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Brain className="h-6 w-6" />Intelligence Overview</h1>
+          <p className="text-sm text-muted-foreground">Your content strategy at a glance.</p>
         </div>
         <Button variant="outline" size="sm" onClick={loadData}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Refresh</Button>
-      </div>
-
-      {/* Scan Buttons */}
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => handleScan("competitor-scan")} disabled={!!scanning}>
-          {scanning === "competitor-scan" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Users className="mr-1.5 h-3.5 w-3.5" />}
-          Scan Competitors
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => handleScan("trend-scan")} disabled={!!scanning}>
-          {scanning === "trend-scan" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="mr-1.5 h-3.5 w-3.5" />}
-          Scan Trends
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => handleScan("content-watch")} disabled={!!scanning}>
-          {scanning === "content-watch" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <BarChart3 className="mr-1.5 h-3.5 w-3.5" />}
-          Analyze Content
-        </Button>
       </div>
 
       {!hasData ? (
         <div className="rounded-xl border-2 border-dashed p-12 text-center space-y-4">
           <Brain className="h-12 w-12 text-muted-foreground/30 mx-auto" />
           <p className="text-sm font-medium">No intelligence data yet</p>
-          <p className="text-xs text-muted-foreground">Run a competitor scan to start building knowledge.</p>
+          <p className="text-xs text-muted-foreground">Start by adding competitors and running a scan.</p>
+          <Link href="/intelligence/competitors">
+            <Button variant="outline" size="sm"><Users className="mr-1.5 h-3.5 w-3.5" />Go to Competitors</Button>
+          </Link>
         </div>
       ) : (
         <>
-          {/* Competitors */}
-          {competitors.length > 0 && (
-            <div>
-              <h2 className="text-base font-semibold mb-3 flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" />Competitors</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {competitors.map((c) => (
-                  <button
-                    key={c.slug}
-                    type="button"
-                    onClick={() => loadDetail(c.slug)}
-                    className="rounded-xl border bg-background shadow-sm p-5 text-left hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-semibold">{c.name}</h3>
-                      {c.newSinceLastScan > 0 ? <Badge variant="default" className="text-[10px]">+{c.newSinceLastScan} new</Badge> : null}
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-3">{c.totalArticles} articles indexed</p>
-                    {c.topClusters.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {c.topClusters.map((cl) => (
-                          <Badge key={cl} variant="outline" className="text-[10px] capitalize">{cl.replace(/-/g, " ")}</Badge>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" />{c.lastScanAt ? timeAgo(c.lastScanAt) : "Never scanned"}
-                    </p>
-                  </button>
-                ))}
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link href="/intelligence/competitors" className="rounded-xl border bg-background shadow-sm p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-2 mb-1">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">Competitors</span>
               </div>
+              <p className="text-2xl font-bold">{competitorCount}</p>
+              <p className="text-xs text-muted-foreground">tracked</p>
+            </Link>
+            <div className="rounded-xl border bg-background shadow-sm p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">Content Gaps</span>
+              </div>
+              <p className="text-2xl font-bold">{gapSummary.weLag ?? 0}</p>
+              <p className="text-xs text-muted-foreground">topics to address</p>
             </div>
-          )}
+            <Link href="/intelligence/trends" className="rounded-xl border bg-background shadow-sm p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-semibold">Trends</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {meta.lastUpdated["areas/trend-watch.json"] ? `Last scan: ${timeAgo(meta.lastUpdated["areas/trend-watch.json"])}` : "Not yet scanned"}
+              </p>
+            </Link>
+          </div>
 
           {/* Gap Matrix */}
           {gapClusters.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-muted-foreground" />Content Gaps</h2>
+                <h2 className="text-base font-semibold flex items-center gap-2"><BarChart3 className="h-4 w-4 text-muted-foreground" />Content Gap Matrix</h2>
                 <div className="flex gap-2 text-xs">
                   {gapSummary.weLag > 0 && <Badge variant="destructive" className="text-[10px]">{gapSummary.weLag} gaps</Badge>}
                   {gapSummary.weLead > 0 && <Badge variant="default" className="text-[10px]">{gapSummary.weLead} leading</Badge>}
@@ -290,7 +140,7 @@ export default function IntelligencePage() {
                     <div className="flex items-center gap-3 text-xs shrink-0">
                       <span className="font-medium">Us: {g.ourCount}</span>
                       <span className="text-muted-foreground">
-                        {Object.entries(g.competitors).filter(([, v]) => v.count > 0).map(([k, v]) => `${k.split("-")[0]}: ${v.count}`).join(" | ")}
+                        {Object.entries(g.competitors).filter(([, v]) => v.count > 0).map(([k, v]) => `${k}: ${v.count}`).join(" | ")}
                       </span>
                     </div>
                   </div>
@@ -298,11 +148,25 @@ export default function IntelligencePage() {
               </div>
             </div>
           )}
-        </>
-      )}
 
-      {detailLoading && (
-        <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+          {/* Memory Status */}
+          {memoryFiles.length > 0 && (
+            <div>
+              <h2 className="text-base font-semibold mb-3">Memory Status</h2>
+              <div className="rounded-xl border bg-background shadow-sm divide-y">
+                {memoryFiles.map((file) => (
+                  <div key={file} className="flex items-center justify-between px-5 py-2.5 text-xs">
+                    <span className="font-mono text-muted-foreground">{file}</span>
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {meta.lastUpdated[file] ? timeAgo(meta.lastUpdated[file]) : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
