@@ -76,13 +76,13 @@ function getTypeLabel(item: ContentItem): string {
   return typeLabels[item.type] ?? item.type.replace("_", " ");
 }
 
-export default function ContentLibraryPage() {
+export default function ContentLibraryPage({ defaultTab, hideChannelTabs, contentTypeFilter }: { defaultTab?: string; hideChannelTabs?: boolean; contentTypeFilter?: string }) {
   const { customerId, projectId, loading: projectLoading } = useProject();
 
   const [items, setItems] = useState<ContentItem[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
-  const [channelTab, setChannelTab] = useState<string>("all");
+  const [channelTab, setChannelTab] = useState<string>(defaultTab ?? "all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [flowFilter, setFlowFilter] = useState<string>("all");
 
@@ -128,12 +128,21 @@ export default function ContentLibraryPage() {
 
   // Filter
   const filtered = items.filter((item) => {
-    if (channelTab === "article" && item.type !== "article" && item.type !== "guide") return false;
-    if (channelTab === "linkedin" && item.category !== "linkedin") return false;
-    if (channelTab === "instagram" && item.category !== "instagram") return false;
-    if (channelTab === "x" && item.category !== "x") return false;
-    if (channelTab === "tiktok" && item.category !== "tiktok") return false;
-    if (channelTab === "newsletter" && item.type !== "newsletter") return false;
+    // Content type pre-filter (from sub-page routing)
+    if (contentTypeFilter === "article" && item.type !== "article" && item.type !== "guide") return false;
+    if (contentTypeFilter === "social" && item.type !== "social_post") return false;
+    if (contentTypeFilter === "newsletter" && item.type !== "newsletter") return false;
+
+    // Channel tab filter (within the page)
+    if (!contentTypeFilter) {
+      if (channelTab === "article" && item.type !== "article" && item.type !== "guide") return false;
+      if (channelTab === "linkedin" && item.category !== "linkedin") return false;
+      if (channelTab === "instagram" && item.category !== "instagram") return false;
+      if (channelTab === "x" && item.category !== "x") return false;
+      if (channelTab === "tiktok" && item.category !== "tiktok") return false;
+      if (channelTab === "newsletter" && item.type !== "newsletter") return false;
+    }
+
     if (statusFilter !== "all" && item.status !== statusFilter) return false;
     if (flowFilter !== "all" && (item.flowId ?? item.topicId) !== flowFilter) return false;
     return true;
@@ -164,29 +173,35 @@ export default function ContentLibraryPage() {
     <div className="p-8 max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Content</h1>
-        <p className="text-sm text-muted-foreground">All your content pieces across every channel.</p>
+        <h1 className="text-2xl font-bold">
+          {contentTypeFilter === "article" ? "Articles" : contentTypeFilter === "social" ? "Social Posts" : contentTypeFilter === "newsletter" ? "Newsletters" : "Content"}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          {contentTypeFilter === "article" ? "Blog articles and guides." : contentTypeFilter === "social" ? "Social media posts across all channels." : contentTypeFilter === "newsletter" ? "Email newsletters." : "All your content pieces across every channel."}
+        </p>
       </div>
 
-      {/* Channel Tabs */}
-      <div className="flex items-center gap-1 border-b">
-        {CHANNEL_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setChannelTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              channelTab === tab.key
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-            <span className="ml-1.5 text-xs text-muted-foreground">
-              {counts[tab.key as keyof typeof counts] ?? 0}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Channel Tabs — only shown on "All" view */}
+      {!hideChannelTabs && (
+        <div className="flex items-center gap-1 border-b">
+          {CHANNEL_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setChannelTab(tab.key)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                channelTab === tab.key
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+              <span className="ml-1.5 text-xs text-muted-foreground">
+                {counts[tab.key as keyof typeof counts] ?? 0}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex items-center gap-3">
