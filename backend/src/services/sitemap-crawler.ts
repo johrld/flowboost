@@ -114,6 +114,15 @@ export function diffArticles(
   const crawledUrls = new Set(crawled.map((e) => e.url));
   const newEntries = crawled.filter((e) => !knownUrls.has(e.url));
   const removedUrls = [...knownUrls].filter((u) => !crawledUrls.has(u));
+
+  // Sort: prioritize URLs with content-like paths (/blog/, /articles/) first
+  const contentPattern = /\/(blog|articles|posts|resources|learn|guides|journal|stories)\//i;
+  newEntries.sort((a, b) => {
+    const aContent = contentPattern.test(a.url) ? 0 : 1;
+    const bContent = contentPattern.test(b.url) ? 0 : 1;
+    return aContent - bContent;
+  });
+
   return { newEntries, removedUrls };
 }
 
@@ -147,9 +156,14 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
     // Extract slug from URL
     const slug = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "";
 
-    // Extract H2 headings
-    const h2Headings = extractHeadings(html, "h2");
-    const h3Headings = extractHeadings(html, "h3");
+    // Extract H2 and H3 headings
+    const rawH2 = extractHeadings(html, "h2");
+    const rawH3 = extractHeadings(html, "h3");
+
+    // Filter out navigation H2s: single-word ALL-CAPS headings are likely nav links, not content
+    const h2Headings = rawH2.filter((h) => !(h === h.toUpperCase() && h.split(/\s+/).length <= 2));
+    // If all H2s were filtered out, use H3s as the content structure
+    const h3Headings = h2Headings.length === 0 ? rawH3.filter((h) => !h.includes("${")) : rawH3;
 
     // Estimate word count from text content
     const textContent = html
@@ -187,11 +201,15 @@ function extractUrls(xml: string): SitemapEntry[] {
 
     // Skip non-content URLs
     if (/\.(jpg|png|gif|svg|pdf|zip|css|js)$/i.test(loc)) continue;
-    // Skip known non-content patterns anywhere in URL
-    if (/privacy|terms|conditions|cookie|gdpr|imprint|impressum|legal|accessibility|compliance|notice|applicant|careers|jobs|press-release|subscribe|signup|login|account|checkout|cart|pricing|gift|partner/i.test(loc)) continue;
+    // Skip known non-content patterns
+    if (/privacy|terms|conditions|cookie|gdpr|imprint|legal|accessibility|compliance|notice|applicant|careers|jobs|press-release|subscribe|signup|login|account|checkout|cart|pricing|gift|partner|store|wallpaper|calendar|landing-page|our-team|editorial-team|newsroom|media-/i.test(loc)) continue;
     // Skip very short paths (homepage, section indexes)
     const pathParts = new URL(loc).pathname.split("/").filter(Boolean);
     if (pathParts.length === 0) continue;
+    // Skip non-content paths: only keep /blog/, /articles/, /posts/, /resources/, /learn/, /guides/ or similar content paths
+    // If the URL has a recognizable content prefix, keep it. If it's a single-segment path like /intentions/, skip.
+    const contentPrefixes = /^\/(blog|articles|posts|resources|learn|guides|journal|stories|news)\//i;
+    if (pathParts.length >= 2 && !contentPrefixes.test(new URL(loc).pathname)) continue;
 
     const lastmod = extractFirstTag(block, "lastmod") ?? undefined;
     entries.push({ url: loc, lastmod });

@@ -118,14 +118,16 @@ export async function runCompetitorScan(
       if (!page) continue;
 
       // Content filter: skip pages that aren't real articles
-      if (page.estimatedWordCount < 300) continue; // Too short
-      if (page.h2Headings.length === 0 && page.estimatedWordCount < 600) continue; // No structure + short
-      if (!page.title || page.title.length < 10) continue; // No real title
-      if (page.title.split(/\s+/).length <= 2 && page.estimatedWordCount < 800) continue; // Single-word titles are category pages, not articles
+      if (page.estimatedWordCount < 200) continue; // Too short
+      if (!page.title || page.title.length < 5) continue; // No title at all
 
-      // Keyword-classify immediately
-      const cluster = classifyBatch([{ url: page.url, title: page.title, h2Headings: page.h2Headings }]);
+      // Use H2s for classification, fall back to H3s if H2s are empty (nav-filtered)
+      const headingsForClassify = page.h2Headings.length > 0 ? page.h2Headings : page.h3Headings;
+      const cluster = classifyBatch([{ url: page.url, title: page.title, h2Headings: headingsForClassify }]);
       const topicCluster = cluster.classified[0]?.topicCluster ?? null;
+
+      // Store both H2s and H3s — show whichever is the actual content structure
+      const contentHeadings = page.h2Headings.length > 0 ? page.h2Headings : page.h3Headings;
 
       newArticles.push({
         url: page.url,
@@ -134,7 +136,7 @@ export async function runCompetitorScan(
         publishedAt: entry.lastmod ?? null,
         discoveredAt: now(),
         topicCluster,
-        h2Headings: page.h2Headings,
+        h2Headings: contentHeadings,
         estimatedWordCount: page.estimatedWordCount,
         hasBeenAnalyzed: true,
       });
