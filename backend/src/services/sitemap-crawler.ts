@@ -139,8 +139,10 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
     const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is);
     const rawTitle = titleMatch?.[1]?.replace(/\s*[|–-]\s*.+$/, "").trim();
     // Use H1 if it looks like a real article title (not generic brand name)
-    const title = (h1Title && h1Title.length > 5 && h1Title.length < 200) ? h1Title
-      : ogTitleMatch?.[1] ?? rawTitle ?? "";
+    const title = decodeHtmlEntities(
+      (h1Title && h1Title.length > 5 && h1Title.length < 200) ? h1Title
+        : ogTitleMatch?.[1] ?? rawTitle ?? ""
+    );
 
     // Extract slug from URL
     const slug = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "";
@@ -213,12 +215,27 @@ function extractTagContent(xml: string, tag: string): string[] {
   return results;
 }
 
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–")
+    .replace(/&hellip;/g, "...")
+    .replace(/&#\d+;/g, (m) => String.fromCharCode(parseInt(m.slice(2, -1))))
+    .trim();
+}
+
 function extractHeadings(html: string, tag: string): string[] {
   const regex = new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`, "gis");
   const headings: string[] = [];
   let match;
   while ((match = regex.exec(html)) !== null) {
-    const text = match[1].replace(/<[^>]+>/g, "").trim();
+    const text = decodeHtmlEntities(match[1].replace(/<[^>]+>/g, "").trim());
     if (text && text.length > 2 && text.length < 200) {
       headings.push(text);
     }

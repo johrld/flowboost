@@ -28,6 +28,17 @@ const log = createLogger("workflow:competitor-scan");
 
 const MAX_PAGES_TO_CRAWL_PER_SCAN = 25; // Limit deep crawling per run
 
+/** Generate a clean slug from a domain: "https://www.calm.com/" → "calm" */
+function domainSlug(domain: string): string {
+  return domain
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/$/, "")
+    .replace(/\..+$/, "") // Remove TLD: calm.com → calm
+    .replace(/[^a-z0-9]/gi, "-")
+    .toLowerCase();
+}
+
 /**
  * Full competitor scan workflow (hybrid: code + agent).
  *
@@ -60,7 +71,7 @@ export async function runCompetitorScan(
 
   // ── Step 1+2+3: Per-competitor crawl + classify ──────────────
   for (const comp of competitors) {
-    const slug = comp.domain.replace(/^https?:\/\//, "").replace(/[^a-z0-9]/gi, "-").toLowerCase();
+    const slug = domainSlug(comp.domain);
     const competitorDir = `areas/competitors/${slug}`;
 
     log.info({ competitor: slug, domain: comp.domain }, "scanning competitor");
@@ -107,9 +118,10 @@ export async function runCompetitorScan(
       if (!page) continue;
 
       // Content filter: skip pages that aren't real articles
-      if (page.estimatedWordCount < 200) continue; // Too short (nav/footer pages)
-      if (page.h2Headings.length === 0 && page.estimatedWordCount < 500) continue; // No structure + short
+      if (page.estimatedWordCount < 300) continue; // Too short
+      if (page.h2Headings.length === 0 && page.estimatedWordCount < 600) continue; // No structure + short
       if (!page.title || page.title.length < 10) continue; // No real title
+      if (page.title.split(/\s+/).length <= 2 && page.estimatedWordCount < 800) continue; // Single-word titles are category pages, not articles
 
       // Keyword-classify immediately
       const cluster = classifyBatch([{ url: page.url, title: page.title, h2Headings: page.h2Headings }]);
@@ -224,7 +236,7 @@ export async function runCompetitorScan(
   const competitorCoverages: Array<{ slug: string; coverage: ReturnType<typeof computeTopicCoverage> }> = [];
 
   for (const comp of competitors) {
-    const slug = comp.domain.replace(/^https?:\/\//, "").replace(/[^a-z0-9]/gi, "-").toLowerCase();
+    const slug = domainSlug(comp.domain);
     const dir = `areas/competitors/${slug}`;
     const blogIndex = memory.load<CompetitorBlogIndex>(`${dir}/blog-index.json`);
     if (!blogIndex) continue;
@@ -253,7 +265,7 @@ export async function runCompetitorScan(
 
   // ── Step 7: Regenerate _index.json ──────────────────────────
   const blogIndexes = competitors.map((comp) => {
-    const slug = comp.domain.replace(/^https?:\/\//, "").replace(/[^a-z0-9]/gi, "-").toLowerCase();
+    const slug = domainSlug(comp.domain);
     const idx = memory.load<CompetitorBlogIndex>(`areas/competitors/${slug}/blog-index.json`);
     return {
       slug,
