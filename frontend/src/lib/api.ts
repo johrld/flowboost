@@ -1048,6 +1048,23 @@ export function createSocialJob(
   });
 }
 
+// ── Competitor Intelligence (v2 Agent System) ───────────────────
+
+export function getCompetitors(
+  customerId: string,
+  projectId: string,
+): Promise<{ index: unknown; gapMatrix: unknown }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/cmo/competitors`);
+}
+
+export function getCompetitorDetail(
+  customerId: string,
+  projectId: string,
+  slug: string,
+): Promise<{ profile: unknown; topicCoverage: unknown; recentActivity: unknown; blogStats: unknown }> {
+  return fetchJson(`/customers/${customerId}/projects/${projectId}/cmo/competitors/${slug}`);
+}
+
 // ── Heartbeat / Monitors (v2 Agent System) ──────────────────────
 
 export function getMonitorStatus(

@@ -201,7 +201,39 @@ export async function cmoRoutes(app: FastifyInstance) {
       return {
         meta: memory.getMeta(),
         files: memory.listFiles(),
-        data: memory.getAll(),
+        data: memory.getHotMemory(),
+      };
+    },
+  );
+
+  // GET /cmo/competitors — list all competitor summaries
+  app.get<{ Params: { customerId: string; projectId: string } }>(
+    "/competitors",
+    async (request) => {
+      const { customerId, projectId } = request.params;
+      const memory = app.ctx.memoryFor(customerId, projectId);
+      const index = memory.load("areas/competitors/_index.json");
+      const gapMatrix = memory.load("areas/competitors/_gap-matrix.json");
+      return { index, gapMatrix };
+    },
+  );
+
+  // GET /cmo/competitors/:slug — get full detail for one competitor
+  app.get<{ Params: { customerId: string; projectId: string; slug: string } }>(
+    "/competitors/:slug",
+    async (request, reply) => {
+      const { customerId, projectId, slug } = request.params;
+      const memory = app.ctx.memoryFor(customerId, projectId);
+      const profile = memory.load(`areas/competitors/${slug}/profile.json`);
+      if (!profile) return reply.status(404).send({ error: "Competitor not found" });
+      const topicCoverage = memory.load(`areas/competitors/${slug}/topic-coverage.json`);
+      const recentActivity = memory.load(`areas/competitors/${slug}/recent-activity.json`);
+      const blogIndex = memory.load<{ totalArticles: number; lastCrawlAt: string }>(`areas/competitors/${slug}/blog-index.json`);
+      return {
+        profile,
+        topicCoverage,
+        recentActivity,
+        blogStats: blogIndex ? { totalArticles: blogIndex.totalArticles, lastCrawlAt: blogIndex.lastCrawlAt } : null,
       };
     },
   );

@@ -26,7 +26,7 @@ import type {
 
 const log = createLogger("workflow:competitor-scan");
 
-const MAX_PAGES_TO_CRAWL_PER_SCAN = 20; // Limit deep crawling per run
+const MAX_PAGES_TO_CRAWL_PER_SCAN = 25; // Limit deep crawling per run
 
 /**
  * Full competitor scan workflow (hybrid: code + agent).
@@ -104,36 +104,28 @@ export async function runCompetitorScan(
 
     for (const entry of toCrawl) {
       const page = await crawlPage(entry.url);
-      if (page) {
-        // Keyword-classify immediately
-        const cluster = classifyBatch([{ url: page.url, title: page.title, h2Headings: page.h2Headings }]);
-        const topicCluster = cluster.classified[0]?.topicCluster ?? null;
+      if (!page) continue;
 
-        newArticles.push({
-          url: page.url,
-          title: page.title,
-          slug: page.slug,
-          publishedAt: entry.lastmod ?? null,
-          discoveredAt: now(),
-          topicCluster,
-          h2Headings: page.h2Headings,
-          estimatedWordCount: page.estimatedWordCount,
-          hasBeenAnalyzed: true,
-        });
-      } else {
-        // Couldn't crawl page, add with minimal data from sitemap
-        newArticles.push({
-          url: entry.url,
-          title: "",
-          slug: entry.url.split("/").filter(Boolean).pop() ?? "",
-          publishedAt: entry.lastmod ?? null,
-          discoveredAt: now(),
-          topicCluster: null,
-          h2Headings: [],
-          estimatedWordCount: null,
-          hasBeenAnalyzed: false,
-        });
-      }
+      // Content filter: skip pages that aren't real articles
+      if (page.estimatedWordCount < 200) continue; // Too short (nav/footer pages)
+      if (page.h2Headings.length === 0 && page.estimatedWordCount < 500) continue; // No structure + short
+      if (!page.title || page.title.length < 10) continue; // No real title
+
+      // Keyword-classify immediately
+      const cluster = classifyBatch([{ url: page.url, title: page.title, h2Headings: page.h2Headings }]);
+      const topicCluster = cluster.classified[0]?.topicCluster ?? null;
+
+      newArticles.push({
+        url: page.url,
+        title: page.title,
+        slug: page.slug,
+        publishedAt: entry.lastmod ?? null,
+        discoveredAt: now(),
+        topicCluster,
+        h2Headings: page.h2Headings,
+        estimatedWordCount: page.estimatedWordCount,
+        hasBeenAnalyzed: true,
+      });
     }
 
     // Update blog index

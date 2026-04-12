@@ -26,13 +26,20 @@ export interface CrawledPage {
 export async function discoverSitemapUrl(blogUrl: string): Promise<string | null> {
   const base = blogUrl.replace(/\/$/, "");
   const domain = new URL(base).origin;
+  const hostname = new URL(base).hostname;
+
+  // Try blog subdomain first (blog.calm.com, blog.headspace.com)
+  const blogSubdomain = `https://blog.${hostname.replace(/^www\./, "")}`;
 
   const candidates = [
+    `${blogSubdomain}/sitemap.xml`,
+    `${base}/blog/sitemap.xml`,
+    `${domain}/blog/sitemap.xml`,
     `${base}/sitemap.xml`,
     `${domain}/sitemap.xml`,
-    `${domain}/blog/sitemap.xml`,
     `${domain}/post-sitemap.xml`,
     `${domain}/sitemap_index.xml`,
+    `${domain}/articles/sitemap.xml`,
   ];
 
   for (const url of candidates) {
@@ -69,12 +76,13 @@ export async function fetchSitemap(sitemapUrl: string, maxDepth = 2): Promise<Si
     // Check if this is a sitemap index (contains links to other sitemaps)
     if (xml.includes("<sitemapindex") && maxDepth > 0) {
       const sitemapUrls = extractTagContent(xml, "loc");
-      // Only follow sitemaps that look like blog/post content
+      // Only follow sitemaps that look like blog/post/article content
       const blogSitemaps = sitemapUrls.filter((u) =>
-        u.includes("post") || u.includes("blog") || u.includes("article") || u.includes("page"),
+        /post|blog|article|news|stories|resources|learn|guide/i.test(u),
       );
-      // If no blog-specific sitemaps found, take all
-      const toFollow = blogSitemaps.length > 0 ? blogSitemaps : sitemapUrls.slice(0, 5);
+      // If no blog-specific sitemaps found, take first 3 (skip image/video sitemaps)
+      const nonMediaSitemaps = sitemapUrls.filter((u) => !/image|video|media|product|shop/i.test(u));
+      const toFollow = blogSitemaps.length > 0 ? blogSitemaps : nonMediaSitemaps.slice(0, 3);
 
       for (const subUrl of toFollow) {
         const subEntries = await fetchSitemap(subUrl, maxDepth - 1);
@@ -123,11 +131,16 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
 
     const html = await res.text();
 
-    // Extract title
-    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is);
+    // Extract title — prefer H1 > og:title > <title>
+    const h1Match = html.match(/<h1[^>]*>(.*?)<\/h1>/is);
+    const h1Title = h1Match?.[1]?.replace(/<[^>]+>/g, "").trim();
     const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/) ||
       html.match(/<meta\s+content="([^"]*)"\s+property="og:title"/);
-    const title = ogTitleMatch?.[1] ?? titleMatch?.[1]?.replace(/\s*[|–-]\s*.+$/, "").trim() ?? "";
+    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is);
+    const rawTitle = titleMatch?.[1]?.replace(/\s*[|–-]\s*.+$/, "").trim();
+    // Use H1 if it looks like a real article title (not generic brand name)
+    const title = (h1Title && h1Title.length > 5 && h1Title.length < 200) ? h1Title
+      : ogTitleMatch?.[1] ?? rawTitle ?? "";
 
     // Extract slug from URL
     const slug = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "";
@@ -170,9 +183,13 @@ function extractUrls(xml: string): SitemapEntry[] {
     const loc = extractFirstTag(block, "loc");
     if (!loc) continue;
 
-    // Skip non-content URLs (images, categories, tags, author pages)
-    if (/\.(jpg|png|gif|svg|pdf|zip)$/i.test(loc)) continue;
-    if (/\/(tag|category|author|page)\//.test(loc)) continue;
+    // Skip non-content URLs
+    if (/\.(jpg|png|gif|svg|pdf|zip|css|js)$/i.test(loc)) continue;
+    // Skip known non-content patterns anywhere in URL
+    if (/privacy|terms|conditions|cookie|gdpr|imprint|impressum|legal|accessibility|compliance|notice|applicant|careers|jobs|press-release|subscribe|signup|login|account|checkout|cart|pricing|gift|partner/i.test(loc)) continue;
+    // Skip very short paths (homepage, section indexes)
+    const pathParts = new URL(loc).pathname.split("/").filter(Boolean);
+    if (pathParts.length === 0) continue;
 
     const lastmod = extractFirstTag(block, "lastmod") ?? undefined;
     entries.push({ url: loc, lastmod });
