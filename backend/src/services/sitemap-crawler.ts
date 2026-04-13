@@ -51,6 +51,7 @@ export interface CrawledPage {
   metaDescription?: string;
   author?: string;
   publishedAt?: string;
+  category?: string;
 }
 
 /**
@@ -199,6 +200,7 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
     let jsonLdDate: string | undefined;
     let jsonLdWordCount: number | undefined;
     let jsonLdAuthor: string | undefined;
+    let extractedCategory: string | undefined;
 
     const jsonLdMatches = html.match(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
     if (jsonLdMatches) {
@@ -216,6 +218,10 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
             jsonLdWordCount = article.wordCount as number | undefined;
             jsonLdAuthor = typeof article.author === "string" ? article.author
               : (article.author as Record<string, unknown>)?.name as string | undefined;
+            // Category from JSON-LD
+            if (article.articleSection) extractedCategory = String(article.articleSection);
+            else if (article.genre) extractedCategory = String(article.genre);
+            else if (Array.isArray(article.keywords) && article.keywords.length > 0) extractedCategory = String(article.keywords[0]);
           }
         } catch { /* malformed JSON-LD */ }
       }
@@ -225,6 +231,55 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
     const dom = new JSDOM(html, { url });
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
+
+    // ── Extract category from page ──────────────────────────
+    if (!extractedCategory) {
+      // Try meta tags
+      const articleSection = html.match(/<meta\s+property="article:section"\s+content="([^"]*)"/) ??
+        html.match(/<meta\s+content="([^"]*)"\s+property="article:section"/);
+      if (articleSection) extractedCategory = articleSection[1];
+    }
+    if (!extractedCategory) {
+      // Try WordPress category tags (rel="category tag" or rel="category")
+      const wpCategory = html.match(/<a[^>]*rel="category[^"]*"[^>]*>([^<]+)<\/a>/i);
+      if (wpCategory) extractedCategory = wpCategory[1].trim();
+    }
+    if (!extractedCategory) {
+      // Try elements with "category" in class name (Squarespace, custom themes)
+      const catElements = html.match(/<(?:a|span|div)[^>]*class="[^"]*category[^"]*"[^>]*>([^<]{2,50})<\/(?:a|span|div)>/gi) ?? [];
+      for (const el of catElements) {
+        const text = el.replace(/<[^>]+>/g, "").trim();
+        // Skip template variables and very long texts (descriptions, not categories)
+        if (text && text.length > 1 && text.length < 40 && !text.startsWith("$") && !text.includes("{")) {
+          extractedCategory = text;
+          break;
+        }
+      }
+    }
+    if (!extractedCategory) {
+      // Try breadcrumbs
+      const breadcrumb = html.match(/<nav[^>]*class="[^"]*breadcrumb[^"]*"[^>]*>([\s\S]*?)<\/nav>/i);
+      if (breadcrumb) {
+        const crumbLinks = breadcrumb[1].match(/<a[^>]*>([^<]+)<\/a>/gi) ?? [];
+        // Take the last crumb before the article title (usually the category)
+        if (crumbLinks.length >= 3) {
+          const cat = crumbLinks[crumbLinks.length - 2].replace(/<[^>]+>/g, "").trim();
+          if (cat && cat.length > 1 && cat.length < 50) extractedCategory = cat;
+        }
+      }
+    }
+    if (!extractedCategory) {
+      // Try URL path — e.g., /blog/category/sleep/article-slug → "sleep"
+      const pathParts = new URL(url).pathname.split("/").filter(Boolean);
+      if (pathParts.length >= 3) {
+        // Common patterns: /blog/category/article, /blog/topic/article
+        const possibleCat = pathParts[pathParts.length - 2];
+        // Skip generic path segments
+        if (possibleCat && !/^(blog|articles|posts|page|\d+)$/i.test(possibleCat)) {
+          extractedCategory = possibleCat.replace(/-/g, " ");
+        }
+      }
+    }
 
     // ── Extract headings from full DOM (jsdom, not regex) ───
     // This works better than Readability for some sites (React SPAs)
@@ -300,6 +355,7 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
       metaDescription: article?.excerpt ?? undefined,
       author: jsonLdAuthor ?? article?.byline ?? undefined,
       publishedAt: jsonLdDate,
+      category: extractedCategory ? decodeHtmlEntities(extractedCategory) : undefined,
     };
   } catch (err) {
     log.warn({ url, err }, "page crawl failed");

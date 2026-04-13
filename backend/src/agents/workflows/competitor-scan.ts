@@ -4,8 +4,7 @@ import { createLogger } from "../../utils/logger.js";
 import { PipelineContext } from "../../pipeline/context.js";
 import { JobStore } from "../../models/job.js";
 import { MemoryStore } from "../../models/memory.js";
-import { executeJob } from "../executor.js";
-import { extractJson } from "../../pipeline/extract-json.js";
+// executeJob and extractJson no longer needed — no AI classification step
 import {
   discoverSitemapUrl,
   fetchSitemap,
@@ -14,7 +13,7 @@ import {
   type CrawledPage,
 } from "../../services/sitemap-crawler.js";
 import { analyzeCompetitor, type CrawlProfile } from "../../services/crawl-profiler.js";
-import { classifyBatch } from "../../services/topic-classifier.js";
+// topic-classifier.ts no longer used — categories extracted from pages directly
 import { computeTopicCoverage, computeGapMatrix, computeCompetitorIndex } from "../../services/gap-analyzer.js";
 import type {
   Job,
@@ -172,19 +171,16 @@ export async function runCompetitorScan(
       if (page.estimatedWordCount < 200) continue; // Too short
       if (!page.title || page.title.length < 5) continue; // No title at all
 
-      // Use H2s for classification, fall back to H3s if H2s are empty (nav-filtered)
-      const headingsForClassify = page.h2Headings.length > 0 ? page.h2Headings : page.h3Headings;
-      const cluster = classifyBatch([{ url: page.url, title: page.title, h2Headings: headingsForClassify }]);
-      const topicCluster = cluster.classified[0]?.topicCluster ?? null;
+      // Category: only use what the page itself declares. Never invent categories.
+      const topicCluster: string | null = page.category ?? null;
 
-      // Store both H2s and H3s — show whichever is the actual content structure
       const contentHeadings = page.h2Headings.length > 0 ? page.h2Headings : page.h3Headings;
 
       newArticles.push({
         url: page.url,
         title: page.title,
         slug: page.slug,
-        publishedAt: entry.lastmod ?? null,
+        publishedAt: entry.lastmod ?? page.publishedAt ?? null,
         discoveredAt: now(),
         topicCluster,
         h2Headings: contentHeadings,
@@ -238,59 +234,16 @@ export async function runCompetitorScan(
     log.info({ competitor: slug, newArticles: newArticles.length, total: blogIndex.totalArticles }, "blog index updated");
   }
 
-  // ── Step 4: Agent classification for unclassified articles ───
-  const unclassified = allNewArticles
+  // ── Step 4: Report unclassified articles (no AI guessing) ──
+  const unclassifiedCount = allNewArticles
     .flatMap(({ articles }) => articles)
-    .filter((a) => a.topicCluster === null && a.title);
+    .filter((a) => a.topicCluster === null).length;
+  const classifiedCount = allNewArticles
+    .flatMap(({ articles }) => articles)
+    .filter((a) => a.topicCluster !== null).length;
 
   ctx.startPhase("classify");
-  if (unclassified.length > 0) {
-    logEvent("classify", "agent-classify", `${unclassified.length} articles need AI classification`);
-    log.info({ count: unclassified.length }, "classifying unclassified articles via agent");
-
-    const classifyJob = jobs.create({
-      customerId: ctx.customerId,
-      projectId: project.id,
-      type: "custom" as Job["type"],
-      assigneeAgent: "monitor-competitors",
-      status: "queued",
-      title: `Classify ${unclassified.length} competitor articles`,
-      description: "Assign topic clusters to articles that couldn't be classified by keywords",
-      input: {
-        articles: unclassified.map((a) => ({ url: a.url, title: a.title, h2s: a.h2Headings?.slice(0, 5) })),
-      },
-      comments: [],
-      createdAt: now(),
-      runId: ctx.run.id,
-    }) as Job;
-
-    jobs.transition(classifyJob.id, "in_progress");
-    try {
-      const result = await executeJob(ctx, classifyJob);
-      const classifications = extractJson(result.text) as Array<{ url: string; cluster: string }> | null;
-      if (Array.isArray(classifications)) {
-        // Apply classifications back to blog indexes
-        for (const { url, cluster } of classifications) {
-          for (const { competitor } of allNewArticles) {
-            const dir = `areas/competitors/${competitor}`;
-            const idx = memory.load<CompetitorBlogIndex>(`${dir}/blog-index.json`);
-            if (!idx) continue;
-            const article = idx.articles.find((a) => a.url === url);
-            if (article) {
-              article.topicCluster = cluster;
-              memory.save(`${dir}/blog-index.json`, idx, "competitor-scan");
-            }
-          }
-        }
-      }
-      jobs.transition(classifyJob.id, "done");
-    } catch (err) {
-      log.warn({ err }, "agent classification failed, proceeding with keyword-only classifications");
-      jobs.transition(classifyJob.id, "failed");
-    }
-  }
-
-  logEvent("classify", "done", `Classification complete`);
+  logEvent("classify", "done", `${classifiedCount} categorized from page, ${unclassifiedCount} uncategorized`);
   ctx.completePhase("classify");
 
   // ── Step 5: Recompute topic coverage per competitor ──────────
@@ -442,13 +395,12 @@ export async function runSingleCompetitorScan(
   for (const entry of toCrawl) {
     const page = await crawlPage(entry.url);
     if (!page || page.estimatedWordCount < 200 || !page.title || page.title.length < 5) continue;
-    const headingsForClassify = page.h2Headings.length > 0 ? page.h2Headings : page.h3Headings;
-    const cluster = classifyBatch([{ url: page.url, title: page.title, h2Headings: headingsForClassify }]);
+    const topicCluster2: string | null = page.category ?? null;
     const contentHeadings = page.h2Headings.length > 0 ? page.h2Headings : page.h3Headings;
     newArticles.push({
       url: page.url, title: page.title, slug: page.slug,
-      publishedAt: entry.lastmod ?? null, discoveredAt: now(),
-      topicCluster: cluster.classified[0]?.topicCluster ?? null,
+      publishedAt: entry.lastmod ?? page.publishedAt ?? null, discoveredAt: now(),
+      topicCluster: topicCluster2,
       h2Headings: contentHeadings, estimatedWordCount: page.estimatedWordCount, hasBeenAnalyzed: true,
     });
   }

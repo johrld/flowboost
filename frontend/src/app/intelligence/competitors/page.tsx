@@ -349,7 +349,7 @@ export default function CompetitorsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><Users className="h-6 w-6" />Competitors</h1>
-          <p className="text-sm text-muted-foreground">Track competitor content and find gaps in your coverage.</p>
+          <p className="text-sm text-muted-foreground">Track competitor blogs and articles to find content gaps. Only editorial content is indexed — no product pages or shop listings.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setShowAdd(true)}>

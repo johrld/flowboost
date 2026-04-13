@@ -212,8 +212,29 @@ export async function cmoRoutes(app: FastifyInstance) {
     async (request) => {
       const { customerId, projectId } = request.params;
       const memory = app.ctx.memoryFor(customerId, projectId);
-      const index = memory.load("areas/competitors/_index.json");
+      let index = memory.load<{ competitors: Array<Record<string, unknown>> }>("areas/competitors/_index.json");
       const gapMatrix = memory.load("areas/competitors/_gap-matrix.json");
+
+      // Fallback: if no memory index, build from project settings
+      if (!index || !index.competitors?.length) {
+        const project = app.ctx.projectsFor(customerId).get(projectId);
+        const competitors = project?.competitors ?? [];
+        if (competitors.length > 0) {
+          index = {
+            competitors: competitors.map((c) => ({
+              slug: c.domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "").replace(/\..+$/, "").replace(/[^a-z0-9]/gi, "-").toLowerCase(),
+              name: c.name,
+              domain: c.domain,
+              totalArticles: 0,
+              lastScanAt: "",
+              newSinceLastScan: 0,
+              topClusters: [],
+              recentHighlight: "Not yet scanned",
+            })),
+          };
+        }
+      }
+
       return { index, gapMatrix };
     },
   );
