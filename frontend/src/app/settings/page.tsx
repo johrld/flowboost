@@ -281,9 +281,7 @@ function SettingsPageContent() {
       <Tabs defaultValue={searchParams.get("tab") ?? "general"}>
         <TabsList className="flex-wrap">
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="ai-context">AI Context</TabsTrigger>
           <TabsTrigger value="connector-data">Connector Data</TabsTrigger>
-          <TabsTrigger value="competitors">Competitors</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
         </TabsList>
 
@@ -353,44 +351,6 @@ function SettingsPageContent() {
         </TabsContent>
 
         {/* AI Context (Project Brief + Brand Voice) */}
-        <TabsContent value="ai-context" className="mt-6 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Project Brief</CardTitle>
-              <CardDescription>
-                Business context, target audience, USPs, goals — gives AI agents the full picture
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                className="min-h-[300px] font-mono text-sm"
-                placeholder={`# Project Brief\n\n## About the Business\nWhat does the business do?\n\n## Target Audience\nWho are we writing for?\n\n## Unique Selling Points\n- USP 1\n- USP 2\n\n## Goals\nWhat should the content achieve?`}
-                value={projectBriefContent}
-                onChange={(e) => setProjectBriefContent(e.target.value)}
-              />
-              <SaveButton status={projectBriefStatus} onClick={saveProjectBrief} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Brand Voice</CardTitle>
-              <CardDescription>
-                Tone, forbidden terms, writing style — controls how AI agents write
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                className="min-h-[300px] font-mono text-sm"
-                placeholder={`# Brand Voice\n\n## Tone\n- Warm, supportive, knowledgeable\n\n## Forbidden Terms\n- ...\n\n## Writing Style\n- Short paragraphs, active voice`}
-                value={brandVoiceContent}
-                onChange={(e) => setBrandVoiceContent(e.target.value)}
-              />
-              <SaveButton status={brandVoiceStatus} onClick={saveBrandVoice} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* Connector Data (Authors + Categories, read-only) */}
         <TabsContent value="connector-data" className="mt-6 space-y-6">
           <div className="flex items-center justify-between">
@@ -475,73 +435,6 @@ function SettingsPageContent() {
         </TabsContent>
 
         {/* Competitors */}
-        <TabsContent value="competitors" className="mt-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold">Competitors</h3>
-              <p className="text-sm text-muted-foreground">
-                Used by the strategy agent for competitive analysis
-              </p>
-            </div>
-            <Button variant="outline" size="sm" onClick={addCompetitor}>
-              <Plus className="mr-2 h-3 w-3" />
-              Add Competitor
-            </Button>
-          </div>
-          {competitors.length === 0 && (
-            <div className="rounded-md border border-dashed p-8 text-center">
-              <p className="text-sm text-muted-foreground">No competitors configured yet</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={addCompetitor}>
-                <Plus className="mr-2 h-3 w-3" />
-                Add First Competitor
-              </Button>
-            </div>
-          )}
-          {competitors.map((comp, idx) => (
-            <Card key={idx}>
-              <CardContent className="p-4">
-                <div className="flex items-start gap-4">
-                  <div className="flex-1 grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Domain</Label>
-                      <Input
-                        value={comp.domain}
-                        onChange={(e) => updateCompetitor(idx, "domain", e.target.value)}
-                        placeholder="headspace.com"
-                        className="h-8"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Name</Label>
-                      <Input
-                        value={comp.name}
-                        onChange={(e) => updateCompetitor(idx, "name", e.target.value)}
-                        placeholder="Headspace"
-                        className="h-8"
-                      />
-                    </div>
-                    <div className="col-span-2 space-y-1">
-                      <Label className="text-xs text-muted-foreground">Notes</Label>
-                      <Input
-                        value={comp.notes ?? ""}
-                        onChange={(e) => updateCompetitor(idx, "notes", e.target.value)}
-                        placeholder="Market leader, strong blog presence"
-                        className="h-8"
-                      />
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="icon" className="mt-5" onClick={() => removeCompetitor(idx)}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {competitors.length > 0 && (
-            <SaveButton status={competitorsStatus} onClick={saveCompetitors} />
-          )}
-        </TabsContent>
-
         {/* Pipeline */}
         <TabsContent value="pipeline" className="mt-6">
           <Card>

@@ -51,6 +51,7 @@ export interface CrawledPage {
   metaDescription?: string;
   author?: string;
   publishedAt?: string;
+  category?: string;
 }
 
 /**
@@ -58,7 +59,12 @@ export interface CrawledPage {
  * Tries common patterns: /sitemap.xml, /blog/sitemap.xml, /post-sitemap.xml
  */
 export async function discoverSitemapUrl(blogUrl: string): Promise<string | null> {
-  const base = blogUrl.replace(/\/$/, "");
+  // Normalize URL
+  let normalizedUrl = blogUrl;
+  if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
+    normalizedUrl = `https://${normalizedUrl}`;
+  }
+  const base = normalizedUrl.replace(/\/$/, "");
   const domain = new URL(base).origin;
   const hostname = new URL(base).hostname;
 
@@ -67,13 +73,16 @@ export async function discoverSitemapUrl(blogUrl: string): Promise<string | null
 
   const candidates = [
     `${blogSubdomain}/sitemap.xml`,
-    `${base}/blog/sitemap.xml`,
+    `${domain}/blog/sitemap_index.xml`,
     `${domain}/blog/sitemap.xml`,
+    `${domain}/blog/post-sitemap.xml`,
+    `${domain}/blog/wp-sitemap-posts-post-1.xml`,
     `${base}/sitemap.xml`,
     `${domain}/sitemap.xml`,
     `${domain}/post-sitemap.xml`,
     `${domain}/sitemap_index.xml`,
     `${domain}/articles/sitemap.xml`,
+    `${domain}/wp-sitemap.xml`,
   ];
 
   for (const url of candidates) {
@@ -191,6 +200,7 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
     let jsonLdDate: string | undefined;
     let jsonLdWordCount: number | undefined;
     let jsonLdAuthor: string | undefined;
+    let extractedCategory: string | undefined;
 
     const jsonLdMatches = html.match(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
     if (jsonLdMatches) {
@@ -208,6 +218,10 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
             jsonLdWordCount = article.wordCount as number | undefined;
             jsonLdAuthor = typeof article.author === "string" ? article.author
               : (article.author as Record<string, unknown>)?.name as string | undefined;
+            // Category from JSON-LD
+            if (article.articleSection) extractedCategory = String(article.articleSection);
+            else if (article.genre) extractedCategory = String(article.genre);
+            else if (Array.isArray(article.keywords) && article.keywords.length > 0) extractedCategory = String(article.keywords[0]);
           }
         } catch { /* malformed JSON-LD */ }
       }
@@ -218,6 +232,55 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
 
+    // ── Extract category from page ──────────────────────────
+    if (!extractedCategory) {
+      // Try meta tags
+      const articleSection = html.match(/<meta\s+property="article:section"\s+content="([^"]*)"/) ??
+        html.match(/<meta\s+content="([^"]*)"\s+property="article:section"/);
+      if (articleSection) extractedCategory = articleSection[1];
+    }
+    if (!extractedCategory) {
+      // Try WordPress category tags (rel="category tag" or rel="category")
+      const wpCategory = html.match(/<a[^>]*rel="category[^"]*"[^>]*>([^<]+)<\/a>/i);
+      if (wpCategory) extractedCategory = wpCategory[1].trim();
+    }
+    if (!extractedCategory) {
+      // Try elements with "category" in class name (Squarespace, custom themes)
+      const catElements = html.match(/<(?:a|span|div)[^>]*class="[^"]*category[^"]*"[^>]*>([^<]{2,50})<\/(?:a|span|div)>/gi) ?? [];
+      for (const el of catElements) {
+        const text = el.replace(/<[^>]+>/g, "").trim();
+        // Skip template variables and very long texts (descriptions, not categories)
+        if (text && text.length > 1 && text.length < 40 && !text.startsWith("$") && !text.includes("{")) {
+          extractedCategory = text;
+          break;
+        }
+      }
+    }
+    if (!extractedCategory) {
+      // Try breadcrumbs
+      const breadcrumb = html.match(/<nav[^>]*class="[^"]*breadcrumb[^"]*"[^>]*>([\s\S]*?)<\/nav>/i);
+      if (breadcrumb) {
+        const crumbLinks = breadcrumb[1].match(/<a[^>]*>([^<]+)<\/a>/gi) ?? [];
+        // Take the last crumb before the article title (usually the category)
+        if (crumbLinks.length >= 3) {
+          const cat = crumbLinks[crumbLinks.length - 2].replace(/<[^>]+>/g, "").trim();
+          if (cat && cat.length > 1 && cat.length < 50) extractedCategory = cat;
+        }
+      }
+    }
+    if (!extractedCategory) {
+      // Try URL path — e.g., /blog/category/sleep/article-slug → "sleep"
+      const pathParts = new URL(url).pathname.split("/").filter(Boolean);
+      if (pathParts.length >= 3) {
+        // Common patterns: /blog/category/article, /blog/topic/article
+        const possibleCat = pathParts[pathParts.length - 2];
+        // Skip generic path segments
+        if (possibleCat && !/^(blog|articles|posts|page|\d+)$/i.test(possibleCat)) {
+          extractedCategory = possibleCat.replace(/-/g, " ");
+        }
+      }
+    }
+
     // ── Extract headings from full DOM (jsdom, not regex) ───
     // This works better than Readability for some sites (React SPAs)
     const fullDoc = dom.window.document;
@@ -227,9 +290,10 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
     const domH2s = [...contentRoot.querySelectorAll("h2")]
       .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
       .filter((h) => h.length > 3 && h.length < 200 && !(h === h.toUpperCase() && h.split(/\s+/).length <= 2));
+    const h2Set = new Set(domH2s.map((h) => h.toLowerCase()));
     const domH3s = [...contentRoot.querySelectorAll("h3")]
       .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
-      .filter((h) => h.length > 3 && h.length < 200);
+      .filter((h) => h.length > 3 && h.length < 200 && !h2Set.has(h.toLowerCase()));
 
     // ── Use Readability for content + word count ─────────
     const readabilityWordCount = article?.textContent
@@ -261,9 +325,10 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
       h2Headings = [...articleDom2.window.document.querySelectorAll("h2")]
         .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
         .filter((h) => h.length > 3 && h.length < 200);
+      const rH2Set = new Set(h2Headings.map((h) => h.toLowerCase()));
       h3Headings = [...articleDom2.window.document.querySelectorAll("h3")]
         .map((el) => decodeHtmlEntities(el.textContent?.trim() ?? ""))
-        .filter((h) => h.length > 3 && h.length < 200);
+        .filter((h) => h.length > 3 && h.length < 200 && !rH2Set.has(h.toLowerCase()));
     } else {
       h2Headings = domH2s;
       h3Headings = domH3s;
@@ -290,6 +355,7 @@ export async function crawlPage(url: string): Promise<CrawledPage | null> {
       metaDescription: article?.excerpt ?? undefined,
       author: jsonLdAuthor ?? article?.byline ?? undefined,
       publishedAt: jsonLdDate,
+      category: extractedCategory ? decodeHtmlEntities(extractedCategory) : undefined,
     };
   } catch (err) {
     log.warn({ url, err }, "page crawl failed");

@@ -126,7 +126,33 @@ export async function projectRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Project not found" });
       }
 
-      const { id: _id, customerId: _cid, createdAt: _ca, ...allowed } = request.body as Record<string, unknown>;
+      const body = request.body as Record<string, unknown>;
+
+      // Handle competitor operations
+      if (body.addCompetitor) {
+        const comp = body.addCompetitor as { domain: string; name: string; notes?: string };
+        const competitors = [...(existing.competitors ?? [])];
+        if (!competitors.some((c) => c.domain === comp.domain)) {
+          competitors.push({ domain: comp.domain, name: comp.name, notes: comp.notes ?? "" });
+        }
+        return store.update(projectId, { competitors, updatedAt: new Date().toISOString() } as Partial<typeof existing>);
+      }
+
+      if (body.removeCompetitorDomain) {
+        const domain = body.removeCompetitorDomain as string;
+        const competitors = (existing.competitors ?? []).filter((c) => c.domain !== domain);
+        return store.update(projectId, { competitors, updatedAt: new Date().toISOString() } as Partial<typeof existing>);
+      }
+
+      if (body.updateCompetitor) {
+        const { oldDomain, domain, name } = body.updateCompetitor as { oldDomain: string; domain: string; name: string };
+        const competitors = (existing.competitors ?? []).map((c) =>
+          c.domain === oldDomain ? { ...c, domain, name } : c,
+        );
+        return store.update(projectId, { competitors, updatedAt: new Date().toISOString() } as Partial<typeof existing>);
+      }
+
+      const { id: _id, customerId: _cid, createdAt: _ca, ...allowed } = body;
       const updated = store.update(projectId, {
         ...allowed,
         updatedAt: new Date().toISOString(),

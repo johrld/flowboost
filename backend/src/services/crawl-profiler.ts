@@ -45,19 +45,35 @@ export interface CrawlProfile {
  * Analyze a competitor website and create a crawl profile.
  * Uses Playwright to render pages in a real browser and validate extraction.
  */
+export interface ProfileEvent {
+  step: string;
+  status: "running" | "done" | "error";
+  detail?: string;
+  data?: Record<string, unknown>;
+}
+
 export async function analyzeCompetitor(
   domain: string,
   name: string,
   projectDir: string,
+  onEvent?: (event: ProfileEvent) => void,
 ): Promise<CrawlProfile> {
+  const emit = onEvent ?? (() => {});
   const slug = domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "").replace(/\..+$/, "").replace(/[^a-z0-9]/gi, "-").toLowerCase();
   const memory = new MemoryStore(projectDir);
   const now = new Date().toISOString();
 
+  // Normalize domain — ensure https:// prefix
+  if (!domain.startsWith("http://") && !domain.startsWith("https://")) {
+    domain = `https://${domain}`;
+  }
+  domain = domain.replace(/\/$/, "");
+
   log.info({ domain, name }, "analyzing competitor site structure");
+  emit({ step: "discover-sitemap", status: "running", detail: `Searching for sitemap on ${domain}` });
 
   // ── Step 1: Discover sitemap ────────────────────────────
-  const sitemapUrl = await discoverSitemapUrl(domain);
+  let sitemapUrl = await discoverSitemapUrl(domain);
   let sitemapEntries: Array<{ url: string; lastmod?: string }> = [];
   if (sitemapUrl) {
     sitemapEntries = await fetchSitemap(sitemapUrl);
@@ -103,6 +119,17 @@ export async function analyzeCompetitor(
     }
   } catch { /* no blog subdomain */ }
 
+  if (sitemapUrl) {
+    emit({ step: "discover-sitemap", status: "done", detail: sitemapUrl, data: { urlCount: sitemapEntries.length, blogPathFilter } });
+  } else {
+    emit({ step: "discover-sitemap", status: "error", detail: "No sitemap found" });
+  }
+
+  if (blogPathFilter) {
+    const filteredCount = sitemapEntries.filter((e) => e.url.includes(blogPathFilter)).length;
+    emit({ step: "detect-blog-path", status: "done", detail: `${blogPathFilter} → ${filteredCount} article URLs`, data: { blogPathFilter, filteredCount } });
+  }
+
   log.info({ sitemapUrl, blogPathFilter, totalUrls: sitemapEntries.length }, "sitemap analysis done");
 
   // ── Step 2: Pick 3 sample article URLs ──────────────────
@@ -123,10 +150,97 @@ export async function analyzeCompetitor(
     articleUrls.push(...longPathUrls);
   }
 
+  // ── Fallback: if no articles from sitemap, crawl the website for blog links ──
+  if (articleUrls.length === 0) {
+    emit({ step: "discover-blog", status: "running", detail: "No articles in sitemap — scanning website for blog links" });
+
+    try {
+      const { chromium: chr } = await import("playwright");
+      const fb = await chr.launch({ headless: true });
+      const fbCtx = await fb.newContext({ userAgent: "FlowBoost/1.0 (content research bot)" });
+      const fbPage = await fbCtx.newPage();
+      await fbPage.goto(domain, { waitUntil: "domcontentloaded", timeout: 15000 });
+      await fbPage.waitForTimeout(2000);
+
+      // Find blog-like links on the page
+      const blogLinks = await fbPage.evaluate(() => {
+        const links = [...document.querySelectorAll("a[href]")] as HTMLAnchorElement[];
+        const blogPatterns = /blog|artikel|articles|news|journal|magazine|beitr|posts|stories|ratgeber|magazin/i;
+        return links
+          .map((a: HTMLAnchorElement) => ({ href: a.href, text: a.textContent?.trim() ?? "" }))
+          .filter((l) => blogPatterns.test(l.href) || blogPatterns.test(l.text))
+          .filter((l) => l.href.startsWith("http"))
+          .slice(0, 10);
+      });
+
+      await fb.close();
+
+      if (blogLinks.length > 0) {
+        emit({ step: "discover-blog", status: "done", detail: `Found ${blogLinks.length} blog links: ${blogLinks.map((l) => l.text || l.href).join(", ").slice(0, 100)}` });
+
+        // Try to find a blog section sitemap from discovered links
+        for (const link of blogLinks) {
+          try {
+            const blogBase = new URL(link.href).origin + new URL(link.href).pathname.replace(/\/$/, "");
+            const blogSitemapCandidates = [
+              `${blogBase}/sitemap.xml`,
+              `${blogBase}/sitemap_index.xml`,
+              `${blogBase}/feed`,
+            ];
+            for (const candidate of blogSitemapCandidates) {
+              const res = await fetch(candidate, { signal: AbortSignal.timeout(5000) });
+              if (res.ok) {
+                const text = await res.text();
+                if (text.includes("<urlset") || text.includes("<sitemapindex")) {
+                  emit({ step: "discover-blog", status: "done", detail: `Blog sitemap found: ${candidate}` });
+                  // Re-run sitemap discovery with the blog URL
+                  const blogEntries = await fetchSitemap(candidate);
+                  if (blogEntries.length > 0) {
+                    sitemapEntries = blogEntries;
+                    sitemapUrl = candidate;
+                    // Re-pick sample articles
+                    const blogArticleUrls = blogEntries
+                      .filter((e) => !/privacy|terms|legal|about|contact/i.test(e.url))
+                      .slice(0, 3)
+                      .map((e) => e.url);
+                    articleUrls.push(...blogArticleUrls);
+                  }
+                  break;
+                }
+              }
+            }
+            if (articleUrls.length > 0) break;
+          } catch { /* try next */ }
+        }
+
+        // If still no sitemap articles, crawl the blog links directly as samples
+        if (articleUrls.length === 0) {
+          for (const link of blogLinks.slice(0, 5)) {
+            try {
+              // Follow the link and look for article links on that page
+              const blogPage = await fbCtx?.newPage().catch(() => null);
+              if (!blogPage) break;
+              // Just use the blog links themselves as samples
+              articleUrls.push(link.href);
+              if (articleUrls.length >= 3) break;
+            } catch { /* skip */ }
+          }
+        }
+      } else {
+        emit({ step: "discover-blog", status: "error", detail: "No blog section found on website" });
+      }
+    } catch (err) {
+      emit({ step: "discover-blog", status: "error", detail: `Website scan failed: ${String(err).slice(0, 100)}` });
+    }
+  }
+
   if (articleUrls.length === 0) {
     log.warn({ domain }, "no sample articles found");
-    return createEmptyProfile(domain, name, sitemapUrl, sitemapEntries.length);
+    emit({ step: "complete", status: "error", detail: "No blog articles found — this site may not have a blog" });
+    return createEmptyProfile(domain, name, sitemapUrl ?? null, sitemapEntries.length);
   }
+
+  emit({ step: "test-extraction", status: "running", detail: `Testing ${articleUrls.length} sample articles` });
 
   // ── Step 3: Crawl samples with code + validate with Playwright ──
   const samples: CrawlProfile["validation"]["samples"] = [];
@@ -139,7 +253,9 @@ export async function analyzeCompetitor(
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ userAgent: "FlowBoost/1.0 (content research bot)" });
 
-    for (const url of articleUrls) {
+    for (let si = 0; si < articleUrls.length; si++) {
+      const url = articleUrls[si];
+      emit({ step: "analyze-sample", status: "running", detail: `Sample ${si + 1}/${articleUrls.length}: ${url.split("/").pop()}` });
       log.info({ url }, "analyzing sample article");
 
       // Code-based extraction
@@ -204,6 +320,13 @@ export async function analyzeCompetitor(
           wordCount: browserWords,
           h2Count: browserH2s || browserH3s,
           validated,
+        });
+
+        emit({
+          step: "analyze-sample",
+          status: "done",
+          detail: `"${browserData.title.slice(0, 50)}" — ${browserWords} words, ${browserH2s || browserH3s} sections`,
+          data: { url, title: browserData.title, wordCount: browserWords, h2Count: browserH2s, readabilityOk, validated },
         });
 
         log.info({
@@ -281,6 +404,13 @@ export async function analyzeCompetitor(
       confidence: allValidated && samples.length >= 2 ? "high" : samples.length >= 1 ? "medium" : "low",
     },
   };
+
+  emit({
+    step: "profile-created",
+    status: "done",
+    detail: `Method: ${profile.extraction.method}, Confidence: ${profile.validation.confidence}`,
+    data: { method: profile.extraction.method, confidence: profile.validation.confidence, avgWordCount, avgH2Count },
+  });
 
   // Save the profile
   const profileDir = `areas/competitors/${slug}`;
