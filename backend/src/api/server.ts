@@ -11,6 +11,7 @@ import { PipelineRunStore } from "../models/pipeline-run.js";
 import { TopicStore } from "../models/topic.js";
 import { JobStore } from "../models/job.js";
 import { MemoryStore } from "../models/memory.js";
+import { IdeaStore } from "../models/idea.js";
 import { healthRoutes } from "./routes/health.js";
 import { customerRoutes } from "./routes/customers.js";
 import { projectRoutes } from "./routes/projects.js";
@@ -27,6 +28,7 @@ import { connectorRoutes } from "./routes/connectors.js";
 import { cmoRoutes } from "./routes/cmo.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { heartbeatRoutes } from "./routes/heartbeat.js";
+import { ideaRoutes } from "./routes/ideas.js";
 
 const log = createLogger("server");
 
@@ -41,6 +43,7 @@ export interface AppContext {
   topicsFor(customerId: string, projectId: string): TopicStore;
   jobsFor(customerId: string, projectId: string): JobStore;
   memoryFor(customerId: string, projectId: string): MemoryStore;
+  ideasFor(customerId: string, projectId: string): IdeaStore;
 }
 
 declare module "fastify" {
@@ -85,6 +88,9 @@ export async function buildServer(dataDir: string) {
     memoryFor(customerId: string, projectId: string) {
       return new MemoryStore(path.join(dataDir, "customers", customerId, "projects", projectId));
     },
+    ideasFor(customerId: string, projectId: string) {
+      return new IdeaStore(path.join(dataDir, "customers", customerId, "projects", projectId, "ideas"));
+    },
   };
   app.decorate("ctx", ctx);
 
@@ -107,6 +113,7 @@ export async function buildServer(dataDir: string) {
   await app.register(cmoRoutes, { prefix: "/customers/:customerId/projects/:projectId/cmo" });
   await app.register(jobRoutes, { prefix: "/customers/:customerId/projects/:projectId/jobs" });
   await app.register(heartbeatRoutes, { prefix: "/customers/:customerId/projects/:projectId/heartbeat" });
+  await app.register(ideaRoutes, { prefix: "/customers/:customerId/projects/:projectId/ideas" });
 
   // Error handler
   app.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {

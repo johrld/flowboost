@@ -13,6 +13,7 @@ import {
   BarChart3,
   Brain,
   FileText,
+  Inbox,
   Layers,
   Mail,
   MessageSquare,
@@ -64,6 +65,7 @@ export function Sidebar() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [cmoOpen, setCmoOpen] = useState(false);
+  const [inboxCount, setInboxCount] = useState(0);
   const [renameValue, setRenameValue] = useState("");
   const [deleteFlowId, setDeleteFlowId] = useState<string | null>(null);
 
@@ -78,6 +80,16 @@ export function Sidebar() {
   }, [customerId, projectId]);
 
   useEffect(() => { loadFlows(); }, [loadFlows]);
+
+  // Load inbox count
+  useEffect(() => {
+    if (!customerId || !projectId) return;
+    const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6100";
+    fetch(`${API}/customers/${customerId}/projects/${projectId}/ideas`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((ideas: Array<{ status: string }>) => setInboxCount(ideas.filter((i) => i.status === "inbox").length))
+      .catch(() => {});
+  }, [customerId, projectId, pathname]);
 
   // Reload flows on navigation and custom events
   useEffect(() => {
@@ -241,8 +253,25 @@ export function Sidebar() {
         </div>
       ) : (
       <>
+      {/* Inbox */}
+      <div className="px-3 pt-3 pb-1">
+        <Link
+          href="/inbox"
+          className={cn(
+            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            pathname === "/inbox"
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          )}
+        >
+          <Inbox className="h-4 w-4" />
+          Inbox
+          {inboxCount > 0 && <span className="ml-auto text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">{inboxCount}</span>}
+        </Link>
+      </div>
+
       {/* Content Section */}
-      <div className="px-3 pt-4 pb-1">
+      <div className="px-3 pt-2 pb-1">
         <div className="px-3 pb-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Content</span>
         </div>
