@@ -185,7 +185,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and [VISION.md](VISION.md)
 
 <a href="https://github.com/johrld"><img src="https://github.com/johrld.png" width="48" height="48" alt="johrld" style="border-radius:50%"></a>
 <a href="https://github.com/MagnusHL"><img src="https://github.com/MagnusHL.png" width="48" height="48" alt="MagnusHL" style="border-radius:50%"></a>
-<a href="https://github.com/anthropics"><img src="https://github.com/anthropics.png" width="48" height="48" alt="Claude" style="border-radius:50%"></a>
+<a href="https://github.com/claude"><img src="https://github.com/claude.png" width="48" height="48" alt="Claude" style="border-radius:50%"></a>
 
 ## License
 
