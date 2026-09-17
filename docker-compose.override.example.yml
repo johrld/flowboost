@@ -10,6 +10,8 @@ services:
       #
       # On macOS, export credentials from Keychain first:
       #   security find-generic-password -s "Claude Code-credentials" -w > ~/.claude/.credentials.json
+      # Export BEFORE the first `docker compose up`: if the file is missing,
+      # Docker creates an empty directory at that path, which then breaks the export.
       # On Linux, the file already exists after `claude login`.
       #
       # - ~/.claude.json:/root/.claude.json:ro
